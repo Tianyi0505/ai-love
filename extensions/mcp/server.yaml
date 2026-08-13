@@ -1,7 +1,7 @@
 server:
   name: ailove
   version: 1.0.0
-  instructions: AI Love 的统一 MCP 工具服务，提供天气与音乐能力。
+  instructions: AI Love 的统一 MCP 工具服务，提供天气、音乐与网络搜索能力。
   transport: streamable-http
   host: 0.0.0.0
   port: 8011

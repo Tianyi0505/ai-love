@@ -59,7 +59,8 @@ extensions/
 ├── host/                   # 工具发现、绑定、权限和调用网关
 └── mcp/                    # 单一 MCP 进程
     ├── weather/            # 天气工具
-    └── music/              # 音乐控制工具
+    ├── music/              # 音乐控制工具
+    └── web_search/         # 网络搜索工具
 live/
 ├── director/               # 直播阵容和发言调度
 ├── avatar/                 # 形象与舞台事件输出
@@ -80,7 +81,7 @@ shared/
 - `tts`：包含 `ai.tts`，通过 NATS 向 Agent 提供合成能力。
 - `memory`：包含 `memory` 的 controller、service、repository 等多个内部包。
 - `extension-host`：包含 `extensions.host`。
-- `mcp`：唯一 MCP 部署，同时加载 `extensions.mcp.weather` 和 `extensions.mcp.music`，新增 MCP 能力不新增部署。
+- `mcp`：唯一 MCP 部署，同时加载天气、音乐和网络搜索能力，新增 MCP 能力不新增部署。
 - `director`、`avatar`、`stream`：分别承载 `live` 下的三个直播能力包。
 
 音乐能力目前保持原实现范围：MCP 工具负责接收并记录控制指令，实际播放器适配器仍待接入。
