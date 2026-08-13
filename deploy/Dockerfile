@@ -7,8 +7,6 @@ COPY shared/ ./shared/
 
 FROM base AS gateway
 COPY services/gateway/ ./services/gateway/
-COPY ai/__init__.py ./ai/__init__.py
-COPY ai/vision/ ./ai/vision/
 CMD ["python", "-m", "services.gateway.main"]
 
 FROM base AS orchestrator
