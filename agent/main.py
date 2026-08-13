@@ -13,8 +13,8 @@ from shared.infrastructure.config import ServiceConfig
 from shared.infrastructure.database import Database
 from shared.infrastructure.repositories import AIProfileRepository, AccountOwnershipRepository
 from shared.infrastructure.service import BaseService
-from services.ai_agent.runtime import AIRuntime
-from services.ai_agent.supervisor import AgentSupervisor
+from agent.runtime import AIRuntime
+from agent.supervisor import AgentSupervisor
 
 logger = logging.getLogger("ailove.ai-agent")
 

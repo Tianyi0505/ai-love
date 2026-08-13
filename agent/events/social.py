@@ -5,10 +5,10 @@ import json
 import logging
 
 from ai.llm.service import ChatMessage
-from services.ai_agent.prompting import PromptContext
+from agent.prompting import PromptContext
 from shared.contracts.response import ResponsePlan
 from shared.contracts.social import ContentType, SocialMessage
-from services.ai_agent.events.registry import event_registry
+from agent.events.registry import event_registry
 
 logger = logging.getLogger("ailove.ai-agent.events.social")
 

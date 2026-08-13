@@ -9,19 +9,19 @@ import re
 import time
 from string import Template
 
-from services.ai_agent.agent_loop import AgentLoop
-from services.ai_agent.application.conversation import ConversationContext
-from services.ai_agent.application.proactive import GroupChatManager, ProactiveChat
-from services.ai_agent.application.retrieval import Retrieval
-from services.ai_agent.application.session import SessionManager
-from services.ai_agent.events.handlers import EventHandlers
+from agent.agent_loop import AgentLoop
+from agent.application.conversation import ConversationContext
+from agent.application.proactive import GroupChatManager, ProactiveChat
+from agent.application.retrieval import Retrieval
+from agent.application.session import SessionManager
+from agent.events.handlers import EventHandlers
 from ai.llm.providers import anthropic_gw, deepseek, ollama
 from ai.llm.service import ChatMessage, create_llm
-from services.ai_agent.memory.manager import MemoryManager
-from services.ai_agent.message_understanding import MessageUnderstanding
-from services.ai_agent.persona.model import Persona
-from services.ai_agent.prompting import PromptAssembler, PromptContext
-from services.ai_agent.tools import register_tools
+from agent.memory.manager import MemoryManager
+from agent.message_understanding import MessageUnderstanding
+from agent.persona.model import Persona
+from agent.prompting import PromptAssembler, PromptContext
+from agent.tools import register_tools
 from shared.contracts.agent import AgentDefinition
 from shared.contracts.events import TurnRequest
 from shared.contracts.response import ResponsePlan

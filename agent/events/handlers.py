@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 
-from services.ai_agent.events import live, social
-from services.ai_agent.events.registry import event_registry
+from agent.events import live, social
+from agent.events.registry import event_registry
 
 logger = logging.getLogger("ailove.ai-agent.events")
 

@@ -6,7 +6,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from services.ai_agent.hybrid_search import Doc, HybridSearch
+from agent.hybrid_search import Doc, HybridSearch
 
 
 class ConversationContext:
