@@ -350,7 +350,7 @@ class AIRuntime:
         if not recent:
             logger.info("[ai-agent:%s] 群聊跳过: 会话窗口空", self.ai_id)
             return False
-        _, current_message = recent[-1]
+        current_role, current_message = recent[-1]
         history = recent[:-1]
         relationship = await self._group_relationship(chat_id)
         score = self._group_participation_score(relationship)

@@ -67,7 +67,14 @@ class NacosAgentDefinitionStore:
             relationship_policy=self._mapping(required_config(data, "relationship_policy", f"{key}.relationship_policy"), f"{key}.relationship_policy"),
             behavior_policy=self._mapping(required_config(data, "behavior_policy", f"{key}.behavior_policy"), f"{key}.behavior_policy"),
             extensions=[dict(item) for item in extensions],
-            prompts={str(name): str(content).strip() for name, content in prompts.items()},
+            prompts={
+                str(name): (
+                    str(content)
+                    if str(name) == "message-separator"
+                    else str(content).strip()
+                )
+                for name, content in prompts.items()
+            },
             model_profile_id=required_value(str(required_config(data, "model_profile_id", f"{key}.model_profile_id")), f"{key}.model_profile_id"),
             voice_profile_id=required_value(str(required_config(data, "voice_profile_id", f"{key}.voice_profile_id")), f"{key}.voice_profile_id"),
             avatar_profile_id=required_value(str(required_config(data, "avatar_profile_id", f"{key}.avatar_profile_id")), f"{key}.avatar_profile_id"),
