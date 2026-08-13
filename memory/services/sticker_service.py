@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from services.memory.repositories.sticker_repo import StickerRepo
+from memory.repositories.sticker_repo import StickerRepo
 
 
 class StickerService:

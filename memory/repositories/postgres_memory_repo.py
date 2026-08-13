@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from services.memory.memory_policy import (
+from memory.memory_policy import (
     MemoryAccessContext,
     MemoryPolicy,
     MemoryRecord,

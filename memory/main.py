@@ -15,11 +15,11 @@ from shared.infrastructure.global_config import GlobalConfig
 from shared.infrastructure.repositories import RelationshipRepository
 from shared.infrastructure.service import BaseService
 
-from services.memory.controllers.sticker_controller import StickerController
-from services.memory.memory_policy import MemoryPolicy
-from services.memory.repositories.memory_repo import MemoryRepo
-from services.memory.repositories.postgres_memory_repo import PostgresMemoryRepo
-from services.memory.services.sticker_service import StickerService
+from memory.controllers.sticker_controller import StickerController
+from memory.memory_policy import MemoryPolicy
+from memory.repositories.memory_repo import MemoryRepo
+from memory.repositories.postgres_memory_repo import PostgresMemoryRepo
+from memory.services.sticker_service import StickerService
 
 logger = logging.getLogger("ailove.memory")
 
