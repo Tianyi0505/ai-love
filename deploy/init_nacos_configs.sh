@@ -85,7 +85,7 @@ require_file() {
 echo "=== 写入配置 ==="
 
 # 发布服务配置
-for service_name in gateway orchestrator ai-agent tts stream memory avatar extension-host music; do
+for service_name in gateway orchestrator ai-agent tts stream memory avatar extension-host; do
   publish_file "service.${service_name}" "${SCRIPT_DIR}/nacos/service.${service_name}.yaml"
 done
 
