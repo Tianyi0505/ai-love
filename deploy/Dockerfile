@@ -27,8 +27,9 @@ COPY ai/__init__.py ./ai/__init__.py
 CMD ["python", "-m", "ai.tts.main"]
 
 FROM base AS avatar
-COPY services/avatar/ ./services/avatar/
-CMD ["python", "-m", "services.avatar.main"]
+COPY live/avatar/ ./live/avatar/
+COPY live/__init__.py ./live/__init__.py
+CMD ["python", "-m", "live.avatar.main"]
 
 FROM base AS stream
 COPY services/stream/ ./services/stream/
