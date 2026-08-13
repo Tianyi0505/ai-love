@@ -42,8 +42,8 @@ COPY services/mcp_weather/ ./services/mcp_weather/
 CMD ["python", "-m", "services.mcp_weather.main"]
 
 FROM base AS memory
-COPY services/memory/ ./services/memory/
-CMD ["python", "-m", "services.memory.main"]
+COPY memory/ ./memory/
+CMD ["python", "-m", "memory.main"]
 
 FROM base AS music
 COPY services/music/ ./services/music/
