@@ -7,6 +7,7 @@ from mcp.server import MCPServer
 
 from extensions.mcp.music.tool import register_music
 from extensions.mcp.weather.tool import register_weather
+from extensions.mcp.web_search.tool import register_web_search
 from shared.infrastructure.runtime_config import required_config
 
 
@@ -30,6 +31,7 @@ mcp = MCPServer(
 
 register_weather(mcp)
 register_music(mcp)
+register_web_search(mcp)
 
 
 if __name__ == "__main__":
