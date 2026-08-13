@@ -9,9 +9,10 @@ FROM base AS gateway
 COPY gateway/ ./gateway/
 CMD ["python", "-m", "gateway.main"]
 
-FROM base AS orchestrator
-COPY services/orchestrator/ ./services/orchestrator/
-CMD ["python", "-m", "services.orchestrator.main"]
+FROM base AS director
+COPY live/director/ ./live/director/
+COPY live/__init__.py ./live/__init__.py
+CMD ["python", "-m", "live.director.main"]
 
 FROM base AS ai-agent
 COPY agent/ ./agent/
