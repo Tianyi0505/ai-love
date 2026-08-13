@@ -318,10 +318,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mcp-weather
+  name: mcp
 spec:
   selector:
-    app: mcp-weather
+    app: mcp
   ports:
     - name: http
       port: 8011
@@ -330,25 +330,25 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mcp-weather
+  name: mcp
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: mcp-weather
+      app: mcp
   template:
     metadata:
       labels:
-        app: mcp-weather
+        app: mcp
     spec:
       hostNetwork: true
       nodeSelector:
         ailove.role: edge
       containers:
-        - name: mcp-weather
-          image: ailove/mcp-weather:latest
+        - name: mcp
+          image: ailove/mcp:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -445,57 +445,6 @@ spec:
           resources:
             requests: {cpu: 20m, memory: 48Mi}
             limits: {cpu: 500m, memory: 256Mi}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
-        - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: music
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: music
-  template:
-    metadata:
-      labels:
-        app: music
-    spec:
-      hostNetwork: true
-      nodeSelector:
-        ailove.role: app
-      containers:
-        - name: music
-          image: ailove/music:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 300m, memory: 192Mi}
           volumeMounts:
             - name: data
               mountPath: /app/data
