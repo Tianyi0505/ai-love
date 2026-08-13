@@ -6,8 +6,8 @@ RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r req
 COPY shared/ ./shared/
 
 FROM base AS gateway
-COPY services/gateway/ ./services/gateway/
-CMD ["python", "-m", "services.gateway.main"]
+COPY gateway/ ./gateway/
+CMD ["python", "-m", "gateway.main"]
 
 FROM base AS orchestrator
 COPY services/orchestrator/ ./services/orchestrator/
