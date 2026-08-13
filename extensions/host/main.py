@@ -61,12 +61,12 @@ class ExtensionHostService(BaseService):
     async def _discover_mcp(self) -> None:
         if self._mcp_providers:
             return
-        weather_url = str(self._service_config["mcp_weather_url"])
+        mcp_url = str(self._service_config["mcp_url"])
         try:
-            self._mcp_providers = [await MCPToolProvider.discover("mcp.qweather", weather_url)]
-            logger.info("[extension-host] MCP 已连接: qweather")
+            self._mcp_providers = [await MCPToolProvider.discover("mcp.ailove", mcp_url)]
+            logger.info("[extension-host] MCP 已连接: ailove")
         except Exception as exc:
-            logger.warning("[extension-host] qweather MCP 暂不可用: %s", exc)
+            logger.warning("[extension-host] MCP 暂不可用: %s", exc)
 
     async def _binding_loop(self) -> None:
         while True:

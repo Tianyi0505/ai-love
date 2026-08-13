@@ -1,6 +1,6 @@
 instance_addr: 127.0.0.1:0
 binding_poll_interval_sec: 2
-mcp_weather_url: __MCP_WEATHER_URL__
+mcp_url: __MCP_URL__
 web_search:
   request_timeout_sec: 10
   endpoint: https://www.bing.com/search
