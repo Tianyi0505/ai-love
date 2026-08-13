@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import httpx
 
 
+# 表示检索结果数据
 @dataclass
 class SearchResult:
     title: str
@@ -13,7 +14,9 @@ class SearchResult:
     snippet: str
 
 
+# 调用网页搜索接口
 class WebSearchClient:
+    # 初始化当前实例
     def __init__(
         self,
         endpoint: str,
@@ -26,6 +29,7 @@ class WebSearchClient:
         self._request_timeout_sec = request_timeout_sec
         self._result_limit = result_limit
 
+    # 检索匹配内容
     async def search(self, query: str) -> list[SearchResult]:
         try:
             async with httpx.AsyncClient(
@@ -42,6 +46,7 @@ class WebSearchClient:
         except Exception:
             return []
 
+    # 解析HTML
     def _parse_html(self, html: str) -> list[SearchResult]:
         results = []
         pattern = r'class="b_algo".*?<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>'

@@ -7,6 +7,7 @@ from ai.llm.routing import RoutingLLMService
 from ai.llm.service import LLMService
 
 
+# 创建大模型
 def create_llm(model_cfg: dict, llm_config: dict) -> LLMService:
     health = ModelHealthStore(
         fail_threshold=int(llm_config["health_fail_threshold"]),
@@ -14,6 +15,7 @@ def create_llm(model_cfg: dict, llm_config: dict) -> LLMService:
     )
     selector = ModelSelector(model_cfg, int(llm_config["timeout_ms"]), health)
 
+    # 创建大模型提供器
     def provider_factory(name: str, model: str) -> LLMProvider | None:
         if not provider_registry.contains(name):
             return None

@@ -9,12 +9,15 @@ from shared.contracts.agent import AgentDefinition, AgentDefinitionError
 from shared.infrastructure.runtime_config import required_config, required_value
 
 
+# 使用Nacos存储智能体定义
 class NacosAgentDefinitionStore:
+    # 初始化当前实例
     def __init__(self, provider) -> None:
         if provider is None:
             raise AgentDefinitionError("AI 定义必须使用 Nacos ConfigProvider")
         self._provider = provider
 
+    # 加载数据
     async def load(self, ai_id: str) -> AgentDefinition:
         default_key = "agent.default"
         key = f"agent.{ai_id}"
@@ -83,6 +86,7 @@ class NacosAgentDefinitionStore:
             fingerprint=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         )
 
+    # 列出启用的配置
     async def list_active(self) -> list[AgentDefinition]:
         catalog = await self._provider.get("agent.catalog")
         if not catalog:
@@ -92,12 +96,14 @@ class NacosAgentDefinitionStore:
             raise AgentDefinitionError("agent.catalog.active_ai_ids 必须是列表")
         return [await self.load(str(ai_id)) for ai_id in ai_ids]
 
+    # 生成配置项映射
     @staticmethod
     def _mapping(value, config_name: str) -> dict[str, Any]:
         if not isinstance(value, dict):
             raise AgentDefinitionError(f"{config_name} 必须是对象")
         return dict(value)
 
+    # 递归合并配置
     @classmethod
     def _deep_merge(cls, defaults: dict, overrides: dict) -> dict:
         merged = dict(defaults)

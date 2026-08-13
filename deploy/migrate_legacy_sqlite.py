@@ -22,10 +22,12 @@ CONVERSATION_CONFIG = dict(required_config(MIGRATION_CONFIG, "conversation", "de
 NAMESPACE = uuid.UUID(str(required_config(MIGRATION_CONFIG, "namespace", "deploy.migrate_legacy_sqlite.namespace")))
 
 
+# 生成稳定标识
 def stable_id(value: str) -> uuid.UUID:
     return uuid.uuid5(NAMESPACE, value)
 
 
+# 将数值限制在单位区间
 def unit(value, default: float) -> float:
     try:
         number = float(value)
@@ -36,6 +38,7 @@ def unit(value, default: float) -> float:
     return max(0.0, min(1.0, number))
 
 
+# 读取数据表记录
 def rows(path: Path, table: str) -> list[dict]:
     if not path.is_file():
         return []
@@ -47,6 +50,7 @@ def rows(path: Path, table: str) -> list[dict]:
         conn.close()
 
 
+# 迁移记忆
 async def migrate_memories(conn, data_dir: Path, ai_id: str) -> int:
     imported = 0
     for item in rows(data_dir / "memory.db", "memories"):
@@ -74,6 +78,7 @@ async def migrate_memories(conn, data_dir: Path, ai_id: str) -> int:
     return imported
 
 
+# 迁移会话记录
 async def migrate_conversations(conn, data_dir: Path, ai_id: str) -> int:
     imported = 0
     agent_path = data_dir / "agents" / ai_id / "conversation.db"
@@ -127,6 +132,7 @@ async def migrate_conversations(conn, data_dir: Path, ai_id: str) -> int:
     return imported
 
 
+# 启动程序入口
 async def main() -> None:
     database_url = required_setting(None, ConfigKey.AILOVE_DATABASE_URL)
     data_dir = Path(required_setting(None, ConfigKey.AILOVE_LEGACY_DATA_DIR))

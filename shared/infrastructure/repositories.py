@@ -11,16 +11,20 @@ from shared.contracts.relationship import GroupRelationship, PersonRelationship
 from shared.infrastructure.database import Database
 
 
+# 表示AI档案记录数据
 @dataclass(frozen=True)
 class AIProfileRecord:
     ai_id: str
     definition_version: int
 
 
+# 管理AI档案存储库持久化
 class AIProfileRepository:
+    # 初始化当前实例
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    # 列出启用的配置
     async def list_active(self) -> list[AIProfileRecord]:
         rows = await self._db.fetch(
             "SELECT ai_id, definition_version "
@@ -29,10 +33,13 @@ class AIProfileRepository:
         return [AIProfileRecord(row["ai_id"], row["definition_version"]) for row in rows]
 
 
+# 管理账号归属存储库持久化
 class AccountOwnershipRepository:
+    # 初始化当前实例
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    # 获取社交账号所属智能体
     async def owner_for_social_account(self, account_id: str) -> str | None:
 
         row = await self._db.fetchrow(
@@ -45,6 +52,7 @@ class AccountOwnershipRepository:
         )
         return row["ai_id"] if row else None
 
+    # 选择直播互动候选人
     async def live_candidates(self, account_id: str) -> list[str]:
         rows = await self._db.fetch(
             "SELECT ai_id FROM ai_account_bindings "
@@ -53,6 +61,7 @@ class AccountOwnershipRepository:
         )
         return [row["ai_id"] for row in rows]
 
+    # 列出智能体绑定的账号
     async def accounts_for_ai(self, ai_id: str) -> list[str]:
         rows = await self._db.fetch(
             "SELECT account_id FROM ai_account_bindings "
@@ -62,10 +71,13 @@ class AccountOwnershipRepository:
         return [row["account_id"] for row in rows]
 
 
+# 管理身份存储库持久化
 class IdentityRepository:
+    # 初始化当前实例
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    # 解析联系人
     async def resolve_person(
         self,
         platform: str,
@@ -83,6 +95,7 @@ class IdentityRepository:
             return None
         return row["identity_id"], row["person_id"]
 
+    # 解析或创建平台身份
     async def resolve_or_create(
         self,
         platform: str,
@@ -131,11 +144,14 @@ class IdentityRepository:
         return identity_id, person_id
 
 
+# 管理会话存储库持久化
 class ConversationRepository:
 
+    # 初始化当前实例
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    # 记录入站消息
     async def record_inbound(self, message, ai_id: str) -> str:
         conversation_id = await self._conversation(
             message.platform,
@@ -175,6 +191,7 @@ class ConversationRepository:
         )
         return conversation_id
 
+    # 记录出站消息
     async def record_outbound(self, request: dict, result: dict, ai_id: str) -> str:
         chat = request.get("chat", {})
         platform = str(request.get("channel") or "qq")
@@ -211,6 +228,7 @@ class ConversationRepository:
         )
         return conversation_id
 
+    # 获取或创建会话上下文
     async def _conversation(
         self,
         platform: str,
@@ -236,15 +254,19 @@ class ConversationRepository:
         )
         return row["conversation_id"]
 
+    # 提取消息标识
     @staticmethod
     def _message_id(seed: str) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, seed)) if seed else str(uuid.uuid4())
 
 
+# 管理关系存储库持久化
 class RelationshipRepository:
+    # 初始化当前实例
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    # 获取联系人
     async def get_person(self, ai_id: str, person_id: str):
         row = await self._db.fetchrow(
             "SELECT familiarity, affinity, trust, importance FROM person_relationships "
@@ -254,6 +276,7 @@ class RelationshipRepository:
         )
         return PersonRelationship(**dict(row)) if row else PersonRelationship()
 
+    # 保存联系人
     async def save_person(self, ai_id: str, person_id: str, relationship, ceiling_policy: str = "default") -> None:
         await self._db.execute(
             "INSERT INTO person_relationships("
@@ -272,6 +295,7 @@ class RelationshipRepository:
             ceiling_policy,
         )
 
+    # 确保联系人
     async def ensure_person(self, ai_id: str, person_id: str, ceiling_policy: str = "default") -> None:
         await self._db.execute(
             "INSERT INTO person_relationships("
@@ -283,6 +307,7 @@ class RelationshipRepository:
             ceiling_policy,
         )
 
+    # 获取群聊
     async def get_group(self, ai_id: str, account_id: str, group_id: str):
         row = await self._db.fetchrow(
             "SELECT familiarity, belonging, affinity, activity_willingness FROM group_relationships "
@@ -293,6 +318,7 @@ class RelationshipRepository:
         )
         return GroupRelationship(**dict(row)) if row else GroupRelationship()
 
+    # 保存群聊
     async def save_group(self, ai_id: str, account_id: str, group_id: str, relationship, ceiling_policy: str = "default") -> None:
         await self._db.execute(
             "INSERT INTO group_relationships("
@@ -313,6 +339,7 @@ class RelationshipRepository:
             ceiling_policy,
         )
 
+    # 列出联系人列表
     async def list_people(self, ai_id: str) -> list[dict]:
         rows = await self._db.fetch(
             "SELECT r.person_id::text, p.display_name, pi.platform_user_id AS user_id, pi.account_id, "

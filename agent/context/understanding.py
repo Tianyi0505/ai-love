@@ -10,8 +10,10 @@ from ai.asr.provider import ASRProvider
 from shared.contracts.social import ContentType, SocialMessage
 
 
+# 描述消息理解结果
 class MessageUnderstanding:
 
+    # 初始化当前实例
     def __init__(self, prompts, fallbacks: dict, asr: ASRProvider | None = None, image_describer=None) -> None:
         self._prompts = prompts
         self._fallbacks = fallbacks
@@ -19,9 +21,11 @@ class MessageUnderstanding:
         self._describer = image_describer
         self._extra_handlers: dict[ContentType, list[Callable]] = {}
 
+    # 注册处理器
     def register_handler(self, content_type: ContentType, handler) -> None:
         self._extra_handlers.setdefault(content_type, []).append(handler)
 
+    # 理解社交消息
     async def understand(self, msg: SocialMessage, _ancestors: frozenset[int] | None = None) -> str:
         _ancestors = _ancestors or frozenset()
         identity = id(msg)
@@ -34,9 +38,11 @@ class MessageUnderstanding:
             name=str(msg.sender.name or msg.sender.user_id),
         )
 
+        # 理解消息中的图片
         async def understand_images() -> list[str]:
             urls = msg.all_media_urls()
 
+            # 描述图片内容
             async def describe(index: int, image_url: str) -> str:
                 fallback = msg.media_descs[index] if index < len(msg.media_descs) else ""
                 if not fallback and index == 0:

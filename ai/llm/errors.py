@@ -3,6 +3,7 @@ from __future__ import annotations
 from enum import Enum
 
 
+# 定义大模型错误消息枚举
 class LLMErrorMessage(str, Enum):
     NO_PROVIDER = "无可用大模型提供者"
     START_FAILED = "流式请求启动失败"

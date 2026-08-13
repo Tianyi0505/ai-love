@@ -15,9 +15,11 @@ from extensions.host.mcp_provider import MCPToolProvider
 logger = logging.getLogger("ailove.extension-host")
 
 
+# 托管并调用扩展工具
 class ExtensionHostService(BaseService):
     name = "extension-host"
 
+    # 启动服务
     async def on_start(self) -> None:
         self._service_config = await self.cfg.section()
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
@@ -28,9 +30,11 @@ class ExtensionHostService(BaseService):
         await self.bus.reply("tool.execute.request", self._on_execute)
         self.spawn(self._binding_loop())
 
+    # 停止服务
     async def on_stop(self) -> None:
         pass
 
+    # 重新加载账号绑定
     async def _reload_bindings(self) -> None:
         definitions = await self._definitions.list_active()
         await self._discover_mcp()
@@ -58,6 +62,7 @@ class ExtensionHostService(BaseService):
         self._gateway = gateway
         self._fingerprint = fingerprint
 
+    # 发现MCP工具
     async def _discover_mcp(self) -> None:
         if self._mcp_providers:
             return
@@ -68,6 +73,7 @@ class ExtensionHostService(BaseService):
         except Exception as exc:
             logger.warning("[extension-host] MCP 暂不可用: %s", exc)
 
+    # 持续执行绑定循环
     async def _binding_loop(self) -> None:
         while True:
             await asyncio.sleep(float(self._service_config["binding_poll_interval_sec"]))
@@ -76,6 +82,7 @@ class ExtensionHostService(BaseService):
             except Exception:
                 pass
 
+    # 处理列表请求
     async def _on_list(self, payload: bytes) -> bytes:
         request = json.loads(payload)
         tools = [
@@ -88,6 +95,7 @@ class ExtensionHostService(BaseService):
         ]
         return json.dumps({"tools": tools}, ensure_ascii=False).encode()
 
+    # 处理工具执行请求
     async def _on_execute(self, payload: bytes) -> bytes:
         request = json.loads(payload)
         result = await self._gateway.invoke(
@@ -112,7 +120,9 @@ class ExtensionHostService(BaseService):
         ).encode()
 
 
+# 启动程序入口
 def main() -> None:
+    # 运行主流程
     async def run() -> None:
         service = ExtensionHostService(await ServiceConfig.load("extension-host"))
         await service.start()

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
+# 表示智能体定义数据
 @dataclass(frozen=True)
 class AgentDefinition:
     ai_id: str
@@ -24,5 +25,6 @@ class AgentDefinition:
     fingerprint: str
 
 
+# 表示智能体定义错误异常
 class AgentDefinitionError(ValueError):
     pass

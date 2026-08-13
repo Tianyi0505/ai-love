@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass, field
 
 
+# 表示检索文档数据
 @dataclass
 class Doc:
 
@@ -14,6 +15,7 @@ class Doc:
     metadata: dict = field(default_factory=dict)
 
 
+# 对检索文本分词
 def _tokenize(text: str) -> list[str]:
     text = text.lower()
     tokens = re.findall(r"[a-z0-9]+", text)
@@ -23,8 +25,10 @@ def _tokenize(text: str) -> list[str]:
     return tokens
 
 
+# 提供BM25文本检索能力
 class BM25Index:
 
+    # 初始化当前实例
     def __init__(self, k1: float, b: float) -> None:
         self._k1 = k1
         self._b = b
@@ -32,6 +36,7 @@ class BM25Index:
         self._doc_freq: dict[str, int] = {}
         self._avg_len = 0.0
 
+    # 添加数据
     def add(self, doc: Doc) -> None:
         self._docs.append(doc)
         tokens = set(_tokenize(doc.text))
@@ -39,6 +44,7 @@ class BM25Index:
             self._doc_freq[t] = self._doc_freq.get(t, 0) + 1
         self._avg_len = sum(len(_tokenize(d.text)) for d in self._docs) / max(1, len(self._docs))
 
+    # 检索匹配内容
     def search(self, query: str, top_k: int) -> list[tuple[str, float]]:
         q_tokens = _tokenize(query)
         n = len(self._docs)
@@ -61,8 +67,10 @@ class BM25Index:
         return scores[:top_k]
 
 
+# 融合关键词与向量检索结果
 class HybridSearch:
 
+    # 初始化当前实例
     def __init__(self, config: dict) -> None:
         self._docs: dict[str, Doc] = {}
         self._config = config
@@ -70,22 +78,26 @@ class HybridSearch:
         self._top_k = int(config["top_k"])
         self._reciprocal_rank_k = int(config["reciprocal_rank_k"])
 
+    # 构建BM25检索索引
     def _new_bm25(self) -> BM25Index:
         return BM25Index(
             k1=float(self._config["bm25_k1"]),
             b=float(self._config["bm25_b"]),
         )
 
+    # 添加数据
     def add(self, doc: Doc) -> None:
         self._docs[doc.id] = doc
         self._bm25.add(doc)
 
+    # 移除数据
     def remove(self, doc_id: str) -> None:
         self._docs.pop(doc_id, None)
         self._bm25 = self._new_bm25()
         for d in self._docs.values():
             self._bm25.add(d)
 
+    # 检索匹配内容
     def search(self, query: str, vector_results: list[tuple[str, float]] | None = None, top_k: int | None = None) -> list[tuple[str, float]]:
         top_k = top_k or self._top_k
         bm25_results = self._bm25.search(query, top_k=top_k)
@@ -98,5 +110,6 @@ class HybridSearch:
         ranked = sorted(fused.items(), key=lambda x: -x[1])
         return ranked[:top_k]
 
+    # 获取数据
     def get(self, doc_id: str) -> Doc | None:
         return self._docs.get(doc_id)

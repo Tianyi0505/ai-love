@@ -4,10 +4,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+# 描述账号绑定冲突
 class BindingViolation(ValueError):
     pass
 
 
+# 描述渠道支持的发送能力
 @dataclass(frozen=True)
 class ChannelCapabilities:
 
@@ -18,6 +20,7 @@ class ChannelCapabilities:
     supports_history: bool = False
 
 
+# 表示社交账号数据
 @dataclass(frozen=True)
 class SocialAccount:
     account_id: str
@@ -29,6 +32,7 @@ class SocialAccount:
     capabilities: ChannelCapabilities = field(default_factory=ChannelCapabilities)
 
 
+# 表示账号绑定数据
 @dataclass(frozen=True)
 class AccountBinding:
     account_id: str
@@ -36,6 +40,7 @@ class AccountBinding:
     active: bool = True
 
 
+# 表示平台身份数据
 @dataclass(frozen=True)
 class PlatformIdentity:
 
@@ -47,6 +52,7 @@ class PlatformIdentity:
     verified_by: str
 
 
+# 校验账号绑定关系
 def validate_account_bindings(account: SocialAccount, bindings: list[AccountBinding]) -> None:
 
     active = [binding for binding in bindings if binding.active and binding.account_id == account.account_id]

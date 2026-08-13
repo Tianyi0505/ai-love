@@ -4,12 +4,15 @@ from __future__ import annotations
 from shared.infrastructure.runtime_config import required_config
 
 
+# 读取并缓存全局配置
 class GlobalConfig:
 
+    # 初始化当前实例
     def __init__(self, provider) -> None:
         self._provider = provider
         self._data: dict = {}
 
+    # 加载数据
     async def load(self) -> None:
         data = await self._provider.get("ailove.config")
         if not data:
@@ -17,11 +20,13 @@ class GlobalConfig:
         self._data = data
         await self._subscribe()
 
+    # 订阅消息
     async def _subscribe(self) -> None:
         if getattr(self, "_watching", False):
             return
         self._watching = True
 
+        # 处理配置变更
         async def _on_change(data_id: str, parsed: dict) -> None:
             if not parsed:
                 raise RuntimeError("Nacos 配置 ailove.config 不能为空")
@@ -29,10 +34,12 @@ class GlobalConfig:
 
         await self._provider.watch("ailove.config", _on_change)
 
+    # 获取数据
     def get(self, section: str, key: str):
         values = self.section(section)
         return required_config(values, key, f"ailove.config.{section}.{key}")
 
+    # 读取配置段
     def section(self, name: str) -> dict:
         values = required_config(self._data, name, f"ailove.config.{name}")
         if not isinstance(values, dict):

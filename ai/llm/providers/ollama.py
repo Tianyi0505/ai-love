@@ -13,13 +13,16 @@ from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
+# 提供Ollama大模型调用能力
 @provider_registry.register("ollama")
 class OllamaProvider(LLMProvider):
+    # 初始化当前实例
     def __init__(self, model: str, request_timeout_sec: float, base_url: str | None = None, **_) -> None:
         self._url = required_setting(base_url, ConfigKey.OLLAMA_BASE_URL).rstrip("/")
         self._model = model
         self._request_timeout_sec = request_timeout_sec
 
+    # 流式生成聊天内容
     async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatStreamChunk]:
         payload = {
             "model": self._model,

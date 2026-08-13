@@ -20,25 +20,33 @@ from v2.nacos import (
 from shared.infrastructure.runtime_config import ConfigKey, required_config, required_setting
 
 
+# 定义配置提供器接口
 class ConfigProvider(ABC):
+    # 建立连接
     @abstractmethod
     async def connect(self) -> None: ...
 
+    # 获取数据
     @abstractmethod
     async def get(self, key: str) -> dict: ...
 
+    # 监听配置变化
     @abstractmethod
     async def watch(self, key: str, callback) -> None: ...
 
+    # 注册组件
     @abstractmethod
     async def register(self, service_name: str, instance_id: str, addr: str) -> None: ...
 
+    # 关闭资源
     @abstractmethod
     async def close(self) -> None: ...
 
 
+# 从Nacos加载和监听配置
 class NacosConfigProvider(ConfigProvider):
 
+    # 初始化当前实例
     def __init__(self) -> None:
         self._server_addrs = required_setting(None, ConfigKey.AILOVE_NACOS_ADDRS)
         self._grpc_timeout_ms = int(
@@ -51,6 +59,7 @@ class NacosConfigProvider(ConfigProvider):
         self._config_client = None
         self._naming_client = None
 
+    # 建立连接
     async def connect(self) -> None:
         builder = (
             ClientConfigBuilder()
@@ -64,6 +73,7 @@ class NacosConfigProvider(ConfigProvider):
         self._client_config = builder.build()
         self._config_client = await NacosConfigService.create_config_service(self._client_config)
 
+    # 获取数据
     async def get(self, key: str) -> dict:
         if self._config_client is None:
             raise RuntimeError("NacosConfigProvider 未 connect")
@@ -73,14 +83,17 @@ class NacosConfigProvider(ConfigProvider):
         parsed = yaml.safe_load(content)
         return parsed if isinstance(parsed, dict) else {}
 
+    # 监听配置变化
     async def watch(self, key: str, callback) -> None:
 
+        # 监听配置变化事件
         async def _listener(tenant: str, group: str, data_id: str, content: str) -> None:
             parsed = yaml.safe_load(content) if content else {}
             await callback(data_id, parsed if isinstance(parsed, dict) else {})
 
         await self._config_client.add_listener(key, self._group, _listener)
 
+    # 注册组件
     async def register(self, service_name: str, instance_id: str, addr: str) -> None:
         if self._naming_client is None:
             self._naming_client = await NacosNamingService.create_naming_service(self._client_config)
@@ -97,6 +110,7 @@ class NacosConfigProvider(ConfigProvider):
             )
         )
 
+    # 关闭资源
     async def close(self) -> None:
         if self._config_client is not None:
             await self._config_client.shutdown()
@@ -106,6 +120,7 @@ class NacosConfigProvider(ConfigProvider):
             self._naming_client = None
 
 
+# 表示服务配置数据
 @dataclass
 class ServiceConfig:
 
@@ -118,6 +133,7 @@ class ServiceConfig:
     _section: dict = field(init=False, default_factory=dict)
     _section_key: str = field(init=False, default="")
 
+    # 加载数据
     @classmethod
     async def load(cls, service_name: str) -> "ServiceConfig":
         provider = NacosConfigProvider()
@@ -148,11 +164,13 @@ class ServiceConfig:
         await cfg._subscribe()
         return cfg
 
+    # 订阅消息
     async def _subscribe(self) -> None:
         if getattr(self, "_watching", False):
             return
         self._watching = True
 
+        # 处理配置变更
         async def _on_change(data_id: str, parsed: dict) -> None:
             if not parsed:
                 raise RuntimeError(f"Nacos 配置 {data_id} 不能为空")
@@ -160,6 +178,7 @@ class ServiceConfig:
 
         await self.nacos.watch(self._section_key, _on_change)
 
+    # 读取配置段
     async def section(self, key: str = "") -> dict:
         section = self._section
         if not key:
@@ -169,6 +188,7 @@ class ServiceConfig:
             raise RuntimeError(f"{self._section_key}.{key} 必须是对象")
         return value
 
+    # 加载导演配置
     async def director(self, session_id: str) -> dict:
         key = f"director.{session_id}"
         section = await self.nacos.get(key)

@@ -21,7 +21,9 @@ MUSIC_CONFIG = dict(
 )
 
 
+# 注册音乐
 def register_music(mcp) -> None:
+    # 执行音乐控制命令
     @mcp.tool(
         name=str(required_config(MUSIC_CONFIG, "name", "extensions.mcp.music.tool.music.name")),
         title=str(required_config(MUSIC_CONFIG, "title", "extensions.mcp.music.tool.music.title")),

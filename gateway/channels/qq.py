@@ -16,10 +16,12 @@ from shared.infrastructure.runtime_config import required_value
 logger = logging.getLogger("ailove.gateway.qq")
 
 
+# 接入QQ消息收发渠道
 @channel_registry.register(ChannelEnum.QQ.value)
 class QQChannel(Channel):
     name = ChannelEnum.QQ.value
 
+    # 初始化当前实例
     def __init__(self, cfg: dict) -> None:
         super().__init__(cfg)
         self._ws_url = required_value(cfg["ws_url"], "service.gateway QQ ws_url")
@@ -35,6 +37,7 @@ class QQChannel(Channel):
         self._ws = None
         self._stop = False
 
+    # 启动服务
     async def start(self) -> None:
         while not self._stop:
             try:
@@ -49,9 +52,11 @@ class QQChannel(Channel):
                 print(f"[qq] WS 断开: {e}，重连中...")
                 await asyncio.sleep(self._reconnect_delay_sec)
 
+    # 停止服务
     async def stop(self) -> None:
         self._stop = True
 
+    # 转换为消息
     def _to_message(self, evt: dict) -> SocialMessage | None:
         if evt.get("post_type") != EventPostType.MESSAGE.value:
             return None
@@ -152,9 +157,11 @@ class QQChannel(Channel):
             msg.media_desc = str(images[0].get("summary", ""))
         return msg
 
+    # 补全消息内容
     async def hydrate_message(self, message: SocialMessage) -> SocialMessage:
         return await self._hydrate(message, ancestors=frozenset())
 
+    # 补全引用和转发消息
     async def _hydrate(self, message: SocialMessage, ancestors: frozenset[tuple[str, str]]) -> SocialMessage:
         reply_id = str(message.meta.pop("reply_message_id", "") or "")
         if message.type == ContentType.QUOTE and reply_id:
@@ -179,6 +186,7 @@ class QQChannel(Channel):
             )
         return message
 
+    # 获取消息
     async def _get_message(self, message_id: str) -> SocialMessage | None:
         try:
             value: int | str = int(message_id) if message_id.lstrip("-").isdigit() else message_id
@@ -191,6 +199,7 @@ class QQChannel(Channel):
             logger.warning("[qq] 获取引用消息失败: %s", exc)
             return None
 
+    # 获取转发消息节点列表
     async def _get_forward_nodes(self, forward_id: str) -> list[dict]:
         if not forward_id:
             return []
@@ -204,12 +213,14 @@ class QQChannel(Channel):
             logger.warning("[qq] 获取合并转发失败: %s", exc)
             return []
 
+    # 解析转发节点消息
     def _node_messages(self, node: dict) -> list[SocialMessage]:
         primary = self._to_message(node)
         if primary is None:
             return []
         return [primary]
 
+    # 发送消息
     async def send(self, req) -> dict:
         if req.get("account_id") != self.account_id:
             return {"ok": False, "message_id": "", "fallback_note": "account_id 与 QQ 登录账号不匹配"}
@@ -249,10 +260,12 @@ class QQChannel(Channel):
             }
         return {"ok": False, "message_id": "", "fallback_note": f"HTTP {resp.status_code}"}
 
+    # 列出历史
     async def list_history(self, chat: Chat, since: int, limit: int) -> list[SocialMessage]:
         # 缓存本地聊天历史
         return []
 
+    # 返回渠道能力
     @property
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(

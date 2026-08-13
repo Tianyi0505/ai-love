@@ -7,26 +7,35 @@ from shared.contracts.events import TurnRequest, make_conversation_id
 from shared.contracts.social import SocialMessage
 
 
+# 定义归属解析器接口
 class OwnershipResolver(Protocol):
+    # 获取社交账号所属智能体
     async def owner_for_social_account(self, account_id: str) -> str | None: ...
 
 
+# 按静态配置解析账号归属
 class StaticOwnershipResolver:
 
+    # 初始化当前实例
     def __init__(self, owners: dict[str, str]) -> None:
         self._owners = dict(owners)
 
+    # 获取社交账号所属智能体
     async def owner_for_social_account(self, account_id: str) -> str | None:
         return self._owners.get(account_id)
 
 
+# 路由社交消息与发送请求
 class SocialRouter:
+    # 初始化当前实例
     def __init__(self, ownership: OwnershipResolver) -> None:
         self._ownership = ownership
 
+    # 获取账号所属智能体
     async def owner_for(self, account_id: str) -> str | None:
         return await self._ownership.owner_for_social_account(account_id)
 
+    # 路由消息
     async def route(self, message: SocialMessage) -> TurnRequest:
         ai_id = await self._ownership.owner_for_social_account(message.account_id)
         if not ai_id:

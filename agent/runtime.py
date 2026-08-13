@@ -34,7 +34,9 @@ from ai.vision.factory import create_vision
 logger = logging.getLogger("ailove.ai-agent")
 
 
+# 运行单个智能体实例
 class AIRuntime:
+    # 初始化当前实例
     def __init__(self, host, definition: AgentDefinition, account_ids: tuple[str, ...]) -> None:
         self._host = host
         self.definition = definition
@@ -45,6 +47,7 @@ class AIRuntime:
         self._in_flight = 0
         self._group_turns_in_flight: dict[str, float] = {}
 
+    # 启动服务
     async def start(self) -> None:
         self.ai_id = self.definition.ai_id
 
@@ -112,14 +115,17 @@ class AIRuntime:
                 float(self._proactive_config["min_weight"]),
             ))
 
+    # 返回主社交账号标识
     @property
     def primary_social_account_id(self) -> str:
         return self._account_ids[0] if self._account_ids else ""
 
+    # 等待在途任务完成
     async def drain(self) -> None:
         while self._in_flight:
             await asyncio.sleep(float(self.gcfg.get("social", "drain_poll_interval_sec")))
 
+    # 停止服务
     async def stop(self) -> None:
         tasks = list(self._tasks)
         for task in tasks:
@@ -128,18 +134,21 @@ class AIRuntime:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
 
+    # 创建后台任务
     def spawn(self, coro) -> asyncio.Task:
         task = asyncio.create_task(coro)
         self._tasks.append(task)
         task.add_done_callback(self._discard_task)
         return task
 
+    # 清理已结束的后台任务
     def _discard_task(self, task: asyncio.Task) -> None:
         if task in self._tasks:
             self._tasks.remove(task)
         if not task.cancelled() and task.exception() is not None:
             logger.warning("[ai-agent:%s] 后台任务失败: %s", self.ai_id, task.exception())
 
+    # 处理社交
     async def handle_social(self, payload: bytes) -> None:
         self._in_flight += 1
         try:
@@ -156,6 +165,7 @@ class AIRuntime:
                 logger.warning("[ai-agent:%s] 发布记忆活动失败: %s", self.ai_id, exc)
             self._in_flight -= 1
 
+    # 处理直播
     async def handle_live(self, payload: bytes) -> None:
         self._in_flight += 1
         try:
@@ -163,6 +173,7 @@ class AIRuntime:
         finally:
             self._in_flight -= 1
 
+    # 处理轮次
     async def handle_turn(self, turn: TurnRequest):
         social_message = turn.metadata.get("social_message")
         if social_message:
@@ -170,6 +181,7 @@ class AIRuntime:
             return None
         raise ValueError(f"暂不支持的回合来源: {turn.source}")
 
+    # 处理评论
     async def handle_comment(self, payload: bytes) -> bytes:
         self._in_flight += 1
         try:
@@ -177,6 +189,7 @@ class AIRuntime:
         finally:
             self._in_flight -= 1
 
+    # 列出人格列表
     async def _list_personas(self) -> list[dict]:
         try:
             resp = await self.bus.request_json(
@@ -188,24 +201,30 @@ class AIRuntime:
         except Exception:
             return []
 
+    # 列出人格列表
     async def list_personas(self) -> list[dict]:
         return await self._list_personas()
 
+    # 发送私聊
     async def send_private(self, p: dict) -> None:
         await self._send_proactive(p)
 
+    # 判断是否可以在群聊发言
     def _can_speak_in_group(self, chat_id: str, cooldown_sec: int) -> bool:
         chat_key = f"group:{chat_id}"
         if cooldown_sec > 0:
             return self.sessions.can_initiate(chat_key, cooldown_sec)
         return self.sessions.can_speak(chat_key)
 
+    # 标记群聊已发言状态
     def _mark_group_spoke(self, chat_id: str) -> None:
         self.sessions.mark_spoke(f"group:{chat_id}")
 
+    # 标记群聊已回复状态
     def _mark_group_replied(self, chat_id: str) -> None:
         self.sessions.mark_replied(f"group:{chat_id}")
 
+    # 记录群聊消息
     def _observe_group_message(self, chat_id: str) -> None:
         self.group_manager.observe(
             chat_id,
@@ -215,9 +234,11 @@ class AIRuntime:
             rest_sec=int(self._proactive_config["group_session_rest_sec"]),
         )
 
+    # 激活群聊会话
     def _activate_group_session(self, chat_id: str) -> None:
         self.group_manager.activate(chat_id)
 
+    # 开始群聊回复轮次
     async def _begin_group_turn(
         self,
         chat_id: str,
@@ -239,9 +260,11 @@ class AIRuntime:
         self._group_turns_in_flight[chat_id] = now
         return True
 
+    # 完成群聊轮次
     def _finish_group_turn(self, chat_id: str) -> None:
         self._group_turns_in_flight.pop(chat_id, None)
 
+    # 加载群聊关系
     async def _group_relationship(self, chat_id: str) -> dict:
         try:
             response = await self.bus.request_json(
@@ -258,6 +281,7 @@ class AIRuntime:
             logger.warning("[ai-agent:%s] 读取群关系失败: %s", self.ai_id, exc)
             return {}
 
+    # 计算群聊参与度
     def _group_participation_score(self, relationship: dict) -> float:
         weights = self._proactive_config["group_participation_weights"]
         score = (
@@ -268,18 +292,21 @@ class AIRuntime:
         )
         return max(0.0, min(1.0, score))
 
+    # 计算群聊发言冷却时间
     def _group_cooldown(self, participation_score: float) -> int:
         minimum = int(self._proactive_config["group_min_cooldown_sec"])
         maximum = int(self._proactive_config["group_max_cooldown_sec"])
         exponent = float(self._proactive_config["group_cooldown_curve_exponent"])
         return round(minimum + (maximum - minimum) * (1.0 - participation_score) ** exponent)
 
+    # 限制回复句子数量
     def _limit_sentences(self, text: str, max_sentences: int) -> str:
         sentences = re.split(r"(?<=[。！？!?])", text.strip())
         if len(sentences) <= max_sentences:
             return text
         return "".join(sentences[:max_sentences])
 
+    # 生成回复计划
     async def _generate_plan(self, context: PromptContext, fallback: str = "") -> ResponsePlan:
         messages = [
             ChatMessage(role="system", content=self.prompt_assembler.build_system_prompt(context)),
@@ -295,6 +322,7 @@ class AIRuntime:
             return plan
         return ResponsePlan.from_model_output(fallback)
 
+    # 发送主动交互
     async def _send_proactive(self, p: dict) -> None:
         user_id = p.get("user_id", "")
         name = self.persona.name_for(user_id) or p.get("display_name") or p.get("name", "朋友")
@@ -328,6 +356,7 @@ class AIRuntime:
         self.sessions.mark_spoke(session_key)
         logger.info("[ai-agent:%s] 主动私聊 %s: %s", self.ai_id, name, text[:30])
 
+    # 判断是否加入群聊对话
     async def _join_group_checker(self, chat_id: str, explicitly_addressed: bool = False) -> bool:
         if not explicitly_addressed and (
             not self._proactive_enabled or not self.proactive.in_work_hours()
@@ -393,6 +422,7 @@ class AIRuntime:
             logger.warning("[ai-agent:%s] 群聊判断失败: %s", self.ai_id, e)
             return False
 
+    # 持续执行补偿回复循环
     async def _compensation_loop(self) -> None:
         interval = int(self.gcfg.get("social", "compensate_interval_sec"))
         while True:
@@ -406,6 +436,7 @@ class AIRuntime:
             except Exception as e:
                 logger.warning("[ai-agent:%s] 补偿检查失败: %s", self.ai_id, e)
 
+    # 执行群聊补偿回复
     async def _compensate(self, chat_key: str, window) -> None:
         chat_id = chat_key.split(":", 1)[1]
         history_limit = int(self.gcfg.get("social", "compensation_history_messages"))
@@ -426,6 +457,7 @@ class AIRuntime:
         self.conversation.add_ai("private", chat_id, reply)
         logger.info("[ai-agent:%s] 补偿回复 %s: %s", self.ai_id, chat_id, reply[:30])
 
+    # 处理评论请求
     async def _on_comment_request(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         feed_text = req.get("feed_text", "")
@@ -468,6 +500,7 @@ class AIRuntime:
             ensure_ascii=False,
         ).encode()
 
+    # 描述图片
     async def _describe_image(self, image_url: str) -> str:
         try:
             result = await self.vision.describe(image_url)
@@ -476,9 +509,11 @@ class AIRuntime:
             logger.warning("[ai-agent:%s] 图片理解失败: %s", self.ai_id, exc)
             return str(self._fallbacks["image_unreadable"])
 
+    # 收集表情列表
     async def collect_stickers(self, image_urls: list[str]) -> None:
         await asyncio.gather(*(self._collect_sticker(url) for url in image_urls))
 
+    # 收集表情
     async def _collect_sticker(self, image_url: str) -> None:
         try:
             description = await self.vision.describe(image_url)

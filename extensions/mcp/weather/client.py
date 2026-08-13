@@ -9,13 +9,16 @@ import httpx
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
+# 调用和风天气接口
 class QWeatherClient:
+    # 初始化当前实例
     def __init__(self, request_timeout_sec: float) -> None:
         self._api_key = required_setting(None, ConfigKey.QWEATHER_API_KEY)
         host = required_setting(None, ConfigKey.QWEATHER_API_HOST)
         self._host = host.removeprefix("https://").rstrip("/")
         self._request_timeout_sec = request_timeout_sec
 
+    # 查询天气信息
     async def weather(self, city: str, days: int, lang: str) -> dict[str, Any]:
         location = await self._get(
             "/geo/v2/city/lookup",
@@ -39,6 +42,7 @@ class QWeatherClient:
         )
         return self._normalize(place, current, daily)
 
+    # 获取数据
     async def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         async with httpx.AsyncClient(
             timeout=self._request_timeout_sec,
@@ -52,6 +56,7 @@ class QWeatherClient:
             raise RuntimeError("和风天气返回了无效数据")
         return data
 
+    # 规范化输入数据
     @staticmethod
     def _normalize(place: dict, current: dict, daily: dict) -> dict[str, Any]:
         condition = current.get("condition") or {}
@@ -114,6 +119,7 @@ class QWeatherClient:
             "source": "QWeather",
         }
 
+    # 计算百分比值
     @staticmethod
     def _percent(value: Any) -> int | None:
         if value is None:

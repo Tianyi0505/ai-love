@@ -13,6 +13,7 @@ from shared.contracts.social import ContentType, SocialMessage
 logger = logging.getLogger("ailove.ai-agent.events.social")
 
 
+# 处理社交
 async def handle_social(service, payload: bytes) -> None:
     msg = SocialMessage.from_dict(json.loads(payload))
     logger.info("[ai-agent:%s] 收到社交: %s: %s", service.ai_id, msg.sender.user_id, msg.text[:30])

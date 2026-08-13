@@ -10,6 +10,7 @@ from typing import TypeVar
 T = TypeVar("T")
 
 
+# 定义配置键枚举
 class ConfigKey(str, Enum):
     AILOVE_NACOS_ADDRS = "AILOVE_NACOS_ADDRS"
     AILOVE_NACOS_GROUP = "AILOVE_NACOS_GROUP"
@@ -40,6 +41,7 @@ class ConfigKey(str, Enum):
     QWEATHER_API_HOST = "QWEATHER_API_HOST"
 
 
+# 读取必填配置值
 def required_value(value: str | None, config_name: str | ConfigKey) -> str:
     name = config_name.value if isinstance(config_name, ConfigKey) else config_name
     if value is None:
@@ -50,11 +52,13 @@ def required_value(value: str | None, config_name: str | ConfigKey) -> str:
     return resolved
 
 
+# 读取必填设置项
 def required_setting(value: str | None, env_name: ConfigKey) -> str:
     resolved = value if value is not None else os.environ.get(env_name.value)
     return required_value(resolved, env_name)
 
 
+# 读取必填配置项
 def required_config(config: Mapping[str, T], key: str, config_name: str) -> T:
     try:
         return config[key]

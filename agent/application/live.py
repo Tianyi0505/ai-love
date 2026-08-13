@@ -12,6 +12,7 @@ from agent.generation.response import ResponsePlan
 logger = logging.getLogger("ailove.ai-agent.events.live")
 
 
+# 处理直播
 async def handle_live(service, payload: bytes) -> None:
     evt = InteractionEvent.from_dict(json.loads(payload))
     chat_key = f"live:{evt.actor.uid}"

@@ -9,6 +9,7 @@ SUBJ_SOCIAL_SEND = "social.send.request"
 SUBJ_SOCIAL_HISTORY = "social.history.request"
 
 
+# 定义内容类型枚举
 class ContentType(Enum):
     TEXT = "text"
     IMAGE = "image"
@@ -20,11 +21,13 @@ class ContentType(Enum):
     AT = "at"
 
 
+# 定义聊天类型枚举
 class ChatType(Enum):
     PRIVATE = "private"
     GROUP = "group"
 
 
+# 表示社交发送者数据
 @dataclass
 class SocialSender:
     user_id: str
@@ -32,6 +35,7 @@ class SocialSender:
     avatar_url: str = ""
 
 
+# 表示聊天数据
 @dataclass
 class Chat:
 
@@ -41,6 +45,7 @@ class Chat:
     ai_identity: str = ""
     members: list[SocialSender] = field(default_factory=list)
 
+    # 转换为字典
     def to_dict(self) -> dict:
         return {
             "chat_id": self.chat_id,
@@ -50,6 +55,7 @@ class Chat:
             "members": [{"user_id": m.user_id, "name": m.name, "avatar_url": m.avatar_url} for m in self.members],
         }
 
+    # 从字典创建实例
     @classmethod
     def from_dict(cls, data: dict) -> "Chat":
         return cls(
@@ -61,6 +67,7 @@ class Chat:
         )
 
 
+# 表示社交消息数据
 @dataclass
 class SocialMessage:
 
@@ -83,6 +90,7 @@ class SocialMessage:
     platform: str = ""
     meta: dict = field(default_factory=dict)
 
+    # 转换为字典
     def to_dict(self) -> dict:
         d = {
             "chat": self.chat.to_dict(),
@@ -108,6 +116,7 @@ class SocialMessage:
             d["quote_ref"] = self.quote_ref.to_dict()
         return d
 
+    # 从字典创建实例
     @classmethod
     def from_dict(cls, data: dict) -> "SocialMessage":
         return cls(
@@ -131,6 +140,7 @@ class SocialMessage:
             meta=data.get("meta", {}),
         )
 
+    # 列出全部媒体地址
     def all_media_urls(self) -> list[str]:
         if self.media_urls:
             return [str(url) for url in self.media_urls if str(url)]

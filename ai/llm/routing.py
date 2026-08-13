@@ -13,14 +13,17 @@ from ai.llm.types import ChatRequest, ChatStreamChunk
 
 logger = logging.getLogger("ailove.llm.routing")
 
+# 提供路由大模型服务能力
 class RoutingLLMService:
 
+    # 初始化当前实例
     def __init__(self, selector: ModelSelector, health_store: ModelHealthStore, provider_factory) -> None:
         self._selector = selector
         self._health = health_store
         self._provider_factory = provider_factory
         self._streams: dict[str, AsyncIterator[ChatStreamChunk]] = {}
 
+    # 执行大模型聊天
     async def chat(self, req: ChatRequest, tier: Tier | None = None, preferred: str = "") -> AsyncIterator[ChatStreamChunk]:
         thinking = getattr(req, "thinking", False)
         targets = self._selector.select_chat_candidates(thinking, tier, preferred)
@@ -49,6 +52,7 @@ class RoutingLLMService:
 
         raise RuntimeError(LLMErrorMessage.ALL_FAILED.value) from last_error
 
+    # 读取首个流式响应包
     async def _try_first_packet(self, provider: LLMProvider, req: ChatRequest, target: ModelTarget) -> tuple[ChatStreamChunk | None, AsyncIterator]:
         try:
             stream = provider.chat_stream(req)

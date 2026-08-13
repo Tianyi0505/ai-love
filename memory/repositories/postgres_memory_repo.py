@@ -12,12 +12,15 @@ from memory.memory_policy import (
 )
 
 
+# 使用PostgreSQL持久化记忆
 class PostgresMemoryRepo:
+    # 初始化当前实例
     def __init__(self, db, policy: MemoryPolicy, config: dict) -> None:
         self._db = db
         self._policy = policy
         self._config = config
 
+    # 写入数据
     async def write(self, ai_id: str, entries: list[dict]) -> None:
         for entry in entries:
             scope = MemoryScope(entry["scope"])
@@ -46,6 +49,7 @@ class PostgresMemoryRepo:
                 int(entry.get("reference_count", 0)),
             )
 
+    # 检索匹配内容
     async def search(
         self,
         ai_id: str,
@@ -103,6 +107,7 @@ class PostgresMemoryRepo:
             )
         return results
 
+    # 清理过期数据
     async def cleanup(self) -> dict[str, int]:
         rows = await self._db.fetch(
             "SELECT memory_id::text, owner_ai_id, person_id::text, session_id::text, scope, "
@@ -130,6 +135,7 @@ class PostgresMemoryRepo:
             )
         return {"dormant": len(dormant_ids), "deleted": len(delete_ids)}
 
+    # 记录模型调用结果
     @staticmethod
     def _record(row) -> MemoryRecord:
         return MemoryRecord(
@@ -152,6 +158,7 @@ class PostgresMemoryRepo:
             recall_count=int(row["recall_count"]),
         )
 
+    # 计算记忆相关度
     def _relevance(self, content: str, query: str) -> float:
         if not query:
             return float(self._config["empty_query_relevance"])
@@ -161,6 +168,7 @@ class PostgresMemoryRepo:
             return 0.0
         return len(content_chars & query_chars) / len(query_chars)
 
+    # 将数值限制在单位区间
     @staticmethod
     def _unit(value) -> float:
         number = float(value)

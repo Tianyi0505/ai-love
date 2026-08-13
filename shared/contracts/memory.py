@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 
+# 表示记忆活动数据
 @dataclass(frozen=True)
 class MemoryActivity:
     ai_id: str
@@ -13,6 +14,7 @@ class MemoryActivity:
     sequence: int
     active_at: float = field(default_factory=time.time)
 
+    # 转换为字典
     def to_dict(self) -> dict:
         return {
             "ai_id": self.ai_id,
@@ -23,6 +25,7 @@ class MemoryActivity:
             "active_at": self.active_at,
         }
 
+    # 从字典创建实例
     @classmethod
     def from_dict(cls, data: dict) -> "MemoryActivity":
         return cls(

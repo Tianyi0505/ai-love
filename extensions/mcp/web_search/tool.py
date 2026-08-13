@@ -28,7 +28,9 @@ MESSAGES = dict(
 )
 
 
+# 注册网页检索
 def register_web_search(mcp) -> None:
+    # 搜索网页信息
     @mcp.tool(
         name=str(
             required_config(

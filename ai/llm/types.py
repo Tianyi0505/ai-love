@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+# 表示聊天消息数据
 @dataclass
 class ChatMessage:
     role: str
@@ -10,6 +11,7 @@ class ChatMessage:
     name: str = ""
 
 
+# 表示工具结构数据
 @dataclass
 class ToolSchema:
     name: str
@@ -17,6 +19,7 @@ class ToolSchema:
     parameters: dict = field(default_factory=dict)
 
 
+# 表示聊天请求数据
 @dataclass
 class ChatRequest:
     ai_id: str
@@ -25,12 +28,14 @@ class ChatRequest:
     options: dict = field(default_factory=dict)
 
 
+# 描述工具调用数据
 @dataclass
 class ToolCall:
     name: str
     arguments: dict
 
 
+# 描述聊天流式响应片段
 @dataclass
 class ChatStreamChunk:
     content: str = ""

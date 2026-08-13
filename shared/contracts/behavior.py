@@ -6,22 +6,27 @@ from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
 
+# 表示工作时段数据
 @dataclass(frozen=True)
 class WorkPeriod:
     start: dt.time
     end: dt.time
 
+    # 判断是否包含指定项
     def contains(self, value: dt.time) -> bool:
         if self.start <= self.end:
             return self.start <= value < self.end
         return value >= self.start or value < self.end
 
 
+# 管理主动行为时间表
 class BehaviorSchedule:
+    # 初始化当前实例
     def __init__(self, timezone: str, periods: list[WorkPeriod]) -> None:
         self._timezone = ZoneInfo(timezone)
         self._periods = periods
 
+    # 从配置创建实例
     @classmethod
     def from_config(cls, config: dict) -> "BehaviorSchedule":
         proactive = config["proactive"]
@@ -30,6 +35,7 @@ class BehaviorSchedule:
             periods.append(WorkPeriod(cls._time(item["start"]), cls._time(item["end"])))
         return cls(str(proactive["timezone"]), periods)
 
+    # 判断是否允许主动交互
     def allows_proactive(self, moment: dt.datetime | None = None) -> bool:
         if not self._periods:
             return False
@@ -39,6 +45,7 @@ class BehaviorSchedule:
         local_time = current.astimezone(self._timezone).time().replace(tzinfo=None)
         return any(period.contains(local_time) for period in self._periods)
 
+    # 解析事件时间
     @staticmethod
     def _time(value: str) -> dt.time:
         hour, minute = (int(part) for part in value.split(":", 1))

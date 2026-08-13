@@ -12,8 +12,10 @@ from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall, To
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
+# 通过Anthropic网关调用大模型
 @provider_registry.register("anthropic_gw")
 class AnthropicGatewayProvider(LLMProvider):
+    # 初始化当前实例
     def __init__(
         self,
         model: str,
@@ -31,6 +33,7 @@ class AnthropicGatewayProvider(LLMProvider):
         self._model = model
         self._max_tokens = max_tokens
 
+    # 转换为消息列表
     def _to_messages(self, msgs: list[ChatMessage]) -> list[dict]:
         out = []
         for m in msgs:
@@ -39,9 +42,11 @@ class AnthropicGatewayProvider(LLMProvider):
             out.append({"role": "assistant" if m.role == "assistant" else "user", "content": m.content})
         return out
 
+    # 转换为工具列表
     def _to_tools(self, tools: list[ToolSchema]) -> list[dict]:
         return [{"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tools]
 
+    # 流式生成聊天内容
     async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatStreamChunk]:
         system_prompt = "\n".join(m.content for m in req.messages if m.role == "system")
         kwargs: dict = {
@@ -86,5 +91,6 @@ class AnthropicGatewayProvider(LLMProvider):
                     elif stop == "end_turn":
                         yield ChatStreamChunk(finish_reason="stop", latency_ms=latency)
 
+    # 关闭资源
     async def close(self) -> None:
         await self._client.close()

@@ -8,6 +8,7 @@ from pathlib import Path
 import asyncpg
 
 
+# 运行主流程
 async def run() -> None:
     url = os.environ.get("AILOVE_DATABASE_URL", "")
     if not url:

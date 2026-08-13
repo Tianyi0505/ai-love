@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from shared.contracts.memory import MemoryActivity
 
 
+# 表示状态条目数据
 @dataclass(frozen=True)
 class StateEntry:
     key: str
@@ -16,15 +17,18 @@ class StateEntry:
     data: dict
 
 
+# 管理记忆任务状态
 class MemoryStateStore:
     """用 JetStream KV 保存活动水位和待合并批次。"""
 
+    # 初始化当前实例
     def __init__(self, activity_kv, pending_kv, quiet_window_sec: float, lease_sec: float) -> None:
         self._activity = activity_kv
         self._pending = pending_kv
         self._quiet_window = float(quiet_window_sec)
         self._lease = float(lease_sec)
 
+    # 记录活动
     async def record_activity(self, activity: MemoryActivity) -> None:
         key = self._key("activity", activity.ai_id, activity.person_id)
         data = {
@@ -51,6 +55,7 @@ class MemoryStateStore:
                 return
         raise RuntimeError("更新记忆活动状态冲突")
 
+    # 列出到期活动
     async def due_activities(self, now: float | None = None) -> list[StateEntry]:
         now = time.time() if now is None else now
         result = []
@@ -63,6 +68,7 @@ class MemoryStateStore:
                 result.append(entry)
         return result
 
+    # 领取活动
     async def claim_activity(self, entry: StateEntry, now: float | None = None) -> StateEntry | None:
         now = time.time() if now is None else now
         data = dict(entry.data)
@@ -74,9 +80,11 @@ class MemoryStateStore:
         revision = await self._update(self._activity, entry.key, data, entry.revision)
         return StateEntry(entry.key, revision, data) if revision else None
 
+    # 完成活动
     async def finish_activity(self, claim: StateEntry) -> None:
         await self._delete_if_claim(self._activity, claim)
 
+    # 释放活动
     async def release_activity(self, claim: StateEntry, retry_delay_sec: float) -> None:
         current = await self._get(self._activity, claim.key)
         if current is None or current.data.get("claim_id") != claim.data.get("claim_id"):
@@ -90,6 +98,7 @@ class MemoryStateStore:
         )
         await self._update(self._activity, current.key, data, current.revision)
 
+    # 添加待处理项
     async def add_pending(
         self,
         ai_id: str,
@@ -134,6 +143,7 @@ class MemoryStateStore:
                 return
         raise RuntimeError("更新待合并记忆状态冲突")
 
+    # 列出可处理的待办任务
     async def ready_pending(self, thresholds: dict[str, dict], now: float | None = None) -> list[StateEntry]:
         now = time.time() if now is None else now
         result = []
@@ -153,6 +163,7 @@ class MemoryStateStore:
                 result.append(entry)
         return result
 
+    # 领取待处理项
     async def claim_pending(self, entry: StateEntry, now: float | None = None) -> StateEntry | None:
         now = time.time() if now is None else now
         data = dict(entry.data)
@@ -164,6 +175,7 @@ class MemoryStateStore:
         revision = await self._update(self._pending, entry.key, data, entry.revision)
         return StateEntry(entry.key, revision, data) if revision else None
 
+    # 完成待处理项
     async def complete_pending(self, claim: StateEntry) -> None:
         processed_episodes = set(claim.data.get("episode_ids", []))
         processed_atoms = set(claim.data.get("atom_ids", []))
@@ -205,6 +217,7 @@ class MemoryStateStore:
                 return
         raise RuntimeError("完成待合并记忆状态冲突")
 
+    # 释放待处理项
     async def release_pending(self, claim: StateEntry) -> None:
         current = await self._get(self._pending, claim.key)
         if current is None or current.data.get("claim_id") != claim.data.get("claim_id"):
@@ -213,11 +226,13 @@ class MemoryStateStore:
         data.update(status="active", lease_until=0.0, claim_id="")
         await self._update(self._pending, current.key, data, current.revision)
 
+    # 删除匹配的已领取任务
     async def _delete_if_claim(self, kv, claim: StateEntry) -> None:
         current = await self._get(kv, claim.key)
         if current is not None and current.data.get("claim_id") == claim.data.get("claim_id"):
             await self._delete(kv, current)
 
+    # 读取记忆状态条目
     async def _entries(self, kv) -> list[StateEntry]:
         try:
             keys = await kv.keys()
@@ -232,6 +247,7 @@ class MemoryStateStore:
                 result.append(entry)
         return result
 
+    # 获取数据
     @staticmethod
     async def _get(kv, key: str) -> StateEntry | None:
         try:
@@ -246,6 +262,7 @@ class MemoryStateStore:
             data=json.loads(entry.value.decode("utf-8")),
         )
 
+    # 比较并交换状态值
     async def _cas(self, kv, key: str, data: dict, current: StateEntry | None) -> bool:
         raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         try:
@@ -259,6 +276,7 @@ class MemoryStateStore:
                 return False
             raise
 
+    # 更新数据
     @staticmethod
     async def _update(kv, key: str, data: dict, revision: int) -> int:
         raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -269,6 +287,7 @@ class MemoryStateStore:
                 return 0
             raise
 
+    # 删除数据
     @staticmethod
     async def _delete(kv, entry: StateEntry) -> bool:
         try:
@@ -279,6 +298,7 @@ class MemoryStateStore:
                 return False
             raise
 
+    # 生成状态存储键
     @staticmethod
     def _key(prefix: str, *parts: str) -> str:
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()

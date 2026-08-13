@@ -32,7 +32,9 @@ LANG_CONFIG = dict(
 )
 
 
+# 注册天气
 def register_weather(mcp) -> None:
+    # 查询天气信息
     @mcp.tool(
         name=str(
             required_config(

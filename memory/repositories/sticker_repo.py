@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 
+# 对检索文本分词
 def _tokenize(text: str) -> list[str]:
     tokens = re.findall(r"[a-z0-9]+", text.lower())
     for ch in text:
@@ -16,8 +17,10 @@ def _tokenize(text: str) -> list[str]:
     return tokens
 
 
+# 管理表情存储库持久化
 class StickerRepo:
 
+    # 初始化当前实例
     def __init__(self, ai_id: str, data_dir: str, config: dict) -> None:
         self._ai_id = ai_id
         self._config = config
@@ -27,6 +30,7 @@ class StickerRepo:
         self._conn.row_factory = sqlite3.Row
         self._init_db()
 
+    # 初始化表情数据库
     def _init_db(self) -> None:
         self._conn.execute(f"""
             CREATE TABLE IF NOT EXISTS stickers (
@@ -64,6 +68,7 @@ class StickerRepo:
             )
         self._conn.commit()
 
+    # 将数据行转换为字典
     def _row_to_dict(self, row: sqlite3.Row) -> dict:
         d = dict(row)
         d["tags"] = json.loads(d.get("tags") or "[]")
@@ -73,11 +78,13 @@ class StickerRepo:
         d.pop("importance", None)
         return d
 
+    # 计算记忆新鲜度
     def _freshness(self, row: sqlite3.Row) -> float:
         anchor = row["last_used_at"] or row["created_at"] or time.time()
         elapsed = max(0.0, time.time() - anchor)
         return 0.5 ** (elapsed / float(self._config["half_life_sec"]))
 
+    # 计算记忆保留分数
     def _retention_score(self, row: sqlite3.Row) -> float:
         return (
             float(row["match_quality"] or 0.0) * float(self._config["retention_weights"]["match_quality"])
@@ -85,12 +92,15 @@ class StickerRepo:
             + self._freshness(row) * float(self._config["retention_weights"]["freshness"])
         )
 
+    # 返回记录数量
     def count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM stickers").fetchone()[0]
 
+    # 判断记录是否存在
     def exists(self, sticker_id: str) -> bool:
         return self._conn.execute("SELECT 1 FROM stickers WHERE id=?", (sticker_id,)).fetchone() is not None
 
+    # 插入数据
     def insert(self, sticker: dict) -> None:
         self._conn.execute(
             "INSERT INTO stickers (id, image_url, description, tags, value, importance, boost_count, "
@@ -101,6 +111,7 @@ class StickerRepo:
         )
         self._conn.commit()
 
+    # 删除最低项
     def delete_lowest(self) -> str:
         rows = self._conn.execute("SELECT * FROM stickers").fetchall()
         if not rows:
@@ -110,6 +121,7 @@ class StickerRepo:
         self._conn.commit()
         return lowest["description"]
 
+    # 删除不可用项
     def delete_unusable(self, min_quality: float) -> int:
         cursor = self._conn.execute(
             "DELETE FROM stickers WHERE COALESCE(match_quality, 0) < ? OR TRIM(description) LIKE '```%'",
@@ -118,9 +130,11 @@ class StickerRepo:
         self._conn.commit()
         return max(0, cursor.rowcount)
 
+    # 列出全部数据
     def all(self) -> list[dict]:
         return [self._row_to_dict(r) for r in self._conn.execute("SELECT * FROM stickers").fetchall()]
 
+    # 增强记忆强度
     def boost(self, sticker_id: str, boost_delta: float) -> None:
         cur = self._conn.execute("SELECT * FROM stickers WHERE id=?", (sticker_id,))
         row = cur.fetchone()
@@ -134,6 +148,7 @@ class StickerRepo:
             )
             self._conn.commit()
 
+    # 清理过期数据
     def cleanup(self, threshold: float) -> int:
         rows = self._conn.execute("SELECT * FROM stickers").fetchall()
         normalized_threshold = self._unit(threshold)
@@ -144,13 +159,16 @@ class StickerRepo:
             self._conn.commit()
         return len(removed)
 
+    # 获取数据
     def get(self, sticker_id: str) -> dict | None:
         row = self._conn.execute("SELECT * FROM stickers WHERE id=?", (sticker_id,)).fetchone()
         return self._row_to_dict(row) if row else None
 
+    # 关闭资源
     def close(self) -> None:
         self._conn.close()
 
+    # 将数值限制在单位区间
     @staticmethod
     def _unit(value) -> float:
         number = float(value)

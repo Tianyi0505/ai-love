@@ -23,9 +23,11 @@ SUBJ_LIVE_TURN_ALL = "agent.live.>"
 SUBJ_COMMENT = "ai.comment.request"
 
 
+# 提供AI智能体服务能力
 class AIAgentService(BaseService):
     name = "ai-agent"
 
+    # 启动服务
     async def on_start(self) -> None:
         section = await self.cfg.section()
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
@@ -43,6 +45,7 @@ class AIAgentService(BaseService):
             self._profiles = AIProfileRepository(self._db)
             self._accounts = AccountOwnershipRepository(self._db)
 
+        # 创建智能体运行时
         async def runtime_factory(definition):
             account_ids = await self._account_ids_for(definition.ai_id)
             return AIRuntime(self, definition, account_ids)
@@ -56,13 +59,16 @@ class AIAgentService(BaseService):
         self.spawn(self._catalog_loop())
         await self._watch_agent_configs()
 
+    # 停止服务
     async def on_stop(self) -> None:
         await self._supervisor.stop()
         if self._db is not None:
             await self._db.close()
 
+    # 监听智能体配置变化
     async def _watch_agent_configs(self) -> None:
 
+        # 重新加载配置
         async def _reload(_data_id: str, _parsed: dict) -> None:
             try:
                 await self._supervisor.reconcile(await self._active_definitions())
@@ -75,17 +81,20 @@ class AIAgentService(BaseService):
         await self.cfg.nacos.watch("agent.default", _reload)
         await self.cfg.nacos.watch("agent.catalog", _reload)
 
+    # 加载已启用的智能体定义
     async def _active_definitions(self):
         if self._profiles is None:
             return await self._definitions.list_active()
         records = await self._profiles.list_active()
         return [await self._definitions.load(record.ai_id) for record in records]
 
+    # 获取智能体绑定的账号标识
     async def _account_ids_for(self, ai_id: str) -> tuple[str, ...]:
         if self._accounts is not None:
             return tuple(await self._accounts.accounts_for_ai(ai_id))
         return self._fallback_accounts.get(ai_id, ())
 
+    # 持续执行目录循环
     async def _catalog_loop(self) -> None:
         poll_interval = float((await self.cfg.section())["catalog_poll_interval_sec"])
         while True:
@@ -95,6 +104,7 @@ class AIAgentService(BaseService):
             except Exception:
                 logger.exception("[ai-agent] Catalog 更新失败，保留上一有效版本")
 
+    # 处理社交
     async def _on_social(self, payload: bytes) -> None:
         msg = SocialMessage.from_dict(json.loads(payload))
         ai_id = str(msg.meta.get("ai_id", ""))
@@ -103,6 +113,7 @@ class AIAgentService(BaseService):
             return
         await self._supervisor.dispatch_social(ai_id, payload)
 
+    # 处理直播
     async def _on_live(self, payload: bytes) -> None:
         event = InteractionEvent.from_dict(json.loads(payload))
         ai_id = str(event.context_metadata.get("target_ai_id", "") or event.ai_target)
@@ -111,6 +122,7 @@ class AIAgentService(BaseService):
             return
         await self._supervisor.dispatch_live(ai_id, payload)
 
+    # 处理评论
     async def _on_comment(self, payload: bytes) -> bytes:
         request = json.loads(payload)
         ai_id = str(request.get("ai_id", ""))
@@ -119,7 +131,9 @@ class AIAgentService(BaseService):
         return await self._supervisor.dispatch_comment(ai_id, payload)
 
 
+# 启动程序入口
 def main() -> None:
+    # 运行主流程
     async def run() -> None:
         service = AIAgentService(await ServiceConfig.load("ai-agent"))
         await service.start()

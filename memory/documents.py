@@ -23,6 +23,7 @@ SELF_SECTIONS = (
 )
 
 
+# 规范化Markdown文本
 def normalize_markdown(owner_type: str, markdown: str) -> str:
     sections = PERSON_SECTIONS if owner_type == "person" else SELF_SECTIONS
     title = "联系人长期认知" if owner_type == "person" else "自我长期认知"

@@ -17,9 +17,11 @@ SUBJ_LIVE_EVENTS = "live.events"
 SUBJ_LIVE_TURN = "agent.live.{ai_id}"
 
 
+# 提供导演服务能力
 class DirectorService(BaseService):
     name = "director"
 
+    # 启动服务
     async def on_start(self) -> None:
         section = await self.cfg.section()
         self._session_id = section["session_id"]
@@ -31,9 +33,11 @@ class DirectorService(BaseService):
 
         self.spawn(self._proactive_loop())
 
+    # 停止服务
     async def on_stop(self) -> None:
         pass
 
+    # 处理互动
     async def _on_interaction(self, payload: bytes) -> None:
         evt = InteractionEvent.from_dict(json.loads(payload))
         ai_id = self._policy.choose(evt)
@@ -49,6 +53,7 @@ class DirectorService(BaseService):
         await self.bus.publish_json(SUBJ_LIVE_TURN.format(ai_id=ai_id), evt.to_dict())
         logger.info("[director] 互动已分配: %s -> %s", evt.type.value, ai_id)
 
+    # 持续执行主动交互循环
     async def _proactive_loop(self) -> None:
         interval = self._director_cfg["proactive_interval_sec"]
         while True:
@@ -57,7 +62,9 @@ class DirectorService(BaseService):
             logger.info("[director] 主动发言机会触发")
 
 
+# 启动程序入口
 def main() -> None:
+    # 运行主流程
     async def run() -> None:
         svc = DirectorService(await ServiceConfig.load("director"))
         await svc.start()

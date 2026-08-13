@@ -7,24 +7,28 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+# 表示话语数据
 @dataclass(frozen=True)
 class Speech:
     text: str
     delivery: str = "text"
 
 
+# 表示情绪数据
 @dataclass(frozen=True)
 class Emotion:
     name: str = "neutral"
     intensity: float = 0.0
 
 
+# 表示动作数据
 @dataclass(frozen=True)
 class Action:
     type: str
     params: dict[str, Any] = field(default_factory=dict)
 
 
+# 表示响应计划数据
 @dataclass
 class ResponsePlan:
     speech: list[Speech]
@@ -33,10 +37,12 @@ class ResponsePlan:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     memory_candidates: list[dict[str, Any]] = field(default_factory=list)
 
+    # 返回合并后的文本
     @property
     def text(self) -> str:
         return "".join(item.text for item in self.speech)
 
+    # 转换为字典
     def to_dict(self) -> dict[str, Any]:
         return {
             "speech": [{"text": item.text, "delivery": item.delivery} for item in self.speech],
@@ -46,6 +52,7 @@ class ResponsePlan:
             "memory_candidates": self.memory_candidates,
         }
 
+    # 从模型输出创建实例
     @classmethod
     def from_model_output(cls, output: str) -> "ResponsePlan":
 

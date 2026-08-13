@@ -12,8 +12,10 @@ from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall, To
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
+# 提供DeepSeek大模型调用能力
 @provider_registry.register("deepseek")
 class DeepSeekProvider(LLMProvider):
+    # 初始化当前实例
     def __init__(self, model: str, request_timeout_sec: float, api_key: str | None = None, base_url: str | None = None, **_) -> None:
         self._client = AsyncOpenAI(
             api_key=required_setting(api_key, ConfigKey.DEEPSEEK_API_KEY),
@@ -22,6 +24,7 @@ class DeepSeekProvider(LLMProvider):
         )
         self._model = model
 
+    # 转换为消息列表
     def _to_messages(self, msgs: list[ChatMessage]) -> list[dict]:
         out = []
         for m in msgs:
@@ -31,9 +34,11 @@ class DeepSeekProvider(LLMProvider):
             out.append(item)
         return out
 
+    # 转换为工具列表
     def _to_tools(self, tools: list[ToolSchema]) -> list[dict]:
         return [{"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}} for t in tools]
 
+    # 流式生成聊天内容
     async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatStreamChunk]:
         kwargs: dict = {"model": self._model, "messages": self._to_messages(req.messages), "stream": True}
         if req.tools:

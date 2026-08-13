@@ -11,6 +11,7 @@ SCHEMA_VERSION = 1
 _CONVERSATION_NAMESPACE = uuid.UUID("3d1da1d1-cd6d-4ccd-9f34-69469e5b906e")
 
 
+# 生成会话标识
 def make_conversation_id(
     platform: str,
     account_id: str,
@@ -22,6 +23,7 @@ def make_conversation_id(
     return str(uuid.uuid5(_CONVERSATION_NAMESPACE, raw))
 
 
+# 封装消息总线事件
 @dataclass
 class EventEnvelope:
     event_type: str
@@ -39,6 +41,7 @@ class EventEnvelope:
     schema_version: int = SCHEMA_VERSION
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # 转换为字典
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
@@ -57,6 +60,7 @@ class EventEnvelope:
             "metadata": self.metadata,
         }
 
+    # 从字典创建实例
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EventEnvelope":
         return cls(
@@ -76,6 +80,7 @@ class EventEnvelope:
             metadata=dict(data.get("metadata", {})),
         )
 
+# 描述入站社交消息
 @dataclass(frozen=True)
 class InboundSocialMessage:
     account_id: str
@@ -94,10 +99,12 @@ class InboundSocialMessage:
     timestamp: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # 返回会话标识
     @property
     def conversation_id(self) -> str:
         return make_conversation_id(self.platform, self.account_id, self.platform_chat_id)
 
+    # 转换为事件信封
     def to_envelope(self, *, person_id: str = "", correlation_id: str = "") -> EventEnvelope:
         return EventEnvelope(
             event_type="social.message.received",
@@ -124,6 +131,7 @@ class InboundSocialMessage:
         )
 
 
+# 表示轮次请求数据
 @dataclass
 class TurnRequest:
     ai_id: str
@@ -138,6 +146,7 @@ class TurnRequest:
     correlation_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # 转换为事件信封
     def to_envelope(self) -> EventEnvelope:
         return EventEnvelope(
             event_type="agent.turn.requested",
@@ -156,6 +165,7 @@ class TurnRequest:
             },
         )
 
+    # 从事件信封创建实例
     @classmethod
     def from_envelope(cls, envelope: EventEnvelope) -> "TurnRequest":
         payload = envelope.payload

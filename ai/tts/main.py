@@ -19,9 +19,11 @@ SUBJ_SPEECH = "ai.speech.request"
 SUBJ_TTS_SYNTH = "tts.synthesize.request"
 
 
+# 提供语音合成服务能力
 class TTSService(BaseService):
     name = "tts"
 
+    # 启动服务
     async def on_start(self) -> None:
         tts_cfg = await self.cfg.section()
         self._provider = create_tts(
@@ -33,6 +35,7 @@ class TTSService(BaseService):
         await self.bus.subscribe(SUBJ_SPEECH, self._on_speech)
         await self.bus.reply(SUBJ_TTS_SYNTH, self._on_synthesize)
 
+    # 处理语音合成
     async def _on_synthesize(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         result = await self._provider.synthesize(
@@ -48,9 +51,11 @@ class TTSService(BaseService):
         duration_sec = len(result.pcm) / float(self._output_config["pcm_bytes_per_sec"])
         return json.dumps({"ok": True, "audio_path": path, "duration_sec": duration_sec}).encode()
 
+    # 停止服务
     async def on_stop(self) -> None:
         await self._provider.close()
 
+    # 处理话语
     async def _on_speech(self, payload: bytes) -> None:
         req = json.loads(payload.decode("utf-8"))
         # 切分句子、预合成语音并播放到虚拟声卡
@@ -60,7 +65,9 @@ class TTSService(BaseService):
         logger.info("[tts] 合成: %s", req.get("text", "")[:30])
 
 
+# 启动程序入口
 def main() -> None:
+    # 运行主流程
     async def run() -> None:
         svc = TTSService(await ServiceConfig.load("tts"))
         await svc.start()

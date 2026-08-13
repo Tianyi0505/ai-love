@@ -9,6 +9,7 @@ from typing import Callable
 from shared.infrastructure.registry import Registry
 
 
+# 定义互动类型枚举
 class InteractionType(Enum):
     DANMAKU = "danmaku"
     GIFT = "gift"
@@ -28,6 +29,7 @@ SUBJ_AVATAR = "avatar.command.{ai_id}"
 SUBJ_MUSIC = "music.command.{ai_id}"
 
 
+# 表示观众数据
 @dataclass
 class Viewer:
     uid: int
@@ -35,6 +37,7 @@ class Viewer:
     title: str = ""
 
 
+# 表示互动事件数据
 @dataclass
 class InteractionEvent:
 
@@ -48,6 +51,7 @@ class InteractionEvent:
     event_id: str = field(default_factory=lambda: f"{int(time.time() * 1000)}-{id(object())}")
     timestamp: int = field(default_factory=lambda: int(time.time() * 1000))
 
+    # 转换为字典
     def to_dict(self) -> dict:
         return {
             "type": self.type.value,
@@ -61,6 +65,7 @@ class InteractionEvent:
             "timestamp": self.timestamp,
         }
 
+    # 从字典创建实例
     @classmethod
     def from_dict(cls, data: dict) -> "InteractionEvent":
         return cls(
@@ -79,13 +84,17 @@ class InteractionEvent:
 HandlerT = Callable[["InteractionEvent"], object]
 
 
+# 按优先级分发互动事件
 class EventDispatcher:
 
+    # 初始化当前实例
     def __init__(self) -> None:
         self._handlers: dict[InteractionType, list[tuple[int, int, HandlerT]]] = {}
 
+    # 注册互动事件处理器
     def on(self, event_type: InteractionType, priority: int) -> Callable[[HandlerT], HandlerT]:
 
+        # 注册装饰器目标
         def deco(fn: HandlerT) -> HandlerT:
             seq = len(self._handlers.get(event_type, []))
             self._handlers.setdefault(event_type, []).append((priority, seq, fn))
@@ -94,6 +103,7 @@ class EventDispatcher:
 
         return deco
 
+    # 分发请求
     async def dispatch(self, evt: InteractionEvent) -> None:
         for _, _, handler in self._handlers.get(evt.type, []):
             result = handler(evt)

@@ -7,8 +7,10 @@ import time
 from pathlib import Path
 
 
+# 管理记忆存储库持久化
 class MemoryRepo:
 
+    # 初始化当前实例
     def __init__(self, data_dir: str) -> None:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(Path(data_dir) / "memory.db")
@@ -32,6 +34,7 @@ class MemoryRepo:
             self._conn.execute("ALTER TABLE memories ADD COLUMN person_id TEXT")
         self._conn.commit()
 
+    # 写入数据
     async def write(self, ai_id: str, entries: list[dict]) -> None:
         for e in entries:
             self._conn.execute(
@@ -43,6 +46,7 @@ class MemoryRepo:
             )
         self._conn.commit()
 
+    # 检索匹配内容
     async def search(self, ai_id: str, query: str, top_k: int, person_id: str = "", **_) -> list[dict]:
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE ai_id=? AND (?='' OR person_id IS NULL OR person_id=?) "
@@ -65,9 +69,11 @@ class MemoryRepo:
         self._conn.commit()
         return results
 
+    # 清理过期数据
     async def cleanup(self) -> dict[str, int]:
         return {"dormant": 0, "deleted": 0}
 
+    # 匹配可用配置项
     def _match(self, content: str, query: str) -> bool:
         content_l = content.lower()
         if query.lower() in content_l:

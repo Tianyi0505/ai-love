@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any, Protocol
 
 
+# 定义权限级别枚举
 class PermissionLevel(str, Enum):
     ALLOW = "allow"
     CONDITIONAL = "conditional"
@@ -23,6 +24,7 @@ PERMANENTLY_FORBIDDEN_OPERATIONS = frozenset(
 )
 
 
+# 表示工具定义数据
 @dataclass(frozen=True)
 class ToolDefinition:
     tool_id: str
@@ -33,6 +35,7 @@ class ToolDefinition:
     side_effect: str = "none"
 
 
+# 表示工具调用请求数据
 @dataclass(frozen=True)
 class ToolInvocation:
     tool_id: str
@@ -43,6 +46,7 @@ class ToolInvocation:
     reason: str = ""
 
 
+# 表示工具结果数据
 @dataclass(frozen=True)
 class ToolResult:
     ok: bool
@@ -52,25 +56,32 @@ class ToolResult:
     requires_confirmation: bool = False
 
 
+# 表示工具授权数据
 @dataclass(frozen=True)
 class ToolGrant:
     permission: PermissionLevel
     config: dict[str, Any] = field(default_factory=dict)
 
 
+# 定义工具提供器接口
 class ToolProvider(Protocol):
     provider_id: str
 
+    # 列出工具定义
     def definitions(self) -> list[ToolDefinition]: ...
+    # 调用工具
     async def invoke(self, invocation: ToolInvocation) -> ToolResult: ...
 
 
+# 管理工具注册授权与调用
 class ToolGateway:
+    # 初始化当前实例
     def __init__(self) -> None:
         self._providers: dict[str, ToolProvider] = {}
         self._definitions: dict[str, ToolDefinition] = {}
         self._bindings: dict[tuple[str, str], ToolGrant] = {}
 
+    # 注册提供器
     def register_provider(self, provider: ToolProvider) -> None:
         self._providers[provider.provider_id] = provider
         for definition in provider.definitions():
@@ -78,9 +89,11 @@ class ToolGateway:
                 raise ValueError(f"重复工具 ID: {definition.tool_id}")
             self._definitions[definition.tool_id] = definition
 
+    # 绑定工具调用权限
     def bind(self, ai_id: str, tool_id: str, grant: ToolGrant) -> None:
         self._bindings[(ai_id, tool_id)] = grant
 
+    # 列出智能体可用工具
     def list_for_ai(self, ai_id: str) -> list[ToolDefinition]:
         return [
             definition
@@ -88,6 +101,7 @@ class ToolGateway:
             if self._is_exposed(ai_id, tool_id, definition)
         ]
 
+    # 调用工具
     async def invoke(self, invocation: ToolInvocation) -> ToolResult:
         definition = self._definitions.get(invocation.tool_id)
         if definition is None:
@@ -99,12 +113,14 @@ class ToolGateway:
         provider = self._providers[definition.provider_id]
         return await provider.invoke(invocation)
 
+    # 判断工具是否对智能体可见
     def _is_exposed(self, ai_id: str, tool_id: str, definition: ToolDefinition) -> bool:
         if definition.operation in PERMANENTLY_FORBIDDEN_OPERATIONS:
             return False
         grant = self._bindings.get((ai_id, tool_id))
         return grant is not None and grant.permission in (PermissionLevel.ALLOW, PermissionLevel.CONDITIONAL)
 
+    # 校验工具调用权限
     @staticmethod
     def _authorize(definition: ToolDefinition, grant: ToolGrant | None) -> ToolResult | None:
         if definition.operation in PERMANENTLY_FORBIDDEN_OPERATIONS:

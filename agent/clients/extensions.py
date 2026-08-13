@@ -7,6 +7,7 @@ import logging
 logger = logging.getLogger("ailove.agent.clients.extensions")
 
 
+# 注册工具列表
 async def register_tools(agent_loop, bus, ai_id: str, timeouts: dict) -> None:
     try:
         response = await bus.request_json(
@@ -23,6 +24,7 @@ async def register_tools(agent_loop, bus, ai_id: str, timeouts: dict) -> None:
         if not name:
             continue
 
+        # 执行操作
         async def execute(arguments, tool_id=name):
             if isinstance(arguments, str):
                 try:

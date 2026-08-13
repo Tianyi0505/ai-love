@@ -11,8 +11,10 @@ from ai.tts.types import AudioResult, SynthesizeRequest
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
+# 提供GPT-SoVITS语音合成能力
 @provider_registry.register("gpt_sovits")
 class GPTSovitsProvider(TTSProvider):
+    # 初始化当前实例
     def __init__(
         self,
         refs: dict[str, dict],
@@ -29,6 +31,7 @@ class GPTSovitsProvider(TTSProvider):
         self._prompt_lang = prompt_lang
         self._output_format = output_format
 
+    # 生成语音引用标识
     def _ref_for(self, ai_id: str) -> dict:
         ref = self._refs[ai_id]
         return {
@@ -39,6 +42,7 @@ class GPTSovitsProvider(TTSProvider):
             **ref,
         }
 
+    # 执行语音合成请求
     async def _do_synthesize(self, req: SynthesizeRequest, text: str) -> AudioResult:
         t0 = time.perf_counter()
         params = {"text": text, "text_lang": self._text_lang, **self._ref_for(req.ai_id)}

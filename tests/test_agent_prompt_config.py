@@ -16,13 +16,17 @@ from shared.infrastructure.agent_store import NacosAgentDefinitionStore
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# 提供文件配置提供器相关能力
 class FileConfigProvider:
+    # 获取数据
     async def get(self, key: str) -> dict:
         path = ROOT / "deploy" / "nacos" / f"{key}.yaml"
         return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+# 验证智能体提示词配置
 class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
+    # 验证真实配置加载后保留消息分隔符
     async def test_message_separator_survives_real_config_loading(self) -> None:
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         prompts = PromptAssembler(definition)
@@ -41,6 +45,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("\n", definition.prompts["message-separator"])
         self.assertEqual("联系人: 扩展内容\n联系人: 晚上好", result)
 
+    # 验证被点名消息进入群聊参与决策
     async def test_addressed_group_message_reaches_participation_model(self) -> None:
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         runtime = object.__new__(AIRuntime)

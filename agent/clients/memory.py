@@ -5,13 +5,16 @@ import time
 from shared.contracts.memory import MemoryActivity
 
 
+# 封装记忆客户端调用
 class MemoryClient:
+    # 初始化当前实例
     def __init__(self, bus, ai_id: str, config: dict, timeouts: dict) -> None:
         self._bus = bus
         self._ai_id = ai_id
         self._config = config
         self._timeouts = timeouts
 
+    # 检索匹配内容
     async def search(
         self,
         query: str,
@@ -38,6 +41,7 @@ class MemoryClient:
         except Exception:
             return []
 
+    # 写入数据
     async def write(self, entries: list[dict]) -> None:
         await self._bus.request_json(
             "memory.write.request",
@@ -45,6 +49,7 @@ class MemoryClient:
             timeout=float(self._timeouts["memory_write_sec"]),
         )
 
+    # 获取记忆上下文
     async def context(self, person_id: str = "", conversation_id: str = "") -> dict:
         try:
             return await self._bus.request_json(
@@ -63,6 +68,7 @@ class MemoryClient:
                 "conversation_summary": "",
             }
 
+    # 记录记忆活动
     async def activity(
         self,
         *,

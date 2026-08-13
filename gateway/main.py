@@ -40,9 +40,11 @@ SUBJ_EVENT_ALL = "ai.events.all"
 SUBJ_LIVE_EVENTS = "live.events"
 
 
+# 转发不同社交渠道的消息
 class GatewayService(BaseService):
     name = "gateway"
 
+    # 启动服务
     async def on_start(self) -> None:
         self._channels: dict[str, Channel] = {}
         section = await self.cfg.section()
@@ -114,6 +116,7 @@ class GatewayService(BaseService):
             )
             logger.info("[gateway] QQ空间定时任务已挂载")
 
+    # 收集用户标识
     @staticmethod
     def _user_id_set(value) -> set[str]:
         if isinstance(value, dict):
@@ -122,6 +125,7 @@ class GatewayService(BaseService):
             return set()
         return {str(user_id) for user_id in value if str(user_id)}
 
+    # 生成账号配置列表
     @staticmethod
     def _account_specs(section: dict) -> list[dict]:
         specs = section["accounts"]
@@ -136,6 +140,7 @@ class GatewayService(BaseService):
                     raise ValueError(f"service.gateway.accounts 每项必须包含 {key}")
         return result
 
+    # 同步QQ白名单
     async def _sync_qq_whitelist(self) -> None:
         if self._identities is None or self._relationships is None or not self._qq_whitelist:
             return
@@ -164,6 +169,7 @@ class GatewayService(BaseService):
                 await self._relationships.ensure_person(ai_id, person_id, "whitelist")
             logger.info("[gateway] 已同步 %s 个 QQ 白名单身份", len(self._qq_whitelist))
 
+    # 加载关系档案
     async def _relationship_profile(self, user_id: str) -> dict:
         try:
             ai_id = await self._social_router.owner_for(self._qq_account_id)
@@ -191,6 +197,7 @@ class GatewayService(BaseService):
             pass
         return {"familiarity": 0.0, "affinity": 0.0, "trust": 0.0, "importance": 0.0}
 
+    # 生成动态评论
     async def _generate_comment(
         self,
         feed_text: str,
@@ -219,12 +226,14 @@ class GatewayService(BaseService):
             logger.warning("[gateway] 评论生成失败: %s", e)
         return ""
 
+    # 停止服务
     async def on_stop(self) -> None:
         for channel in self._channels.values():
             await channel.stop()
         if self._db is not None:
             await self._db.close()
 
+    # 处理渠道消息
     async def _on_channel_message(self, msg: SocialMessage) -> None:
         if msg.platform == "qq":
             msg.meta["priority_contact"] = str(msg.sender.user_id) in self._qq_whitelist
@@ -254,6 +263,7 @@ class GatewayService(BaseService):
             await self._conversations.record_inbound(msg, turn.ai_id)
         await self.bus.publish_json(SUBJ_SOCIAL_CHAT.format(ai_id=turn.ai_id), msg.to_dict())
 
+    # 转换为互动事件
     async def _as_interaction(self, msg: SocialMessage) -> None:
         evt = InteractionEvent(
             type=InteractionType(
@@ -271,6 +281,7 @@ class GatewayService(BaseService):
         )
         await self.bus.publish_json(SUBJ_LIVE_EVENTS, evt.to_dict())
 
+    # 处理社交发送
     async def _on_social_send(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         account_id = req.get("account_id", "")
@@ -294,6 +305,7 @@ class GatewayService(BaseService):
             )
         return json.dumps(result).encode()
 
+    # 处理历史请求
     async def _on_history_request(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         channel = self._channels.get(req.get("account_id", ""))
@@ -307,7 +319,9 @@ class GatewayService(BaseService):
         return json.dumps({"messages": [m.to_dict() for m in msgs], "has_more": False}).encode()
 
 
+# 启动程序入口
 def main() -> None:
+    # 运行主流程
     async def run() -> None:
         svc = GatewayService(await ServiceConfig.load("gateway"))
         await svc.start()

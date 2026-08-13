@@ -5,6 +5,7 @@ import uuid
 from dataclasses import dataclass
 
 
+# 表示会话片段消息数据
 @dataclass(frozen=True)
 class EpisodeMessage:
     message_id: str
@@ -14,25 +15,30 @@ class EpisodeMessage:
     occurred_at: float
 
 
+# 表示记忆文档数据
 @dataclass(frozen=True)
 class MemoryDocument:
     markdown: str
     version: int
 
 
+# 表示记忆提取记录数据
 @dataclass(frozen=True)
 class ExtractionRecord:
     episode_id: str
     atom_ids_by_owner: dict[tuple[str, str], list[str]]
 
 
+# 管理会话片段记忆存储库持久化
 class EpisodeMemoryRepository:
     """持久化会话片段、原子记忆和长期 Markdown。"""
 
+    # 初始化当前实例
     def __init__(self, db, history_episode_limit: int) -> None:
         self._db = db
         self._history_episode_limit = int(history_episode_limit)
 
+    # 加载会话片段消息列表
     async def load_episode_messages(
         self,
         ai_id: str,
@@ -82,6 +88,7 @@ class EpisodeMemoryRepository:
             )
         return result
 
+    # 保存记忆提取
     async def save_extraction(
         self,
         *,
@@ -143,6 +150,7 @@ class EpisodeMemoryRepository:
                 await self._refresh_conversation_summary(conn, ai_id, conversation_id)
                 return ExtractionRecord(episode_id, atom_ids_by_owner)
 
+    # 查找已有记忆提取记录
     async def _existing_extraction(self, conn, episode_id: str) -> ExtractionRecord:
         rows = await conn.fetch(
             "SELECT atom_id::text, owner_type, owner_id FROM memory_atoms WHERE episode_id=$1::uuid",
@@ -153,6 +161,7 @@ class EpisodeMemoryRepository:
             atoms.setdefault((row["owner_type"], row["owner_id"]), []).append(row["atom_id"])
         return ExtractionRecord(episode_id, atoms)
 
+    # 刷新会话摘要
     async def _refresh_conversation_summary(self, conn, ai_id: str, conversation_id: str) -> None:
         rows = await conn.fetch(
             "SELECT summary FROM conversation_episodes WHERE ai_id=$1 AND conversation_id=$2::uuid "
@@ -171,6 +180,7 @@ class EpisodeMemoryRepository:
             summary,
         )
 
+    # 获取记忆上下文
     async def context(self, ai_id: str, person_id: str, conversation_id: str) -> dict:
         self_row = await self._db.fetchrow(
             "SELECT markdown_content,version FROM memory_documents "
@@ -199,6 +209,7 @@ class EpisodeMemoryRepository:
             "conversation_summary": summary_row["summary"] if summary_row else "",
         }
 
+    # 生成记忆聚合输入
     async def consolidation_input(
         self,
         ai_id: str,
@@ -232,6 +243,7 @@ class EpisodeMemoryRepository:
         )
         return document, [dict(row) for row in atom_rows], [row["summary"] for row in episode_rows]
 
+    # 保存文档
     async def save_document(
         self,
         ai_id: str,

@@ -27,9 +27,11 @@ from memory.state import MemoryStateStore
 
 logger = logging.getLogger("ailove.memory")
 
+# 提供记忆服务能力
 class MemoryService(BaseService):
     name = "memory"
 
+    # 启动服务
     async def on_start(self) -> None:
         self._gcfg = GlobalConfig(provider=self.cfg.nacos)
         await self._gcfg.load()
@@ -108,6 +110,7 @@ class MemoryService(BaseService):
             self.spawn(self._memory_pipeline.activity_loop())
             self.spawn(self._memory_pipeline.consolidation_loop())
 
+    # 停止服务
     async def on_stop(self) -> None:
         if self._memory_activity_sub is not None:
             self._memory_activity_sub.unsubscribe()
@@ -115,14 +118,17 @@ class MemoryService(BaseService):
         if self._db is not None:
             await self._db.close()
 
+    # 创建表情请求处理器
     def _make_sticker_handler(self, action: str):
 
+        # 处理请求
         async def handler(payload: bytes) -> bytes:
             method = getattr(self._sticker_ctrl, f"_on_{action}")
             return await method(payload)
 
         return handler
 
+    # 持续执行清理循环
     async def _cleanup_loop(self) -> None:
         while True:
             await asyncio.sleep(float(self._memory_config["cleanup_interval_sec"]))
@@ -140,6 +146,7 @@ class MemoryService(BaseService):
                 files,
             )
 
+    # 清理过期文件
     def _cleanup_old_files(self, data_dir: str, max_age_sec: float) -> int:
         cutoff = time.time() - max_age_sec
         removed = 0
@@ -156,6 +163,7 @@ class MemoryService(BaseService):
                     pass
         return removed
 
+    # 处理写入
     async def _on_write(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         ai_id = req.get("ai_id", "")
@@ -172,6 +180,7 @@ class MemoryService(BaseService):
         logger.info("[memory] 写入 %s 条: ai=%s", len(entries), ai_id)
         return json.dumps({"ok": True}).encode()
 
+    # 处理检索
     async def _on_search(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         results = await self._memory_repo.search(
@@ -184,12 +193,15 @@ class MemoryService(BaseService):
         )
         return json.dumps({"results": results}).encode()
 
+    # 处理程序性记忆
     async def _on_procedural(self, payload: bytes) -> bytes:
         return json.dumps({"rules": []}).encode()
 
+    # 处理批量消息
     async def _on_batch(self, payload: bytes) -> bytes:
         return json.dumps({"semantic": [], "rules": [], "viewer_profile": None}).encode()
 
+    # 处理上下文
     async def _on_context(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
         if self._db is None:
@@ -203,12 +215,14 @@ class MemoryService(BaseService):
         )
         return json.dumps(result, ensure_ascii=False).encode("utf-8")
 
+    # 处理记忆活动
     async def _on_memory_activity(self, payload: bytes) -> None:
         activity = MemoryActivity.from_dict(json.loads(payload.decode("utf-8")))
         if not activity.ai_id or not activity.person_id or not activity.conversation_id:
             return
         await self._memory_state.record_activity(activity)
 
+    # 创建关系策略
     async def _relationship_policy(self, ai_id: str) -> RelationshipPolicy:
         raw = (await self._definitions.load(ai_id)).relationship_policy
         person_whitelist = {str(item) for item in raw["person_ceiling_whitelist"]}
@@ -225,12 +239,14 @@ class MemoryService(BaseService):
         )
         return RelationshipPolicy(ceilings, raw)
 
+    # 判断是否为优先用户
     def _is_priority_user(self, platform_user_id: str) -> bool:
         whitelist = self._gcfg.get("qq", "whitelist")
         if isinstance(whitelist, dict):
             whitelist = whitelist["user_ids"]
         return str(platform_user_id) in {str(item) for item in whitelist}
 
+    # 处理关系聊天
     async def _on_relationship_chat(self, payload: bytes) -> bytes:
         req = json.loads(payload)
         if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
@@ -250,6 +266,7 @@ class MemoryService(BaseService):
             await self._relationship_repo.save_group(ai_id, str(req["account_id"]), group_id, group)
         return json.dumps({"ok": True, "summary": policy.summarize_person(updated)}, ensure_ascii=False).encode()
 
+    # 处理关系礼物
     async def _on_relationship_gift(self, payload: bytes) -> bytes:
         req = json.loads(payload)
         if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
@@ -264,6 +281,7 @@ class MemoryService(BaseService):
         await self._relationship_repo.save_person(ai_id, person_id, updated, ceiling_policy)
         return json.dumps({"ok": True, "summary": policy.summarize_person(updated)}, ensure_ascii=False).encode()
 
+    # 处理关系摘要
     async def _on_relationship_summary(self, payload: bytes) -> bytes:
         req = json.loads(payload)
         if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
@@ -276,6 +294,7 @@ class MemoryService(BaseService):
         summary = (await self._relationship_policy(ai_id)).summarize_person(relationship)
         return json.dumps({"summary": summary}, ensure_ascii=False).encode()
 
+    # 处理关系列表请求
     async def _on_relationship_list(self, payload: bytes) -> bytes:
         req = json.loads(payload)
         if self._relationship_repo is None:
@@ -289,6 +308,7 @@ class MemoryService(BaseService):
             relationship["priority_contact"] = str(relationship.get("user_id", "")) in priority_user_ids
         return json.dumps({"relationships": relationships}, ensure_ascii=False, default=str).encode()
 
+    # 处理群聊关系
     async def _on_group_relationship(self, payload: bytes) -> bytes:
         req = json.loads(payload)
         if self._relationship_repo is None:
@@ -312,7 +332,9 @@ class MemoryService(BaseService):
         ).encode()
 
 
+# 启动程序入口
 def main() -> None:
+    # 运行主流程
     async def run() -> None:
         svc = MemoryService(await ServiceConfig.load("memory"))
         await svc.start()

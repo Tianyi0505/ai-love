@@ -15,8 +15,10 @@ from gateway.qzone_api import QZoneAPI
 logger = logging.getLogger("ailove.qzone")
 
 
+# 处理QQ空间互动任务
 class QZoneService:
 
+    # 初始化当前实例
     def __init__(
         self,
         napcat_http_url: str,
@@ -37,6 +39,7 @@ class QZoneService:
         self._uin = qq_uin
         self._timeouts = timeouts
 
+    # 获取QQ空间接口客户端
     async def _ensure_api(self) -> None:
         if self._api is not None:
             return
@@ -51,9 +54,11 @@ class QZoneService:
             uin=self._uin,
         )
 
+    # 加载联系人关系
     async def _relationship(self, user_id: str) -> dict:
         return await self._relationship_provider(user_id)
 
+    # 计算主动动作概率
     def _action_probabilities(self, relationship: dict) -> tuple[float, float]:
         top_familiarity = max(
             0.0,
@@ -69,6 +74,7 @@ class QZoneService:
         comment_probability = min(1.0, normalized)
         return like_probability, comment_probability
 
+    # 回复已收到回应的动态
     async def _reply_if_replied(self, tid: str, owner_uin: str, feed: dict, author_name: str) -> None:
         try:
             comments = await self._api.list_comments(
@@ -88,6 +94,7 @@ class QZoneService:
         except Exception as e:
             logger.warning("[qzone] 回复检查失败: %s", e)
 
+    # 提取评论文本
     async def _comment_text(self, feed: dict, author_name: str) -> str:
         content = feed.get("content") or feed.get("text") or ""
         picture_urls = self._picture_urls(feed)
@@ -123,6 +130,7 @@ class QZoneService:
         templates = self._gcfg.get("qq", "qzone_fallback_comments")
         return Template(str(random.choice(templates))).substitute(author_name=author_name)
 
+    # 提取图片地址
     @staticmethod
     def _picture_urls(feed: dict) -> list[str]:
         pictures = feed.get("pic") or feed.get("pics") or []
@@ -147,6 +155,7 @@ class QZoneService:
                 urls.append(url)
         return urls
 
+    # 执行一次任务
     async def run_once(self) -> dict:
         stats = {"scanned": 0, "liked": 0, "commented": 0, "errors": 0, "skipped": False}
         if not self._proactive_allowed():
@@ -217,6 +226,7 @@ class QZoneService:
         logger.info("[qzone] 完成一轮: %s", stats)
         return stats
 
+    # 持续运行任务循环
     async def loop(self) -> None:
         interval = int(self._gcfg.get("qq", "space_interval_sec"))
         while True:

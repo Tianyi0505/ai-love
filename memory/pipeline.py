@@ -25,6 +25,7 @@ MEMORY_TYPES = {
 }
 
 
+# 解析JSON对象
 def parse_json_object(text: str) -> dict:
     start = text.find("{")
     end = text.rfind("}")
@@ -36,14 +37,17 @@ def parse_json_object(text: str) -> dict:
     return value
 
 
+# 复用记忆任务所需模型
 class MemoryModelPool:
     """按 AI 定义复用记忆任务所需的 LLM。"""
 
+    # 初始化当前实例
     def __init__(self, definitions, llm_config: dict) -> None:
         self._definitions = definitions
         self._llm_config = llm_config
         self._cache: dict[str, tuple[str, object, object]] = {}
 
+    # 加载模型资源
     async def resources(self, ai_id: str):
         definition = await self._definitions.load(ai_id)
         cached = self._cache.get(ai_id)
@@ -53,6 +57,7 @@ class MemoryModelPool:
         self._cache[ai_id] = (definition.fingerprint, llm, definition)
         return definition, llm
 
+    # 完成大模型请求
     async def complete(self, ai_id: str, prompt: str) -> str:
         _, llm = await self.resources(ai_id)
         chunks: list[str] = []
@@ -64,9 +69,11 @@ class MemoryModelPool:
         return "".join(chunks).strip()
 
 
+# 提取并聚合长期记忆
 class MemoryPipeline:
     """按静默片段提取并批量更新长期记忆文档。"""
 
+    # 初始化当前实例
     def __init__(self, *, repo, state, models, bus, config: dict, spawn) -> None:
         self._repo = repo
         self._state = state
@@ -77,6 +84,7 @@ class MemoryPipeline:
         self._spawn = spawn
         self._semaphore = asyncio.Semaphore(int(config["worker_concurrency"]))
 
+    # 持续执行活动循环
     async def activity_loop(self) -> None:
         while True:
             for entry in await self._state.due_activities():
@@ -85,6 +93,7 @@ class MemoryPipeline:
                     self._spawn(self._extract_claim(claim))
             await asyncio.sleep(float(self._extraction["scheduler_poll_sec"]))
 
+    # 持续执行记忆聚合循环
     async def consolidation_loop(self) -> None:
         thresholds = {
             "person": dict(self._consolidation["person"]),
@@ -97,6 +106,7 @@ class MemoryPipeline:
                     self._spawn(self._consolidate_claim(claim))
             await asyncio.sleep(float(self._consolidation["scheduler_poll_sec"]))
 
+    # 处理已领取的记忆提取任务
     async def _extract_claim(self, claim: StateEntry) -> None:
         async with self._semaphore:
             try:
@@ -113,6 +123,7 @@ class MemoryPipeline:
                     claim, float(self._extraction["retry_delay_sec"])
                 )
 
+    # 从会话片段提取记忆
     async def _extract(self, claim: StateEntry) -> None:
         data = claim.data
         await self._bus.publish_json("memory.extract", dict(data))
@@ -193,6 +204,7 @@ class MemoryPipeline:
             len(all_atom_ids),
         )
 
+    # 处理已领取的记忆聚合任务
     async def _consolidate_claim(self, claim: StateEntry) -> None:
         async with self._semaphore:
             try:
@@ -208,6 +220,7 @@ class MemoryPipeline:
                 )
                 await self._state.release_pending(claim)
 
+    # 聚合长期记忆
     async def _consolidate(self, claim: StateEntry) -> None:
         data = claim.data
         owner_type = data["owner_type"]
@@ -254,6 +267,7 @@ class MemoryPipeline:
             len(atoms),
         )
 
+    # 解析记忆原子
     @staticmethod
     def _parse_atoms(raw_memories) -> list[dict]:
         if not isinstance(raw_memories, list):
@@ -280,6 +294,7 @@ class MemoryPipeline:
             )
         return result
 
+    # 将数值限制在单位区间
     @staticmethod
     def _unit(value) -> float:
         number = float(value)

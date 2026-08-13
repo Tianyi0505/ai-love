@@ -3,12 +3,15 @@ from __future__ import annotations
 import hashlib
 
 
+# 封装表情客户端调用
 class StickerClient:
+    # 初始化当前实例
     def __init__(self, bus, ai_id: str, timeouts: dict) -> None:
         self._bus = bus
         self._ai_id = ai_id
         self._timeouts = timeouts
 
+    # 检索匹配内容
     async def search(self, query: str) -> dict | None:
         try:
             response = await self._bus.request_json(
@@ -20,6 +23,7 @@ class StickerClient:
             return None
         return response.get("sticker")
 
+    # 添加数据
     async def add(
         self,
         image_url: str,

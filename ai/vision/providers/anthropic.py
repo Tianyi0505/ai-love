@@ -12,9 +12,11 @@ from ai.vision.types import ImageDescription
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
+# 提供Anthropic图像理解能力
 @provider_registry.register("anthropic")
 class AnthropicVisionProvider(VisionProvider):
 
+    # 初始化当前实例
     def __init__(
         self,
         fetch_timeout_sec: float,
@@ -44,6 +46,7 @@ class AnthropicVisionProvider(VisionProvider):
         self._limits = limits
         self._fallbacks = fallbacks
 
+    # 查询多条数据
     async def _fetch(self, image_url: str) -> str:
         try:
             async with httpx.AsyncClient(timeout=self._fetch_timeout_sec, headers=self._fetch_headers, follow_redirects=True) as client:
@@ -59,6 +62,7 @@ class AnthropicVisionProvider(VisionProvider):
             except Exception:
                 return ""
 
+    # 执行图像理解请求
     async def _do_describe(self, image_b64: str) -> ImageDescription:
         if not image_b64:
             return ImageDescription(

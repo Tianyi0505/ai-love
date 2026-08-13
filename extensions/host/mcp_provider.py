@@ -9,12 +9,15 @@ from mcp.types import TextContent
 from extensions.host.tools import ToolDefinition, ToolInvocation, ToolResult
 
 
+# 通过MCP提供扩展工具
 class MCPToolProvider:
+    # 初始化当前实例
     def __init__(self, provider_id: str, url: str, definitions: list[ToolDefinition]) -> None:
         self.provider_id = provider_id
         self._url = url
         self._definitions = definitions
 
+    # 发现可用工具
     @classmethod
     async def discover(cls, provider_id: str, url: str) -> "MCPToolProvider":
         async with Client(url) as client:
@@ -31,9 +34,11 @@ class MCPToolProvider:
         ]
         return cls(provider_id, url, definitions)
 
+    # 列出工具定义
     def definitions(self) -> list[ToolDefinition]:
         return self._definitions
 
+    # 调用工具
     async def invoke(self, invocation: ToolInvocation) -> ToolResult:
         try:
             async with Client(self._url) as client:

@@ -10,8 +10,10 @@ from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolSchema
 logger = logging.getLogger("ailove.agent_loop")
 
 
+# 执行智能体工具调用循环
 class AgentLoop:
 
+    # 初始化当前实例
     def __init__(self, llm: LLMService, prompts, ai_id: str, max_rounds: int) -> None:
         self._llm = llm
         self._prompts = prompts
@@ -19,11 +21,13 @@ class AgentLoop:
         self._max_rounds = max_rounds
         self._tools: dict[str, Callable[[dict], Awaitable[str]]] = {}
 
+    # 注册工具
     def register_tool(self, name: str, tool_info: dict, executor) -> None:
         self._tools[name] = executor
         self._tool_infos = getattr(self, "_tool_infos", {})
         self._tool_infos[name] = tool_info
 
+    # 运行主流程
     async def run(self, messages: list[ChatMessage]) -> str:
         tool_schemas = [ToolSchema(name=n, description=i.get("description", ""), parameters=i.get("parameters", {})) for n, i in getattr(self, "_tool_infos", {}).items()]
         if tool_schemas:

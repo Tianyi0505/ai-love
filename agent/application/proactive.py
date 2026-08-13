@@ -12,8 +12,10 @@ from shared.contracts.behavior import BehaviorSchedule
 logger = logging.getLogger("ailove.ai-agent.proactive")
 
 
+# 维护群聊会话状态
 class GroupSession:
 
+    # 初始化当前实例
     def __init__(self, chat_id: str) -> None:
         self.chat_id = chat_id
         self.active_since = 0.0
@@ -21,6 +23,7 @@ class GroupSession:
         self.inactive_until = 0.0
         self.recent_messages: deque[float] = deque()
 
+    # 更新过期状态
     def expire(self, now: float, idle_sec: int, max_active_sec: int, rest_sec: int) -> None:
         if not self.active_since:
             return
@@ -31,25 +34,31 @@ class GroupSession:
             if overtime:
                 self.inactive_until = now + rest_sec
 
+    # 返回是否处于活跃状态
     @property
     def active(self) -> bool:
         return self.active_since > 0
 
+    # 激活群聊会话
     def activate(self, now: float) -> None:
         if not self.active:
             self.active_since = now
 
 
+# 管理群聊会话生命周期
 class GroupChatManager:
 
+    # 初始化当前实例
     def __init__(self) -> None:
         self._sessions: dict[str, GroupSession] = {}
 
+    # 获取会话
     def session(self, chat_id: str) -> GroupSession:
         if chat_id not in self._sessions:
             self._sessions[chat_id] = GroupSession(chat_id)
         return self._sessions[chat_id]
 
+    # 记录观察事件
     def observe(
         self,
         chat_id: str,
@@ -69,23 +78,29 @@ class GroupChatManager:
         session.last_message_at = now
         return session
 
+    # 判断是否可以加入群聊
     def ready_to_join(self, chat_id: str, min_messages: int) -> bool:
         session = self.session(chat_id)
         return time.time() >= session.inactive_until and len(session.recent_messages) >= min_messages
 
+    # 激活群聊会话
     def activate(self, chat_id: str) -> None:
         self.session(chat_id).activate(time.time())
 
 
+# 筛选主动私聊候选人
 class ProactiveChat:
 
+    # 初始化当前实例
     def __init__(self, behavior_config: dict) -> None:
         self._config = behavior_config
         self._schedule = BehaviorSchedule.from_config(behavior_config)
 
+    # 判断是否处于工作时段
     def in_work_hours(self) -> bool:
         return self._schedule.allows_proactive()
 
+    # 筛选主动私聊候选人
     async def run_private(self, personas: list[dict], min_w: float) -> list[dict]:
         if not self.in_work_hours():
             return []
@@ -122,6 +137,7 @@ class ProactiveChat:
         )
         return chosen[:1]
 
+    # 持续运行任务循环
     async def loop(self, agent, private_interval: int, min_w: float) -> None:
         while True:
             try:
