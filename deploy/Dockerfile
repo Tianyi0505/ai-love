@@ -18,8 +18,9 @@ COPY services/ai_agent/ ./services/ai_agent/
 CMD ["python", "-m", "services.ai_agent.main"]
 
 FROM base AS tts
-COPY services/tts/ ./services/tts/
-CMD ["python", "-m", "services.tts.main"]
+COPY ai/tts/ ./ai/tts/
+COPY ai/__init__.py ./ai/__init__.py
+CMD ["python", "-m", "ai.tts.main"]
 
 FROM base AS avatar
 COPY services/avatar/ ./services/avatar/
