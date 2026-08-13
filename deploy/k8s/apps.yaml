@@ -56,25 +56,25 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orchestrator
+  name: director
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: orchestrator
+      app: director
   template:
     metadata:
       labels:
-        app: orchestrator
+        app: director
     spec:
       hostNetwork: true
       nodeSelector:
         ailove.role: app
       containers:
-        - name: orchestrator
-          image: ailove/orchestrator:latest
+        - name: director
+          image: ailove/director:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:

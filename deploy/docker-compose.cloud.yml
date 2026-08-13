@@ -78,10 +78,10 @@ services:
     restart: unless-stopped
     networks: [ailove]
 
-  orchestrator:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: orchestrator }
-    image: ailove/orchestrator
-    container_name: ailove-orchestrator
+  director:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: director }
+    image: ailove/director
+    container_name: ailove-director
     volumes:
       - /opt/ailove/data:/app/data
     environment:

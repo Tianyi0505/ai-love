@@ -60,9 +60,9 @@ services:
       postgres: { condition: service_healthy }
     networks: [ailove]
 
-  orchestrator:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: orchestrator }
-    container_name: ailove-orchestrator
+  director:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: director }
+    container_name: ailove-director
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
