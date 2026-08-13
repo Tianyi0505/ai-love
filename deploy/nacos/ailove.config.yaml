@@ -80,7 +80,7 @@ llm:
   provider_request_timeout_sec: 60
 
 image:
-  describer: mcp_default
+  provider: anthropic
   fetch_timeout_sec: 15
   request_timeout_sec: 30
   max_tokens: 400

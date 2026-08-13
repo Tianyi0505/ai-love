@@ -6,13 +6,14 @@ import json
 
 import httpx
 
+from ai.vision.provider import VisionProvider
+from ai.vision.registry import provider_registry
+from ai.vision.types import ImageDescription
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
-from shared.vision.registry import describer_registry
-from shared.vision.types import ImageDesc, ImageDescriber
 
 
-@describer_registry.register("mcp_default")
-class DefaultDescriber(ImageDescriber):
+@provider_registry.register("anthropic")
+class AnthropicVisionProvider(VisionProvider):
 
     def __init__(
         self,
@@ -58,9 +59,9 @@ class DefaultDescriber(ImageDescriber):
             except Exception:
                 return ""
 
-    async def _do_describe(self, image_b64: str) -> ImageDesc:
+    async def _do_describe(self, image_b64: str) -> ImageDescription:
         if not image_b64:
-            return ImageDesc(
+            return ImageDescription(
                 description=str(self._fallbacks["unreadable"]),
                 tags=[],
                 match_quality=float(self._fallbacks["match_quality"]),
@@ -108,21 +109,21 @@ class DefaultDescriber(ImageDescriber):
                 if not isinstance(tags, list):
                     tags = []
                 match_quality = float(parsed.get("match_quality", self._fallbacks["match_quality"]))
-                return ImageDesc(
+                return ImageDescription(
                     description=description,
                     sticker_description=sticker_description,
                     tags=tags[: int(self._limits["tags"])],
                     match_quality=match_quality,
                 )
             plain = text.replace("```json", "").replace("```", "").strip()
-            return ImageDesc(
+            return ImageDescription(
                 description=plain[: int(self._limits["plain_description_chars"])]
                 or str(self._fallbacks["unrecognized"]),
                 tags=[],
                 match_quality=float(self._fallbacks["match_quality"]),
             )
         except Exception:
-            return ImageDesc(
+            return ImageDescription(
                 description=str(self._fallbacks["unrecognized"]),
                 tags=[],
                 match_quality=float(self._fallbacks["match_quality"]),

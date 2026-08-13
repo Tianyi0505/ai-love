@@ -24,7 +24,7 @@ from shared.contracts.agent import AgentDefinition
 from shared.contracts.events import TurnRequest
 from shared.contracts.response import ResponsePlan
 from shared.infrastructure.global_config import GlobalConfig
-from shared.vision.base import create_describer
+from ai.vision.factory import create_vision
 
 logger = logging.getLogger("ailove.ai-agent")
 
@@ -59,15 +59,15 @@ class AIRuntime:
 
         image_config = self.gcfg.section("image")
         image_options = {
-            key: value for key, value in image_config.items() if key != "describer"
+            key: value for key, value in image_config.items() if key != "provider"
         }
         self.prompt_assembler = PromptAssembler(self.definition)
         self.understanding = MessageUnderstanding(
             self.prompt_assembler,
             self._fallbacks,
             asr=None,
-            image_describer=create_describer(
-                image_config["describer"],
+            image_describer=create_vision(
+                image_config["provider"],
                 **image_options,
             ),
         )

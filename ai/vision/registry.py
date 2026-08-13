@@ -1,3 +1,3 @@
 from shared.infrastructure.registry import Registry
 
-describer_registry = Registry("image_describer")
+provider_registry = Registry("vision_provider")

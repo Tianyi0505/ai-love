@@ -34,7 +34,7 @@ from shared.infrastructure.repositories import (
     RelationshipRepository,
 )
 from shared.infrastructure.service import BaseService
-from shared.vision.base import create_describer
+from ai.vision.factory import create_vision
 
 logger = logging.getLogger("ailove.gateway")
 
@@ -53,13 +53,13 @@ class GatewayService(BaseService):
         await self._gcfg.load()
         self._timeouts = self._gcfg.section("timeouts")
         image_config = self._gcfg.section("image")
-        self._describer_kind = image_config["describer"]
-        describer_options = {
-            key: value for key, value in image_config.items() if key != "describer"
+        self._vision_provider = image_config["provider"]
+        vision_options = {
+            key: value for key, value in image_config.items() if key != "provider"
         }
-        self._image_describer = create_describer(
-            self._describer_kind,
-            **describer_options,
+        self._image_describer = create_vision(
+            self._vision_provider,
+            **vision_options,
         )
         account_specs = self._account_specs(section)
         static_owners = {
