@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package ailove.director;
+
+// 导演配置：每场直播的阵容与规则
+
+message ActorConfig {
+  string ai_id   = 1;
+  bool   is_lead = 2;
+  int32  talk_weight = 3;
+}
+
+message DirectorConfig {
+  string         session_id = 1;
+  repeated ActorConfig actors = 2;
+  bool           allow_banters = 3;
+  int32          interrupt_threshold = 4;
+  int32          max_plan_steps = 5;
+  int64          start_time = 6;
+}

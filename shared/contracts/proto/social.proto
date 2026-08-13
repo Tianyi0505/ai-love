@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package ailove.social;
+
+// 社交媒体消息协议：QQ/微信多渠道统一内容形态
+// 主题：social.chat.<ai_id> | social.send.request | social.history.request/reply
+
+enum ContentType {
+  CONTENT_TYPE_UNSPECIFIED = 0;
+  TEXT    = 1;
+  IMAGE   = 2;
+  VOICE   = 3;
+  STICKER = 4;
+  FORWARD = 5;   // 转发聊天记录（递归）
+  QUOTE   = 6;
+  FILE    = 7;
+  AT      = 8;
+}
+
+enum ChatType {
+  CHAT_TYPE_UNSPECIFIED = 0;
+  PRIVATE = 1;
+  GROUP   = 2;
+}
+
+message SocialSender {
+  string user_id = 1;
+  string name    = 2;
+  string avatar_url = 3;
+}
+
+message Chat {
+  string   chat_id   = 1;
+  ChatType chat_type = 2;
+  string   chat_name = 3;
+  string   ai_identity = 4;   // AI 在该会话的身份（群名片）
+  repeated SocialSender members = 5;
+}
+
+message SocialMessage {
+  string        id           = 1;
+  Chat          chat         = 2;
+  SocialSender  sender       = 3;
+  ContentType   type         = 4;
+  string        text         = 5;
+  string        media_url    = 6;
+  string        media_desc   = 7;   // 图片/语音可读描述
+  int32         media_duration_sec = 8;
+  repeated SocialMessage sub_messages = 9;   // FORWARD 递归
+  SocialMessage quote_ref  = 10;
+  string        at_user_id = 11;
+  bool          to_ai      = 12;   // 是否直接指向本 AI
+  int64         timestamp  = 13;
+  map<string, string> meta = 14;
+}
+
+message ChannelCapabilities {
+  string channel       = 1;
+  repeated ContentType send_types = 2;
+  repeated ContentType receive_types = 3;
+  bool supports_history = 4;
+  int32 max_forward_depth = 5;
+}
+
+message SocialSendRequest {
+  Chat        chat       = 1;
+  ContentType type       = 2;
+  string      text       = 3;
+  string      media_url  = 4;
+  string      ai_id      = 5;
+  bool        allow_fallback = 6;   // 渠道不支持时降级（语音→文字）
+}
+
+message SocialSendResponse {
+  bool   ok = 1;
+  string message_id = 2;
+  string fallback_note = 3;
+}
+
+message SocialHistoryRequest {
+  string   chat_id   = 1;
+  ChatType chat_type = 2;
+  int64    since     = 3;
+  int32    limit     = 4;
+}
+
+message SocialHistoryResponse {
+  repeated SocialMessage messages = 1;
+  bool has_more = 2;
+}

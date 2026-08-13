@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package ailove.memory;
+
+// 记忆服务协议：三存储分流 + 价值衰减（LRU）
+
+enum MemoryLayer {
+  MEMORY_LAYER_UNSPECIFIED = 0;
+  SHORT_TERM = 1;
+  MID_TERM   = 2;
+  LONG_TERM  = 3;
+}
+
+enum MemoryKind {
+  MEMORY_KIND_UNSPECIFIED = 0;
+  EPISODIC  = 1;   // 情节式
+  PROCEDURAL = 2;  // 程序式（规则/方法）
+}
+
+enum MemorySource {
+  MEMORY_SOURCE_UNSPECIFIED = 0;
+  CONVERSATION = 1;
+  GIFT         = 2;
+  MANUAL       = 3;
+  EVENT        = 4;
+  SOCIAL       = 5;
+}
+
+enum MemoryChannel {
+  MEMORY_CHANNEL_UNSPECIFIED = 0;
+  LIVE   = 1;
+  QQ     = 2;
+  WECHAT = 3;
+  OTHER  = 4;
+}
+
+message MemoryEntry {
+  string     id           = 1;
+  string     ai_id        = 2;
+  MemoryLayer layer       = 3;
+  MemoryKind  kind        = 4;
+  string     content      = 5;
+  int32      importance   = 6;   // 初始价值
+  int64      created_at   = 7;
+  int64      last_access_at = 8;
+  int32      access_count = 9;
+  MemorySource source     = 10;
+  MemoryChannel channel   = 13;
+  map<string, string> tags = 11;
+  bool       shared       = 12;
+  float      value        = 14;   // 当前价值（衰减后）
+  int64      last_boost_at = 15;  // 最近升温时间
+  int32      boost_count  = 16;   // 提及次数
+}
+
+message WriteRequest {
+  string         ai_id = 1;
+  repeated MemoryEntry entries = 2;
+}
+
+message SearchRequest {
+  string        ai_id      = 1;
+  string        query      = 2;
+  int32         top_k      = 3;
+  bool          include_shared = 4;
+  MemoryLayer   min_layer  = 5;
+  MemoryChannel channel_filter = 6;   // 0=不限（跨渠道统一召回）
+  bool          boost_on_hit = 7;     // 命中升温（默认 true）
+}
+
+message SearchResponse {
+  repeated MemoryEntry results = 1;
+}
+
+message GetProceduralRequest {
+  string   ai_id = 1;
+  string   context = 2;
+  int32    max_rules = 3;
+}
+
+message GetProceduralResponse {
+  repeated string rules = 1;
+}
+
+// 批量检索：一次往返拿三类结果（直播延迟敏感）
+message BatchRetrieveRequest {
+  string        ai_id      = 1;
+  string        query      = 2;
+  string        context    = 3;
+  string        viewer_uid = 4;
+  int32         top_k      = 5;
+  int32         max_rules  = 6;
+  MemoryChannel channel_filter = 7;
+}
+
+message BatchRetrieveResponse {
+  repeated MemoryEntry semantic = 1;
+  repeated string      rules    = 2;
+  MemoryEntry          viewer_profile = 3;
+}
