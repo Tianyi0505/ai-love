@@ -1,0 +1,506 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      containers:
+        - name: gateway
+          image: ailove/gateway:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+            - name: AILOVE_DATABASE_POOL_MIN_SIZE
+              value: "1"
+            - name: AILOVE_DATABASE_POOL_MAX_SIZE
+              value: "10"
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      containers:
+        - name: orchestrator
+          image: ailove/orchestrator:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ai-agent
+  template:
+    metadata:
+      labels:
+        app: ai-agent
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      containers:
+        - name: ai-agent
+          image: ailove/ai-agent:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+            - name: AILOVE_DATABASE_POOL_MIN_SIZE
+              value: "1"
+            - name: AILOVE_DATABASE_POOL_MAX_SIZE
+              value: "10"
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: "1", memory: 384Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tts
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tts
+  template:
+    metadata:
+      labels:
+        app: tts
+    spec:
+      nodeSelector:
+        ailove.role: core
+      containers:
+        - name: tts
+          image: ailove/tts:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: nacos:8848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://nats:4222
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - name: audio
+              mountPath: /app/data/voice
+      volumes:
+        - name: audio
+          hostPath:
+            path: /opt/ailove/audio
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avatar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: avatar
+  template:
+    metadata:
+      labels:
+        app: avatar
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: edge
+      containers:
+        - name: avatar
+          image: ailove/avatar:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+          ports:
+            - name: avatar
+              containerPort: 8081
+              hostPort: 8081
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stream
+  template:
+    metadata:
+      labels:
+        app: stream
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: edge
+      containers:
+        - name: stream
+          image: ailove/stream:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-weather
+spec:
+  selector:
+    app: mcp-weather
+  ports:
+    - name: http
+      port: 8011
+      targetPort: 8011
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-weather
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mcp-weather
+  template:
+    metadata:
+      labels:
+        app: mcp-weather
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: edge
+      containers:
+        - name: mcp-weather
+          image: ailove/mcp-weather:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extension-host
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: extension-host
+  template:
+    metadata:
+      labels:
+        app: extension-host
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: edge
+      containers:
+        - name: extension-host
+          image: ailove/extension-host:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: memory
+  template:
+    metadata:
+      labels:
+        app: memory
+    spec:
+      nodeSelector:
+        ailove.role: core
+      containers:
+        - name: memory
+          image: ailove/memory:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: nacos:8848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://nats:4222
+            - name: AILOVE_DATABASE_POOL_MIN_SIZE
+              value: "1"
+            - name: AILOVE_DATABASE_POOL_MAX_SIZE
+              value: "10"
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: music
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: music
+  template:
+    metadata:
+      labels:
+        app: music
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      containers:
+        - name: music
+          image: ailove/music:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_NACOS_ADDRS
+              value: 127.0.0.1:18848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 192Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory

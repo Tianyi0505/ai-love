@@ -8,7 +8,7 @@ logger = logging.getLogger("ailove.ai-agent.persona")
 
 class Persona:
 
-    def __init__(self, ai_id: str, data: dict, gcfg, data_dir: str = "/app/data") -> None:
+    def __init__(self, ai_id: str, data: dict, gcfg, data_dir: str) -> None:
         self.ai_id = ai_id
         self._data = data
         self._gcfg = gcfg
@@ -30,25 +30,22 @@ class Persona:
 
     @property
     def name(self) -> str:
-        return self._data.get("name", "__AILOVE_AI_NAME__")
+        return self._data["name"]
 
     @property
     def traits(self) -> list[str]:
-        return self._data.get("personality", {}).get("traits", [])
+        return self._data["personality"]["traits"]
 
     @property
     def speaking_style(self) -> str:
-        return self._data.get("personality", {}).get("speaking_style", "?????")
+        return self._data["personality"]["speaking_style"]
 
     @property
     def llm_models(self) -> dict:
-        return self._data.get("llm", {}).get("models", {})
+        return self._data["llm"]["models"]
 
     def name_for(self, user_id: str) -> str:
-        try:
-            return self._gcfg.get("social", "contact_names", {}).get(user_id, "")
-        except Exception:
-            return ""
+        return self._gcfg.get("social", "contact_names").get(user_id, "")
 
     async def should_respond(self, chat_type: str, to_ai: bool, at_user_id: str, ai_id: str, chat_id: str = "", join_checker=None) -> bool:
         if chat_type == ChatType.PRIVATE.value:

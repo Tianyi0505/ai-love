@@ -1,4 +1,4 @@
-# 环境变量与密钥（开源安全）
+# 忽略环境变量与密钥。
 .env
 .env.*
 !.env.example
@@ -7,7 +7,7 @@
 *.p12
 napcat-qrcode.png
 
-# Python
+# 忽略 Python 构建文件。
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -16,12 +16,12 @@ venv/
 dist/
 build/
 
-# IDE
+# 忽略编辑器配置。
 .vscode/
 .idea/
 *.swp
 
-# 运行时数据
+# 忽略运行时数据。
 data/
 logs/
 *.log
@@ -30,14 +30,15 @@ chroma/
 *.db
 *.sqlite3
 
-# 文档与归档文件
+# 忽略本地文档与归档文件。
 docs/
 *.tar
 *.md
 !README.md
 deploy/.migration-*
 deploy/.napcat-qrcode.png
+deploy/private/
 
-# 系统
+# 忽略系统文件。
 .DS_Store
 Thumbs.db

@@ -1,0 +1,169 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: ailove-nacos
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=256m
+      - JVM_XMX=512m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    networks: [ailove]
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: ailove-nats
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks: [ailove]
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ailove-postgres
+    environment:
+      - POSTGRES_DB=ailove
+      - POSTGRES_USER=ailove
+      - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?请在 deploy/.env 中配置}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ailove -d ailove"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [ailove]
+  gateway:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: gateway }
+    container_name: ailove-gateway
+    environment:
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
+      - VISION_BASE_URL=${VISION_BASE_URL:?请在 deploy/.env 中配置}
+      - VISION_MODEL=${VISION_MODEL:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+      - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+    depends_on:
+      nacos: { condition: service_started }
+      nats: { condition: service_started }
+      postgres: { condition: service_healthy }
+    networks: [ailove]
+
+  orchestrator:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: orchestrator }
+    container_name: ailove-orchestrator
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+    depends_on: [nacos, nats]
+    networks: [ailove]
+
+  ai-agent:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: ai-agent }
+    container_name: ailove-ai-agent
+    environment:
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?请在 deploy/.env 中配置}
+      - VISION_BASE_URL=${VISION_BASE_URL:?请在 deploy/.env 中配置}
+      - VISION_MODEL=${VISION_MODEL:?请在 deploy/.env 中配置}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+      - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+    depends_on:
+      nacos: { condition: service_started }
+      nats: { condition: service_started }
+      postgres: { condition: service_healthy }
+    networks: [ailove]
+
+  tts:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: tts }
+    container_name: ailove-tts
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+      - GPT_SOVITS_URL=${GPT_SOVITS_URL:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
+      - MIMO_BASE_URL=${MIMO_BASE_URL:-}
+      - MIMO_MODEL=${MIMO_MODEL:-}
+      - MIMO_REF_AUDIO=${MIMO_REF_AUDIO:-}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}
+    depends_on: [nacos, nats]
+    networks: [ailove]
+
+  avatar:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: avatar }
+    container_name: ailove-avatar
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+    ports:
+      - "8081:8081"
+    depends_on: [nacos, nats]
+    networks: [ailove]
+
+  stream:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: stream }
+    container_name: ailove-stream
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+    depends_on: [nacos, nats]
+    networks: [ailove]
+
+  extension-host:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: extension-host }
+    container_name: ailove-extension-host
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+      - MCP_WEATHER_URL=http://mcp-weather:8011/mcp
+    depends_on: [nacos, nats, mcp-weather]
+    networks: [ailove]
+
+  mcp-weather:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: mcp-weather }
+    container_name: ailove-mcp-weather
+    environment:
+      - QWEATHER_API_KEY=${QWEATHER_API_KEY:?请在 deploy/.env 中配置}
+      - QWEATHER_CREDENTIAL_ID=${QWEATHER_CREDENTIAL_ID:-}
+      - QWEATHER_API_HOST=${QWEATHER_API_HOST:-}
+    expose:
+      - "8011"
+    networks: [ailove]
+
+  memory:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: memory }
+    container_name: ailove-memory
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+      - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+    depends_on:
+      nacos: { condition: service_started }
+      nats: { condition: service_started }
+      postgres: { condition: service_healthy }
+    networks: [ailove]
+
+  music:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: music }
+    container_name: ailove-music
+    environment:
+      - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_BUS_URL=nats://nats:4222
+    depends_on: [nacos, nats]
+    networks: [ailove]
+
+networks:
+  ailove:
+    driver: bridge
+
+volumes:
+  postgres-data:

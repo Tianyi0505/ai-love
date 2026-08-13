@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ailove
+resources:
+  - namespace.yaml
+  - infrastructure.yaml
+  # - napcat.yaml  # QQ 暂留 Docker（用户规划），迁移完成后启用
+  - apps.yaml

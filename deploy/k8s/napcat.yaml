@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: napcat
+spec:
+  selector:
+    app: napcat
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+    - name: websocket
+      port: 3001
+      targetPort: 3001
+    - name: webui
+      port: 6099
+      targetPort: 6099
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: napcat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: napcat
+  template:
+    metadata:
+      labels:
+        app: napcat
+    spec:
+      nodeSelector:
+        ailove.role: core
+      containers:
+        - name: napcat
+          image: mlikiowa/napcat-docker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HTTP_PORT
+              value: "3000"
+            - name: ACCOUNT
+              value: "3916750998"
+            - name: WS_ENABLE
+              value: "true"
+            - name: WS_PORT
+              value: "3001"
+            - name: HTTP_ENABLE
+              value: "true"
+            - name: TZ
+              value: Asia/Shanghai
+          ports:
+            - name: http
+              containerPort: 3000
+              hostPort: 3000
+            - name: websocket
+              containerPort: 3001
+              hostPort: 3001
+            - name: webui
+              containerPort: 6099
+              hostPort: 6099
+          readinessProbe:
+            tcpSocket:
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 700Mi
+          volumeMounts:
+            - name: config
+              mountPath: /app/napcat/config
+            - name: audio
+              mountPath: /app/audio
+            - name: qq-data
+              mountPath: /app/.config/QQ
+      volumes:
+        - name: config
+          hostPath:
+            path: /opt/ailove/napcat/config
+            type: Directory
+        - name: audio
+          hostPath:
+            path: /opt/ailove/audio
+            type: Directory
+        - name: qq-data
+          hostPath:
+            path: /opt/ailove/napcat/qq-data
+            type: Directory
