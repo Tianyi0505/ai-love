@@ -17,6 +17,7 @@ CMD ["python", "-m", "live.director.main"]
 FROM base AS ai-agent
 COPY agent/ ./agent/
 COPY ai/__init__.py ./ai/__init__.py
+COPY ai/asr/ ./ai/asr/
 COPY ai/llm/ ./ai/llm/
 COPY ai/vision/ ./ai/vision/
 CMD ["python", "-m", "agent.main"]
