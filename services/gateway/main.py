@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -34,8 +33,6 @@ from shared.infrastructure.repositories import (
     RelationshipRepository,
 )
 from shared.infrastructure.service import BaseService
-from ai.vision.factory import create_vision
-
 logger = logging.getLogger("ailove.gateway")
 
 SUBJ_EVENT_AI = "ai.events.{ai_id}"
@@ -52,15 +49,6 @@ class GatewayService(BaseService):
         self._gcfg = GlobalConfig(provider=self.cfg.nacos)
         await self._gcfg.load()
         self._timeouts = self._gcfg.section("timeouts")
-        image_config = self._gcfg.section("image")
-        self._vision_provider = image_config["provider"]
-        vision_options = {
-            key: value for key, value in image_config.items() if key != "provider"
-        }
-        self._image_describer = create_vision(
-            self._vision_provider,
-            **vision_options,
-        )
         account_specs = self._account_specs(section)
         static_owners = {
             spec["account_id"]: spec["owner_ai_id"]
@@ -121,7 +109,6 @@ class GatewayService(BaseService):
                     relationship_provider=self._relationship_profile,
                     comment_generator=self._generate_comment,
                     proactive_allowed=proactive_schedule.allows_proactive,
-                    image_describer=self._image_describer,
                     timeouts=self._timeouts,
                 ).loop()
             )
@@ -204,7 +191,12 @@ class GatewayService(BaseService):
             pass
         return {"familiarity": 0.0, "affinity": 0.0, "trust": 0.0, "importance": 0.0}
 
-    async def _generate_comment(self, feed_text: str, author_name: str) -> str:
+    async def _generate_comment(
+        self,
+        feed_text: str,
+        author_name: str,
+        picture_urls: list[str],
+    ) -> str:
         try:
             ai_id = await self._social_router.owner_for(self._qq_account_id)
             if not ai_id:
@@ -216,6 +208,7 @@ class GatewayService(BaseService):
                     "account_id": self._qq_account_id,
                     "feed_text": feed_text,
                     "author_name": author_name,
+                    "picture_urls": picture_urls,
                 },
                 timeout=float(self._timeouts["comment_generation_sec"]),
             )
@@ -255,45 +248,11 @@ class GatewayService(BaseService):
         except LookupError as exc:
             logger.warning("[gateway] 社交消息未路由: %s", exc)
             return
-        if msg.all_media_urls():
-            self.spawn(self._collect_stickers(msg, turn.ai_id))
         msg.meta["ai_id"] = turn.ai_id
         msg.meta["conversation_id"] = turn.conversation_id
         if self._conversations is not None:
             await self._conversations.record_inbound(msg, turn.ai_id)
         await self.bus.publish_json(SUBJ_SOCIAL_CHAT.format(ai_id=turn.ai_id), msg.to_dict())
-
-    async def _collect_stickers(self, msg: SocialMessage, ai_id: str) -> None:
-        await asyncio.gather(
-            *(self._collect_sticker(image_url, ai_id) for image_url in msg.all_media_urls())
-        )
-
-    async def _collect_sticker(self, image_url: str, ai_id: str) -> None:
-        try:
-            desc = await self._image_describer.describe(image_url)
-            min_quality = float(self._gcfg.get("sticker", "collect_min_quality"))
-            if desc.match_quality < min_quality or not desc.sticker_description:
-                logger.info("[gateway] 跳过非表情图片: quality=%.2f %s", desc.match_quality, desc.description[:30])
-                return
-            sticker_id = f"stk_{hashlib.md5(image_url.encode()).hexdigest()[:12]}"
-            result = await self.bus.request_json(
-                "sticker.add.request",
-                {
-                    "ai_id": ai_id,
-                    "id": sticker_id,
-                    "image_url": image_url,
-                    "description": desc.sticker_description,
-                    "tags": desc.tags,
-                    "match_quality": desc.match_quality,
-                },
-                timeout=float(self._timeouts["sticker_add_sec"]),
-            )
-            if result.get("ok"):
-                logger.info("[gateway] 收藏表情: %s", desc.description)
-            else:
-                logger.warning("[gateway] 表情收藏失败: %s", result.get("action", "unknown"))
-        except Exception as e:
-            logger.warning("[gateway] 收藏表情失败: %s", e)
 
     async def _as_interaction(self, msg: SocialMessage) -> None:
         evt = InteractionEvent(

@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
 import time
+from string import Template
 
 from services.ai_agent.agent_loop import AgentLoop
 from services.ai_agent.application.conversation import ConversationContext
@@ -62,14 +64,15 @@ class AIRuntime:
             key: value for key, value in image_config.items() if key != "provider"
         }
         self.prompt_assembler = PromptAssembler(self.definition)
+        self.vision = create_vision(
+            image_config["provider"],
+            **image_options,
+        )
         self.understanding = MessageUnderstanding(
             self.prompt_assembler,
             self._fallbacks,
             asr=None,
-            image_describer=create_vision(
-                image_config["provider"],
-                **image_options,
-            ),
+            image_describer=self.vision,
         )
 
         self.agent_loop = AgentLoop(
@@ -414,6 +417,24 @@ class AIRuntime:
         req = json.loads(payload.decode("utf-8"))
         feed_text = req.get("feed_text", "")
         author_name = req.get("author_name", "朋友")
+        picture_urls = [str(url) for url in req.get("picture_urls", []) if str(url)]
+        if picture_urls:
+            descriptions = await asyncio.gather(
+                *(self._describe_image(url) for url in picture_urls)
+            )
+            picture_text = "\n".join(
+                Template(str(self.gcfg.get("qq", "qzone_picture_template"))).substitute(
+                    index=index,
+                    description=description,
+                )
+                for index, description in enumerate(descriptions, start=1)
+            )
+            feed_text = Template(str(self.gcfg.get("qq", "qzone_feed_template"))).substitute(
+                content=feed_text,
+                pictures=picture_text,
+                comments="",
+                reply="",
+            ).strip()
         context = PromptContext(
             scene="qzone-comment",
             user_input=self.prompt_assembler.render(
@@ -434,6 +455,44 @@ class AIRuntime:
             },
             ensure_ascii=False,
         ).encode()
+
+    async def _describe_image(self, image_url: str) -> str:
+        try:
+            result = await self.vision.describe(image_url)
+            return str(result.description or self._fallbacks["image_unreadable"])
+        except Exception as exc:
+            logger.warning("[ai-agent:%s] 图片理解失败: %s", self.ai_id, exc)
+            return str(self._fallbacks["image_unreadable"])
+
+    async def collect_stickers(self, image_urls: list[str]) -> None:
+        await asyncio.gather(*(self._collect_sticker(url) for url in image_urls))
+
+    async def _collect_sticker(self, image_url: str) -> None:
+        try:
+            description = await self.vision.describe(image_url)
+            min_quality = float(self.gcfg.get("sticker", "collect_min_quality"))
+            if (
+                description.match_quality < min_quality
+                or not description.sticker_description
+            ):
+                return
+            sticker_id = f"stk_{hashlib.md5(image_url.encode()).hexdigest()[:12]}"
+            result = await self.bus.request_json(
+                "sticker.add.request",
+                {
+                    "ai_id": self.ai_id,
+                    "id": sticker_id,
+                    "image_url": image_url,
+                    "description": description.sticker_description,
+                    "tags": description.tags,
+                    "match_quality": description.match_quality,
+                },
+                timeout=float(self._timeouts["sticker_add_sec"]),
+            )
+            if result.get("ok"):
+                logger.info("[ai-agent:%s] 收藏表情: %s", self.ai_id, description.description)
+        except Exception as exc:
+            logger.warning("[ai-agent:%s] 收藏表情失败: %s", self.ai_id, exc)
 
     async def tts_synthesize(self, text: str) -> dict | None:
         try:

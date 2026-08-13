@@ -7,7 +7,7 @@ import logging
 from ai.llm.service import ChatMessage
 from services.ai_agent.prompting import PromptContext
 from shared.contracts.response import ResponsePlan
-from shared.contracts.social import SocialMessage
+from shared.contracts.social import ContentType, SocialMessage
 from services.ai_agent.events.registry import event_registry
 
 logger = logging.getLogger("ailove.ai-agent.events.social")
@@ -19,6 +19,8 @@ async def handle_social(service, payload: bytes) -> None:
     logger.info("[ai-agent:%s] 收到社交: %s: %s", service.ai_id, msg.sender.user_id, msg.text[:30])
     understood = await service.understanding.understand(msg)
     query = understood or msg.text
+    if msg.type == ContentType.IMAGE and msg.all_media_urls():
+        service.spawn(service.collect_stickers(msg.all_media_urls()))
     is_group = msg.chat.chat_type.value == "group"
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id

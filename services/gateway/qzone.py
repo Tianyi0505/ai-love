@@ -25,7 +25,6 @@ class QZoneService:
         relationship_provider,
         comment_generator,
         proactive_allowed,
-        image_describer,
         timeouts: dict,
     ) -> None:
         self._napcat_url = napcat_http_url
@@ -33,7 +32,6 @@ class QZoneService:
         self._relationship_provider = relationship_provider
         self._comment_generator = comment_generator
         self._proactive_allowed = proactive_allowed
-        self._image_describer = image_describer
         self._commented = CommentedRepo(str(gcfg.get("qq", "qzone_data_dir")))
         self._api = None
         self._uin = qq_uin
@@ -93,22 +91,6 @@ class QZoneService:
     async def _comment_text(self, feed: dict, author_name: str) -> str:
         content = feed.get("content") or feed.get("text") or ""
         picture_urls = self._picture_urls(feed)
-        picture_descriptions = await self._describe_pictures(picture_urls)
-        if picture_descriptions:
-            pic_desc = "\n".join(
-                Template(str(self._gcfg.get("qq", "qzone_picture_template"))).substitute(
-                    index=index, description=description
-                )
-                for index, description in enumerate(picture_descriptions, start=1)
-            )
-        else:
-            pic_desc = (
-                Template(str(self._gcfg.get("qq", "qzone_picture_unavailable_template"))).substitute(
-                    count=len(picture_urls)
-                )
-                if picture_urls
-                else ""
-            )
         comments = feed.get("commentlist") or []
         comment_summary = ""
         if comments:
@@ -128,12 +110,12 @@ class QZoneService:
         )
         feed_text = Template(str(self._gcfg.get("qq", "qzone_feed_template"))).substitute(
             content=content,
-            pictures=pic_desc,
+            pictures="",
             comments=comment_summary,
             reply=reply_summary,
         ).strip() or str(self._gcfg.get("fallbacks", "qzone_empty_feed"))
         try:
-            resp = await self._comment_generator(feed_text, author_name)
+            resp = await self._comment_generator(feed_text, author_name, picture_urls)
             if resp:
                 return resp
         except Exception as e:
@@ -164,20 +146,6 @@ class QZoneService:
             if url and url not in urls:
                 urls.append(url)
         return urls
-
-    async def _describe_pictures(self, urls: list[str]) -> list[str]:
-        if not urls:
-            return []
-
-        async def describe(url: str) -> str:
-            try:
-                result = await self._image_describer.describe(url)
-                return str(result.description or self._gcfg.get("fallbacks", "image_unreadable"))
-            except Exception as exc:
-                logger.warning("[qzone] 动态图片理解失败: %s", exc)
-                return str(self._gcfg.get("fallbacks", "image_unreadable"))
-
-        return await asyncio.gather(*(describe(url) for url in urls))
 
     async def run_once(self) -> dict:
         stats = {"scanned": 0, "liked": 0, "commented": 0, "errors": 0, "skipped": False}
