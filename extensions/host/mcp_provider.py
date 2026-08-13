@@ -6,7 +6,7 @@ import json
 from mcp import Client
 from mcp.types import TextContent
 
-from services.extension_host.tools import ToolDefinition, ToolInvocation, ToolResult
+from extensions.host.tools import ToolDefinition, ToolInvocation, ToolResult
 
 
 class MCPToolProvider:

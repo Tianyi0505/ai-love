@@ -1,9 +1,9 @@
 
 from __future__ import annotations
 
-from services.extension_host.skill import skill_registry
-from services.extension_host.tools import ToolDefinition, ToolInvocation, ToolResult
-from services.extension_host.web_search import WebSearchTool
+from extensions.host.skill import skill_registry
+from extensions.host.tools import ToolDefinition, ToolInvocation, ToolResult
+from extensions.host.web_search import WebSearchTool
 
 
 class BuiltinToolProvider:

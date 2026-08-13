@@ -5,12 +5,12 @@ import asyncio
 import json
 import logging
 
-from services.extension_host.tools import PermissionLevel, ToolGateway, ToolGrant, ToolInvocation
+from extensions.host.tools import PermissionLevel, ToolGateway, ToolGrant, ToolInvocation
 from shared.infrastructure.agent_store import NacosAgentDefinitionStore
 from shared.infrastructure.config import ServiceConfig
 from shared.infrastructure.service import BaseService
-from services.extension_host.providers import BuiltinToolProvider
-from services.extension_host.mcp_provider import MCPToolProvider
+from extensions.host.providers import BuiltinToolProvider
+from extensions.host.mcp_provider import MCPToolProvider
 
 logger = logging.getLogger("ailove.extension-host")
 
