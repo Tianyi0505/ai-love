@@ -5,8 +5,8 @@ import json
 import logging
 
 from ai.llm.service import ChatMessage
-from agent.prompting import PromptContext
-from shared.contracts.response import ResponsePlan
+from agent.generation.prompting import PromptContext
+from agent.generation.response import ResponsePlan
 from shared.contracts.social import ContentType, SocialMessage
 from agent.events.registry import event_registry
 

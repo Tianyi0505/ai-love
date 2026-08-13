@@ -5,9 +5,9 @@ import json
 import logging
 
 from ai.llm.service import ChatMessage
-from agent.prompting import PromptContext
+from agent.generation.prompting import PromptContext
 from shared.contracts.live import InteractionEvent
-from shared.contracts.response import ResponsePlan
+from agent.generation.response import ResponsePlan
 from agent.events.registry import event_registry
 
 logger = logging.getLogger("ailove.ai-agent.events.live")

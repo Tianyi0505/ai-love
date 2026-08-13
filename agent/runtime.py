@@ -9,7 +9,7 @@ import re
 import time
 from string import Template
 
-from agent.agent_loop import AgentLoop
+from agent.generation.agent_loop import AgentLoop
 from agent.application.conversation import ConversationContext
 from agent.application.proactive import GroupChatManager, ProactiveChat
 from agent.application.retrieval import Retrieval
@@ -20,11 +20,11 @@ from ai.llm.service import ChatMessage, create_llm
 from agent.memory.manager import MemoryManager
 from agent.message_understanding import MessageUnderstanding
 from agent.persona.model import Persona
-from agent.prompting import PromptAssembler, PromptContext
+from agent.generation.prompting import PromptAssembler, PromptContext
 from agent.tools import register_tools
 from shared.contracts.agent import AgentDefinition
 from shared.contracts.events import TurnRequest
-from shared.contracts.response import ResponsePlan
+from agent.generation.response import ResponsePlan
 from shared.infrastructure.global_config import GlobalConfig
 from ai.vision.factory import create_vision
 
