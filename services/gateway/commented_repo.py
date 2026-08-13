@@ -1,0 +1,30 @@
+
+from __future__ import annotations
+
+import sqlite3
+import time
+from pathlib import Path
+
+
+class CommentedRepo:
+
+    def __init__(self, data_dir: str = "/app/data") -> None:
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(Path(data_dir) / "commented.db")
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS commented (
+                tid TEXT PRIMARY KEY,
+                commented_at REAL
+            )
+        """)
+        self._conn.commit()
+
+    def has(self, tid: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM commented WHERE tid=?", (tid,)).fetchone() is not None
+
+    def add(self, tid: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO commented (tid, commented_at) VALUES (?,?)",
+            (tid, time.time()),
+        )
+        self._conn.commit()
