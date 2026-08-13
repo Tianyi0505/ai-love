@@ -13,8 +13,8 @@ from services.ai_agent.application.proactive import GroupChatManager, ProactiveC
 from services.ai_agent.application.retrieval import Retrieval
 from services.ai_agent.application.session import SessionManager
 from services.ai_agent.events.handlers import EventHandlers
-from services.ai_agent.llm.providers import anthropic_gw, deepseek, ollama
-from services.ai_agent.llm.service import ChatMessage, create_llm
+from ai.llm.providers import anthropic_gw, deepseek, ollama
+from ai.llm.service import ChatMessage, create_llm
 from services.ai_agent.memory.manager import MemoryManager
 from services.ai_agent.message_understanding import MessageUnderstanding
 from services.ai_agent.persona.model import Persona

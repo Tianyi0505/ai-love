@@ -5,10 +5,10 @@ import asyncio
 import logging
 from typing import AsyncIterator
 
-from services.ai_agent.llm.errors import LLMErrorMessage
-from services.ai_agent.llm.model import ModelHealthStore, ModelSelector, ModelTarget
-from services.ai_agent.llm.tier import Tier
-from services.ai_agent.llm.types import ChatRequest, ChatStreamChunk, LLMProvider
+from ai.llm.errors import LLMErrorMessage
+from ai.llm.model import ModelHealthStore, ModelSelector, ModelTarget
+from ai.llm.tier import Tier
+from ai.llm.types import ChatRequest, ChatStreamChunk, LLMProvider
 
 logger = logging.getLogger("ailove.llm.routing")
 

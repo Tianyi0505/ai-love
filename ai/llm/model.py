@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from services.ai_agent.llm.tier import ModelCapability, Tier
+from ai.llm.tier import ModelCapability, Tier
 
 
 @dataclass

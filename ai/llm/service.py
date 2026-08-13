@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from services.ai_agent.llm.model import ModelHealthStore, ModelSelector
-from services.ai_agent.llm.routing import RoutingLLMService
-from services.ai_agent.llm.types import (
+from ai.llm.model import ModelHealthStore, ModelSelector
+from ai.llm.routing import RoutingLLMService
+from ai.llm.types import (
     ChatMessage,
     ChatRequest,
     ChatStreamChunk,

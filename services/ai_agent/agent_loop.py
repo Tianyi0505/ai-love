@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable
 
-from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMService, ToolSchema
+from ai.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMService, ToolSchema
 
 logger = logging.getLogger("ailove.agent_loop")
 

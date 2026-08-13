@@ -6,7 +6,7 @@ from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
-from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, ToolSchema, llm_registry
+from ai.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, ToolSchema, llm_registry
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 

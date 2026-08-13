@@ -7,7 +7,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, llm_registry
+from ai.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, llm_registry
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 

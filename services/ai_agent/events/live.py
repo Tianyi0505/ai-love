@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-from services.ai_agent.llm.service import ChatMessage
+from ai.llm.service import ChatMessage
 from services.ai_agent.prompting import PromptContext
 from shared.contracts.live import InteractionEvent
 from shared.contracts.response import ResponsePlan
