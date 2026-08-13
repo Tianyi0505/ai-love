@@ -32,8 +32,9 @@ COPY live/__init__.py ./live/__init__.py
 CMD ["python", "-m", "live.avatar.main"]
 
 FROM base AS stream
-COPY services/stream/ ./services/stream/
-CMD ["python", "-m", "services.stream.main"]
+COPY live/stream/ ./live/stream/
+COPY live/__init__.py ./live/__init__.py
+CMD ["python", "-m", "live.stream.main"]
 
 FROM base AS extension-host
 COPY extensions/host/ ./extensions/host/
