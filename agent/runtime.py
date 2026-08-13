@@ -10,16 +10,16 @@ import time
 from string import Template
 
 from agent.generation.agent_loop import AgentLoop
-from agent.application.conversation import ConversationContext
+from agent.context.conversation import ConversationContext
 from agent.application.proactive import GroupChatManager, ProactiveChat
 from agent.application.retrieval import Retrieval
-from agent.application.session import SessionManager
+from agent.context.speaking_state import SessionManager
 from agent.events.handlers import EventHandlers
 from ai.llm.providers import anthropic_gw, deepseek, ollama
 from ai.llm.factory import create_llm
 from ai.llm.types import ChatMessage
 from agent.memory.manager import MemoryManager
-from agent.message_understanding import MessageUnderstanding
+from agent.context.understanding import MessageUnderstanding
 from agent.persona.model import Persona
 from agent.generation.prompting import PromptAssembler, PromptContext
 from agent.tools import register_tools
