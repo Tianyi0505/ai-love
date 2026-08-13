@@ -204,14 +204,14 @@ services:
       - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
       - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
-    depends_on: [nacos, nats, mcp-weather]
+    depends_on: [nacos, nats, mcp]
     restart: unless-stopped
     networks: [ailove]
 
-  mcp-weather:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: mcp-weather }
-    image: ailove/mcp-weather
-    container_name: ailove-mcp-weather
+  mcp:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: mcp }
+    image: ailove/mcp
+    container_name: ailove-mcp
     environment:
       - QWEATHER_API_KEY=${QWEATHER_API_KEY:?}
       - QWEATHER_API_HOST=${QWEATHER_API_HOST:?}
@@ -243,26 +243,6 @@ services:
       nacos: { condition: service_started }
       nats: { condition: service_started }
       postgres: { condition: service_healthy }
-    restart: unless-stopped
-    networks: [ailove]
-
-  music:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: music }
-    image: ailove/music
-    container_name: ailove-music
-    volumes:
-      - /opt/ailove/data:/app/data
-    environment:
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
-      - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
-    depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]
 
