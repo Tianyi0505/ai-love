@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>AI-Love Live2D</title>
+<style>
+  body { margin: 0; background: #000; overflow: hidden; }
+  #canvas { width: 100vw; height: 100vh; display: block; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+// AI-Love Live2D 前端壳
+// 接入：Live2D Cubism Web SDK + pixi-live2d-display
+// 通过 WebSocket 接收 avatar 服务动作指令（说话/情绪/动作）
+const ws = new WebSocket(`ws://${location.host}/ws`);
+ws.onmessage = (e) => {
+  const cmd = JSON.parse(e.data);
+  // TODO: 动作指令 → Live2D 动画（viseme口型/表情/肢体）
+  console.log("[live2d]", cmd);
+};
+ws.onopen = () => console.log("[live2d] WS connected");
+</script>
+</body>
+</html>
