@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from shared.contracts.agent import AgentDefinition, AgentDefinitionError
+from shared.infrastructure.runtime_config import required_config, required_value
 
 
 class NacosAgentDefinitionStore:
@@ -19,44 +20,68 @@ class NacosAgentDefinitionStore:
         data = await self._provider.get(key)
         if not data:
             raise AgentDefinitionError(f"Nacos 缺少 AI 定义: {key}")
-        configured_ai_id = str(data.get("ai_id", "")).strip()
+        configured_ai_id = required_value(
+            str(required_config(data, "ai_id", f"{key}.ai_id")),
+            f"{key}.ai_id",
+        )
         if configured_ai_id != ai_id:
             raise AgentDefinitionError(f"{key} 的 ai_id 必须等于 {ai_id}")
-        identity = str(data.get("identity", "")).strip()
-        if not identity:
-            raise AgentDefinitionError(f"{key} 缺少 identity")
-        extensions = data.get("extensions", [])
+        identity = required_value(
+            str(required_config(data, "identity", f"{key}.identity")),
+            f"{key}.identity",
+        )
+        extensions = required_config(data, "extensions", f"{key}.extensions")
         if not isinstance(extensions, list):
             raise AgentDefinitionError(f"{key}.extensions 必须是列表")
-        prompts = data.get("prompts", {})
+        for index, extension in enumerate(extensions):
+            if not isinstance(extension, dict):
+                raise AgentDefinitionError(f"{key}.extensions[{index}] 必须是对象")
+        prompts = required_config(data, "prompts", f"{key}.prompts")
         if not isinstance(prompts, dict):
             raise AgentDefinitionError(f"{key}.prompts 必须是对象")
+        model_config = self._mapping(
+            required_config(data, "model_config", f"{key}.model_config"),
+            f"{key}.model_config",
+        )
+        for tier in ("fast", "standard", "deep"):
+            candidates = required_config(model_config, tier, f"{key}.model_config.{tier}")
+            if not isinstance(candidates, list):
+                raise AgentDefinitionError(f"{key}.model_config.{tier} 必须是列表")
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    raise AgentDefinitionError(f"{key}.model_config.{tier} 每项必须是对象")
+                for field in ("id", "provider", "thinking"):
+                    required_config(candidate, field, f"{key}.model_config.{tier}.{field}")
         canonical = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return AgentDefinition(
             ai_id=ai_id,
-            version=int(data.get("version", 1)),
-            name=str(data.get("name", ai_id)),
+            version=int(required_config(data, "version", f"{key}.version")),
+            name=required_value(str(required_config(data, "name", f"{key}.name")), f"{key}.name"),
             identity=identity,
-            personality=self._mapping(data.get("personality")),
-            relationship_policy=self._mapping(data.get("relationship_policy")),
-            behavior_policy=self._mapping(data.get("behavior_policy")),
-            extensions=[dict(item) for item in extensions if isinstance(item, dict)],
+            personality=self._mapping(required_config(data, "personality", f"{key}.personality"), f"{key}.personality"),
+            relationship_policy=self._mapping(required_config(data, "relationship_policy", f"{key}.relationship_policy"), f"{key}.relationship_policy"),
+            behavior_policy=self._mapping(required_config(data, "behavior_policy", f"{key}.behavior_policy"), f"{key}.behavior_policy"),
+            extensions=[dict(item) for item in extensions],
             prompts={str(name): str(content).strip() for name, content in prompts.items()},
-            model_profile_id=str(data.get("model_profile_id", "default")),
-            voice_profile_id=str(data.get("voice_profile_id", "default")),
-            avatar_profile_id=str(data.get("avatar_profile_id", "default")),
-            model_config=self._mapping(data.get("model_config")),
+            model_profile_id=required_value(str(required_config(data, "model_profile_id", f"{key}.model_profile_id")), f"{key}.model_profile_id"),
+            voice_profile_id=required_value(str(required_config(data, "voice_profile_id", f"{key}.voice_profile_id")), f"{key}.voice_profile_id"),
+            avatar_profile_id=required_value(str(required_config(data, "avatar_profile_id", f"{key}.avatar_profile_id")), f"{key}.avatar_profile_id"),
+            model_config=model_config,
             definition_key=key,
             fingerprint=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         )
 
     async def list_active(self) -> list[AgentDefinition]:
         catalog = await self._provider.get("agent.catalog")
-        ai_ids = catalog.get("active_ai_ids", []) if isinstance(catalog, dict) else []
+        if not catalog:
+            raise AgentDefinitionError("Nacos 缺少配置: agent.catalog")
+        ai_ids = required_config(catalog, "active_ai_ids", "agent.catalog.active_ai_ids")
         if not isinstance(ai_ids, list):
             raise AgentDefinitionError("agent.catalog.active_ai_ids 必须是列表")
         return [await self.load(str(ai_id)) for ai_id in ai_ids]
 
     @staticmethod
-    def _mapping(value) -> dict[str, Any]:
-        return dict(value) if isinstance(value, dict) else {}
+    def _mapping(value, config_name: str) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            raise AgentDefinitionError(f"{config_name} 必须是对象")
+        return dict(value)

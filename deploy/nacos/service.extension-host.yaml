@@ -1,0 +1,26 @@
+instance_addr: 127.0.0.1:0
+binding_poll_interval_sec: 2
+mcp_weather_url: __MCP_WEATHER_URL__
+web_search:
+  request_timeout_sec: 10
+  endpoint: https://www.bing.com/search
+  user_agent: Mozilla/5.0
+  result_limit: 5
+  definition:
+    description: 网络搜索：查询最新信息、事实、新闻等（当前资料不足时用）
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: 搜索关键词
+      required: [query]
+  messages:
+    missing_query: 搜索失败：缺少 query
+    no_result: 搜索「${query}」无结果
+    result: |-
+      [${index}] ${title}
+      ${url}
+      ${snippet}
+messages:
+  unknown_skill: 未知本地 Skill

@@ -2,32 +2,32 @@
 from __future__ import annotations
 
 import base64
-import os
 import time
 from pathlib import Path
 
 from openai import AsyncOpenAI
 
 from services.tts.engine import AudioResult, SynthesizeRequest, TTSEngine, tts_registry
-from shared.infrastructure.runtime_config import required_setting
+from shared.infrastructure.runtime_config import ConfigKey, required_setting, required_value
 
 
 @tts_registry.register("mimo")
 class MimoTTSEngine(TTSEngine):
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None, model: str | None = None,
-                 refs: dict[str, dict] | None = None, **_) -> None:
+    def __init__(self, refs: dict[str, dict], request_timeout_sec: float, api_audio_format: str, output_format: str, api_key: str | None = None, base_url: str | None = None, model: str | None = None, **_) -> None:
         self._client = AsyncOpenAI(
-            api_key=api_key or os.environ.get("ANTHROPIC_AUTH_TOKEN", ""),
-            base_url=required_setting(base_url, "MIMO_BASE_URL"),
+            api_key=required_setting(api_key, ConfigKey.ANTHROPIC_AUTH_TOKEN),
+            base_url=required_setting(base_url, ConfigKey.MIMO_BASE_URL),
+            timeout=request_timeout_sec,
         )
-        self._model = required_setting(model, "MIMO_MODEL")
-        self._refs = refs or {}
+        self._model = required_setting(model, ConfigKey.MIMO_MODEL)
+        self._refs = refs
+        self._api_audio_format = api_audio_format
+        self._output_format = output_format
 
     def _voice_data_uri(self, ai_id: str) -> str:
-        ref = self._refs.get(ai_id, {})
-        path = ref.get("ref_audio_path", "") or os.environ.get("MIMO_REF_AUDIO", "")
-        if not path or not Path(path).exists():
+        path = required_value(self._refs[ai_id]["ref_audio_path"], f"service.tts.voices.{ai_id}.ref_audio_path")
+        if not Path(path).exists():
             raise RuntimeError(f"缺少参考音频（声线样本）: ai_id={ai_id}")
         data = Path(path).read_bytes()
         mime = "audio/wav" if path.endswith(".wav") else "audio/mpeg"
@@ -41,13 +41,13 @@ class MimoTTSEngine(TTSEngine):
                 {"role": "user", "content": ""},
                 {"role": "assistant", "content": text},
             ],
-            audio={"format": "wav", "voice": self._voice_data_uri(req.ai_id)},
+            audio={"format": self._api_audio_format, "voice": self._voice_data_uri(req.ai_id)},
             stream=False,
         )
         audio_b64 = resp.choices[0].message.audio.data
         pcm = base64.b64decode(audio_b64)
         return AudioResult(
             pcm=pcm,
-            format="wav",
+            format=self._output_format,
             latency_ms=int((time.perf_counter() - t0) * 1000),
         )

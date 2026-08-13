@@ -1,30 +1,32 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import AsyncIterator
 
 from anthropic import AsyncAnthropic
 
 from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, ToolSchema, llm_registry
-from shared.infrastructure.runtime_config import required_setting, required_value
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
 @llm_registry.register("anthropic_gw")
 class AnthropicGatewayProvider(LLMProvider):
     def __init__(
         self,
+        model: str,
+        max_tokens: int,
+        request_timeout_sec: float,
         api_key: str | None = None,
         base_url: str | None = None,
-        model: str | None = None,
-        max_tokens: int = 4096,
+        **_,
     ) -> None:
         self._client = AsyncAnthropic(
-            api_key=api_key or os.environ.get("ANTHROPIC_AUTH_TOKEN", ""),
-            base_url=required_setting(base_url, "ANTHROPIC_BASE_URL"),
+            api_key=required_setting(api_key, ConfigKey.ANTHROPIC_AUTH_TOKEN),
+            base_url=required_setting(base_url, ConfigKey.ANTHROPIC_BASE_URL),
+            timeout=request_timeout_sec,
         )
-        self._model = required_value(model, "模型路由中的 Anthropic 模型 ID")
+        self._model = model
         self._max_tokens = max_tokens
 
     def _to_messages(self, msgs: list[ChatMessage]) -> list[dict]:

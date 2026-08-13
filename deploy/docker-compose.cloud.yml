@@ -1,6 +1,4 @@
-# AI-Love 云服务器部署（2C4G 精简版）
-# 云服务器部署：无头服务（Nacos/NATS/9服务）
-# 本地直播机：OBS + avatar 前端壳 + GPT-SoVITS
+# 部署云端无头服务
 
 services:
   nacos:
@@ -9,9 +7,9 @@ services:
     environment:
       - MODE=standalone
       - NACOS_AUTH_ENABLE=true
-      - NACOS_AUTH_IDENTITY_KEY=${NACOS_AUTH_IDENTITY_KEY:?请在 deploy/.env 中配置}
-      - NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE:?请在 deploy/.env 中配置}
-      - NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN:?请在 deploy/.env 中配置}
+      - NACOS_AUTH_IDENTITY_KEY=${NACOS_AUTH_IDENTITY_KEY:?}
+      - NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE:?}
+      - NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN:?}
       - JVM_XMS=256m
       - JVM_XMX=512m
       - JVM_XMN=128m
@@ -26,7 +24,7 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: ailove-nats
-    command: ["-js", "-m", "8222", "-auth", "${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}"]
+    command: ["-js", "-m", "8222", "-auth", "${AILOVE_BUS_TOKEN:?}"]
     ports:
       - "4222:4222"
     restart: unless-stopped
@@ -38,10 +36,11 @@ services:
     environment:
       - POSTGRES_DB=ailove
       - POSTGRES_USER=ailove
-      - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?请在 deploy/.env 中配置}
+      - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./sql:/docker-entrypoint-initdb.d:ro
+      - ${AILOVE_PERSONAL_BOOTSTRAP_SQL:?}:/docker-entrypoint-initdb.d/002_bootstrap_personal.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ailove -d ailove"]
       interval: 5s
@@ -57,15 +56,21 @@ services:
     volumes:
       - /opt/ailove/data:/app/data
     environment:
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
-      - VISION_BASE_URL=${VISION_BASE_URL:?请在 deploy/.env 中配置}
-      - VISION_MODEL=${VISION_MODEL:?请在 deploy/.env 中配置}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
+      - VISION_BASE_URL=${VISION_BASE_URL:?}
+      - VISION_MODEL=${VISION_MODEL:?}
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
       - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -81,10 +86,14 @@ services:
       - /opt/ailove/data:/app/data
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]
@@ -95,22 +104,25 @@ services:
     volumes:
       - /opt/ailove/data:/app/data
     extra_hosts:
-      - "tokendance.space:${TOKENDANCE_HOST_IP:?请在 deploy/.env 中配置}"
+      - "tokendance.space:${TOKENDANCE_HOST_IP:?}"
     container_name: ailove-ai-agent
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
       - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?请在 deploy/.env 中配置}
-      - VISION_BASE_URL=${VISION_BASE_URL:?请在 deploy/.env 中配置}
-      - VISION_MODEL=${VISION_MODEL:?请在 deploy/.env 中配置}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?}
+      - VISION_BASE_URL=${VISION_BASE_URL:?}
+      - VISION_MODEL=${VISION_MODEL:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -126,17 +138,14 @@ services:
       - /opt/ailove/audio:/app/data/voice
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
-      - GPT_SOVITS_URL=${GPT_SOVITS_URL:-}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
-      - MIMO_BASE_URL=${MIMO_BASE_URL:-}
-      - MIMO_MODEL=${MIMO_MODEL:-}
-      - MIMO_REF_AUDIO=${MIMO_REF_AUDIO:-}
-      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
-      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]
@@ -149,10 +158,14 @@ services:
       - /opt/ailove/data:/app/data
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]
@@ -165,10 +178,14 @@ services:
       - /opt/ailove/data:/app/data
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]
@@ -179,11 +196,14 @@ services:
     container_name: ailove-extension-host
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
-      - MCP_WEATHER_URL=http://mcp-weather:8011/mcp
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     depends_on: [nacos, nats, mcp-weather]
     restart: unless-stopped
     networks: [ailove]
@@ -193,9 +213,8 @@ services:
     image: ailove/mcp-weather
     container_name: ailove-mcp-weather
     environment:
-      - QWEATHER_API_KEY=${QWEATHER_API_KEY:?请在 deploy/.env 中配置}
-      - QWEATHER_CREDENTIAL_ID=${QWEATHER_CREDENTIAL_ID:-}
-      - QWEATHER_API_HOST=${QWEATHER_API_HOST:-}
+      - QWEATHER_API_KEY=${QWEATHER_API_KEY:?}
+      - QWEATHER_API_HOST=${QWEATHER_API_HOST:?}
     expose:
       - "8011"
     restart: unless-stopped
@@ -209,11 +228,17 @@ services:
       - /opt/ailove/data:/app/data
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
       - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -229,10 +254,14 @@ services:
       - /opt/ailove/data:/app/data
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]

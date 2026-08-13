@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 class ImageDesc:
     description: str
     tags: list[str]
-    match_quality: float = 0.5
+    match_quality: float
     emotion: str = ""
     sticker_description: str = ""
 

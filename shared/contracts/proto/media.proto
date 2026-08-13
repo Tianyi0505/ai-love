@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ailove.media;
 
-// 渲染（avatar）/推流（stream）/音乐（music）协议
+// 定义渲染、推流与音乐协议
 
 message AvatarCommand {
   string   ai_id      = 1;
@@ -22,7 +22,7 @@ message AvatarCommand {
 }
 
 message ObsControl {
-  string   action   = 1;   // start_stream / stop_stream / scene_switch
+  string   action   = 1;
   map<string, string> params = 2;
 }
 

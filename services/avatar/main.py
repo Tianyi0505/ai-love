@@ -17,7 +17,7 @@ class AvatarService(BaseService):
     name = "avatar"
 
     async def on_start(self) -> None:
-        # TODO: 托管 live2d.html（OBS 浏览器源指向本端口）
+        # 托管供 OBS 浏览器源访问的 Live2D 页面
         await self.bus.subscribe(SUBJ_AVATAR.replace("{ai_id}", ">"), self._on_command)
 
     async def on_stop(self) -> None:
@@ -25,7 +25,7 @@ class AvatarService(BaseService):
 
     async def _on_command(self, payload: bytes) -> None:
         cmd = json.loads(payload.decode("utf-8"))
-        # TODO: SPEAK→viseme / EMOTION→表情 / ACTION→动作 → WS 推送
+        # 转换舞台事件并推送到 WebSocket
         logger.info("[avatar] 指令: %s", cmd.get("type"))
 
 

@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package ailove.events;
 
-// 互动事件模型（第二层规范化事件，总线唯一流通形状）
-// 主题：ai.events.<ai_id> | ai.events.all | ai.speech.request | avatar.command.<ai_id> | music.command.<ai_id> | live.plan.<ai_id>
+// 定义总线互动事件
 
 enum InteractionType {
   INTERACTION_TYPE_UNSPECIFIED = 0;
@@ -28,20 +27,20 @@ message InteractionEvent {
   string          id               = 1;
   InteractionType type             = 2;
   Viewer          actor            = 3;
-  string          content          = 4;   // 弹幕内容 / 礼物名
-  map<string, string> meta         = 5;   // 金额、舰长类型等
-  int32           importance       = 6;   // 0-100
-  string          ai_target        = 7;   // 指定AI / all / 空
+  string          content          = 4;
+  map<string, string> meta         = 5;
+  int32           importance       = 6;
+  string          ai_target        = 7;
   map<string, string> context_metadata = 8;
   int64           timestamp        = 9;
 }
 
-// ---- 导演计划（orchestrator ↔ ai-agent）----
+// 定义导演计划
 
 message PlanStep {
   string   step_id = 1;
-  string   action  = 2;   // chat / respond_gift / sing / skill ...
-  string   payload = 3;   // JSON 载荷
+  string   action  = 2;
+  string   payload = 3;
   int32    priority = 4;
   bool     is_dynamic = 5;
 }

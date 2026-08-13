@@ -9,7 +9,7 @@ from typing import Awaitable, Callable
 
 import nats
 
-from shared.infrastructure.runtime_config import required_setting
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 Handler = Callable[[bytes], Awaitable[bytes | None]]
 logger = logging.getLogger("ailove.bus")
@@ -35,7 +35,7 @@ class Bus(ABC):
     async def subscribe(self, subject: str, handler: Handler) -> Subscription: ...
 
     @abstractmethod
-    async def request(self, subject: str, payload: bytes, timeout: float = 5.0) -> bytes: ...
+    async def request(self, subject: str, payload: bytes, timeout: float) -> bytes: ...
 
     @abstractmethod
     async def reply(self, subject: str, handler: Handler) -> Subscription: ...
@@ -43,15 +43,15 @@ class Bus(ABC):
     async def publish_json(self, subject: str, obj: dict) -> None:
         await self.publish(subject, json.dumps(obj, ensure_ascii=False).encode("utf-8"))
 
-    async def request_json(self, subject: str, obj: dict, timeout: float = 5.0) -> dict:
+    async def request_json(self, subject: str, obj: dict, timeout: float) -> dict:
         raw = await self.request(subject, json.dumps(obj, ensure_ascii=False).encode("utf-8"), timeout)
         return json.loads(raw.decode("utf-8"))
 
 
 class NATSBus(Bus):
 
-    def __init__(self, url: str | None = None, token: str = "") -> None:
-        self._url = required_setting(url, "AILOVE_BUS_URL")
+    def __init__(self, url: str | None, token: str | None) -> None:
+        self._url = required_setting(url, ConfigKey.AILOVE_BUS_URL)
         self._token = token
         self._conn = None
 
@@ -92,7 +92,7 @@ class NATSBus(Bus):
         task = asyncio.create_task(pump())
         return _SubWrapper(task)
 
-    async def request(self, subject: str, payload: bytes, timeout: float = 5.0) -> bytes:
+    async def request(self, subject: str, payload: bytes, timeout: float) -> bytes:
         msg = await self._conn.request(subject, payload, timeout=timeout)
         return msg.data
 
@@ -108,5 +108,5 @@ class _SubWrapper(Subscription):
         self._task.cancel()
 
 
-def create_bus(url: str | None = None, token: str = "") -> Bus:
+def create_bus(url: str | None, token: str | None) -> Bus:
     return NATSBus(url, token)

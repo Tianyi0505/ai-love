@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ailove.director;
 
-// 导演配置：每场直播的阵容与规则
+// 定义直播导演配置
 
 message ActorConfig {
   string ai_id   = 1;

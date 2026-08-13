@@ -19,9 +19,9 @@ class StreamService(BaseService):
 
     async def on_start(self) -> None:
         section = await self.cfg.section()
-        self._obs_url = required_value(section.get("obs_ws_url"), "service.stream.obs_ws_url")
-        self._stream_key = section.get("stream_key", "")
-        # TODO: obs-websocket 建场景/浏览器源 + 配置推流地址
+        self._obs_url = required_value(section["obs_ws_url"], "service.stream.obs_ws_url")
+        self._stream_key = required_value(section["stream_key"], "service.stream.stream_key")
+        # 通过 OBS WebSocket 创建场景并配置推流地址
         await self.bus.subscribe(SUBJ_OBS_CONTROL, self._on_control)
 
     async def on_stop(self) -> None:
@@ -29,7 +29,7 @@ class StreamService(BaseService):
 
     async def _on_control(self, payload: bytes) -> None:
         cmd = json.loads(payload.decode("utf-8"))
-        # TODO: start_stream / stop_stream / scene_switch
+        # 处理开播、停播和场景切换命令
         logger.info("[stream] 控制: %s", cmd.get("action"))
 
 

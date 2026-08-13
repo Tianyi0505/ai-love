@@ -41,7 +41,7 @@ class SocialRouter:
             account_id=message.account_id,
             conversation_id=conversation_id,
             source="social",
-            input_text=message.to_conversation_text(),
+            input_text=message.text,
             chat_type=message.chat.chat_type.value,
             person_id=message.meta.get("person_id", ""),
             platform_identity_id=message.meta.get("platform_identity_id", ""),

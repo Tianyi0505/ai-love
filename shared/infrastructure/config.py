@@ -17,7 +17,7 @@ from v2.nacos import (
     RegisterInstanceParam,
 )
 
-from shared.infrastructure.runtime_config import required_setting
+from shared.infrastructure.runtime_config import ConfigKey, required_config, required_setting
 
 
 class ConfigProvider(ABC):
@@ -39,19 +39,15 @@ class ConfigProvider(ABC):
 
 class NacosConfigProvider(ConfigProvider):
 
-    def __init__(
-        self,
-        server_addrs: str | None = None,
-        namespace: str = "",
-        group: str = "DEFAULT_GROUP",
-        username: str | None = None,
-        password: str | None = None,
-    ) -> None:
-        self._server_addrs = required_setting(server_addrs, "AILOVE_NACOS_ADDRS")
-        self._namespace = namespace or os.environ.get("AILOVE_NACOS_NAMESPACE", "")
-        self._group = group
-        self._username = username or os.environ.get("AILOVE_NACOS_USER", "")
-        self._password = password or os.environ.get("AILOVE_NACOS_PASSWORD", "")
+    def __init__(self) -> None:
+        self._server_addrs = required_setting(None, ConfigKey.AILOVE_NACOS_ADDRS)
+        self._grpc_timeout_ms = int(
+            required_setting(None, ConfigKey.AILOVE_NACOS_GRPC_TIMEOUT_MS)
+        )
+        self._namespace = os.environ.get("AILOVE_NACOS_NAMESPACE", "")
+        self._group = required_setting(None, ConfigKey.AILOVE_NACOS_GROUP)
+        self._username = os.environ.get("AILOVE_NACOS_USER", "")
+        self._password = os.environ.get("AILOVE_NACOS_PASSWORD", "")
         self._config_client = None
         self._naming_client = None
 
@@ -61,7 +57,7 @@ class NacosConfigProvider(ConfigProvider):
             .server_address(self._server_addrs)
             .username(self._username)
             .password(self._password)
-            .grpc_config(GRPCConfig(grpc_timeout=5000))
+            .grpc_config(GRPCConfig(grpc_timeout=self._grpc_timeout_ms))
         )
         if self._namespace:
             builder = builder.namespace_id(self._namespace)
@@ -114,55 +110,68 @@ class NacosConfigProvider(ConfigProvider):
 class ServiceConfig:
 
     service_name: str
-    nacos: ConfigProvider | None = None
-    bus_url: str = ""
-    bus_token: str = ""
+    nacos: ConfigProvider
+    bus_url: str
+    bus_token: str | None
+    instance_addr: str
     instance_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
-    instance_addr: str = "127.0.0.1:0"
+    _section: dict = field(init=False, default_factory=dict)
+    _section_key: str = field(init=False, default="")
 
     @classmethod
     async def load(cls, service_name: str) -> "ServiceConfig":
         provider = NacosConfigProvider()
         await provider.connect()
-        cfg = cls(service_name=service_name, nacos=provider)
         section = {}
-        for _ in range(5):
+        retry_count = int(required_setting(None, ConfigKey.AILOVE_CONFIG_RETRY_COUNT))
+        retry_interval = float(
+            required_setting(None, ConfigKey.AILOVE_CONFIG_RETRY_INTERVAL_SEC)
+        )
+        for _ in range(retry_count):
             section = await provider.get(f"service.{service_name}")
             if section:
                 break
-            await asyncio.sleep(2)
-        cfg.bus_url = required_setting(section.get("bus_url") or cfg.bus_url, "AILOVE_BUS_URL")
-        cfg.instance_addr = section.get("instance_addr", cfg.instance_addr)
+            await asyncio.sleep(retry_interval)
+        if not section:
+            raise RuntimeError(f"Nacos 缺少配置: service.{service_name}")
+        cfg = cls(
+            service_name=service_name,
+            nacos=provider,
+            bus_url=required_setting(None, ConfigKey.AILOVE_BUS_URL),
+            bus_token=os.environ.get("AILOVE_BUS_TOKEN"),
+            instance_addr=str(
+                required_config(section, "instance_addr", f"service.{service_name}.instance_addr")
+            ),
+        )
         cfg._section = section
         cfg._section_key = f"service.{service_name}"
         await cfg._subscribe()
         return cfg
 
-    def __post_init__(self) -> None:
-        self.bus_url = os.environ.get("AILOVE_BUS_URL", self.bus_url)
-        self.bus_token = os.environ.get("AILOVE_BUS_TOKEN", self.bus_token)
-        self._section: dict = {}
-        self._section_key = ""
-
     async def _subscribe(self) -> None:
-        if self.nacos is None or getattr(self, "_watching", False):
+        if getattr(self, "_watching", False):
             return
         self._watching = True
 
         async def _on_change(data_id: str, parsed: dict) -> None:
-            self._section = parsed or {}
+            if not parsed:
+                raise RuntimeError(f"Nacos 配置 {data_id} 不能为空")
+            self._section = parsed
 
         await self.nacos.watch(self._section_key, _on_change)
 
     async def section(self, key: str = "") -> dict:
-        if self.nacos is None:
-            return {}
         section = self._section
         if not key:
             return section
-        return section.get(key, {})
+        value = required_config(section, key, f"{self._section_key}.{key}")
+        if not isinstance(value, dict):
+            raise RuntimeError(f"{self._section_key}.{key} 必须是对象")
+        return value
 
     async def director(self, session_id: str) -> dict:
-        if self.nacos is None:
-            return {}
-        return await self.nacos.get(f"director.{session_id}")
+        key = f"director.{session_id}"
+        section = await self.nacos.get(key)
+        if not section:
+            raise RuntimeError(f"Nacos 缺少配置: {key}")
+        return section

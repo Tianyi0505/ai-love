@@ -31,7 +31,7 @@ class AIAgentService(BaseService):
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
         self._fallback_accounts = {
             str(ai_id): tuple(str(account_id) for account_id in account_ids)
-            for ai_id, account_ids in section.get("account_ids_by_ai", {}).items()
+            for ai_id, account_ids in section["account_ids_by_ai"].items()
             if isinstance(account_ids, list)
         }
         self._db = None
@@ -86,8 +86,9 @@ class AIAgentService(BaseService):
         return self._fallback_accounts.get(ai_id, ())
 
     async def _catalog_loop(self) -> None:
+        poll_interval = float((await self.cfg.section())["catalog_poll_interval_sec"])
         while True:
-            await asyncio.sleep(2)
+            await asyncio.sleep(poll_interval)
             try:
                 await self._supervisor.reconcile(await self._active_definitions())
             except Exception:

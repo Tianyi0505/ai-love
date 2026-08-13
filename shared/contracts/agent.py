@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -16,12 +16,12 @@ class AgentDefinition:
     behavior_policy: dict[str, Any]
     extensions: list[dict[str, Any]]
     prompts: dict[str, str]
-    model_profile_id: str = "default"
-    voice_profile_id: str = "default"
-    avatar_profile_id: str = "default"
-    model_config: dict[str, Any] = field(default_factory=dict)
-    definition_key: str = ""
-    fingerprint: str = ""
+    model_profile_id: str
+    voice_profile_id: str
+    avatar_profile_id: str
+    model_config: dict[str, Any]
+    definition_key: str
+    fingerprint: str
 
 
 class AgentDefinitionError(ValueError):

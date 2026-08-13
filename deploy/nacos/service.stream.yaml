@@ -1,0 +1,3 @@
+instance_addr: 127.0.0.1:0
+obs_ws_url: __OBS_WS_URL__
+stream_key: __AILOVE_BILIBILI_STREAM_KEY__

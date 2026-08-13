@@ -26,7 +26,7 @@ class Channel(ABC):
 
     def __init__(self, cfg: dict) -> None:
         self.cfg = cfg
-        self.account_id = str(cfg.get("account_id", ""))
+        self.account_id = str(cfg["account_id"])
         self._on_message = None
 
     async def start(self) -> None: ...
@@ -42,8 +42,8 @@ class Channel(ABC):
     async def list_history(
         self,
         chat: Chat,
-        since: int = 0,
-        limit: int = 50,
+        since: int,
+        limit: int,
     ) -> list[SocialMessage]:
         return []
 
@@ -57,4 +57,4 @@ class Channel(ABC):
 
 def create_channel(kind: str, cfg: dict) -> Channel:
     cls = channel_registry.get(kind)
-    return cls(cfg)  # type: ignore
+    return cls(cfg)

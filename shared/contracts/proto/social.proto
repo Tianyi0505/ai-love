@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package ailove.social;
 
-// 社交媒体消息协议：QQ/微信多渠道统一内容形态
-// 主题：social.chat.<ai_id> | social.send.request | social.history.request/reply
+// 定义多渠道社交消息协议
 
 enum ContentType {
   CONTENT_TYPE_UNSPECIFIED = 0;
@@ -11,7 +10,7 @@ enum ContentType {
   IMAGE   = 2;
   VOICE   = 3;
   STICKER = 4;
-  FORWARD = 5;   // 转发聊天记录（递归）
+  FORWARD = 5;
   QUOTE   = 6;
   FILE    = 7;
   AT      = 8;
@@ -33,7 +32,7 @@ message Chat {
   string   chat_id   = 1;
   ChatType chat_type = 2;
   string   chat_name = 3;
-  string   ai_identity = 4;   // AI 在该会话的身份（群名片）
+  string   ai_identity = 4;
   repeated SocialSender members = 5;
 }
 
@@ -44,12 +43,12 @@ message SocialMessage {
   ContentType   type         = 4;
   string        text         = 5;
   string        media_url    = 6;
-  string        media_desc   = 7;   // 图片/语音可读描述
+  string        media_desc   = 7;
   int32         media_duration_sec = 8;
-  repeated SocialMessage sub_messages = 9;   // FORWARD 递归
+  repeated SocialMessage sub_messages = 9;
   SocialMessage quote_ref  = 10;
   string        at_user_id = 11;
-  bool          to_ai      = 12;   // 是否直接指向本 AI
+  bool          to_ai      = 12;
   int64         timestamp  = 13;
   map<string, string> meta = 14;
 }
@@ -68,7 +67,7 @@ message SocialSendRequest {
   string      text       = 3;
   string      media_url  = 4;
   string      ai_id      = 5;
-  bool        allow_fallback = 6;   // 渠道不支持时降级（语音→文字）
+  bool        allow_fallback = 6;
 }
 
 message SocialSendResponse {

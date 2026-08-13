@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 
 from services.extension_host.tools import PermissionLevel, ToolGateway, ToolGrant, ToolInvocation
 from shared.infrastructure.agent_store import NacosAgentDefinitionStore
@@ -20,6 +19,7 @@ class ExtensionHostService(BaseService):
     name = "extension-host"
 
     async def on_start(self) -> None:
+        self._service_config = await self.cfg.section()
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
         self._fingerprint = ""
         self._mcp_providers: list[MCPToolProvider] = []
@@ -42,18 +42,18 @@ class ExtensionHostService(BaseService):
         if fingerprint == self._fingerprint:
             return
         gateway = ToolGateway()
-        gateway.register_provider(BuiltinToolProvider())
+        gateway.register_provider(BuiltinToolProvider(self._service_config))
         for provider in self._mcp_providers:
             gateway.register_provider(provider)
         for definition in definitions:
             for item in definition.extensions:
-                if not item.get("enabled", True):
+                if not item["enabled"]:
                     continue
-                permission = PermissionLevel(str(item.get("permission", "deny")))
+                permission = PermissionLevel(str(item["permission"]))
                 gateway.bind(
                     definition.ai_id,
-                    str(item.get("tool_id", "")),
-                    ToolGrant(permission, dict(item.get("config", {}))),
+                    str(item["tool_id"]),
+                    ToolGrant(permission, dict(item["config"])),
                 )
         self._gateway = gateway
         self._fingerprint = fingerprint
@@ -61,9 +61,7 @@ class ExtensionHostService(BaseService):
     async def _discover_mcp(self) -> None:
         if self._mcp_providers:
             return
-        weather_url = os.environ.get("MCP_WEATHER_URL", "").strip()
-        if not weather_url:
-            return
+        weather_url = str(self._service_config["mcp_weather_url"])
         try:
             self._mcp_providers = [await MCPToolProvider.discover("mcp.qweather", weather_url)]
             logger.info("[extension-host] MCP 已连接: qweather")
@@ -72,7 +70,7 @@ class ExtensionHostService(BaseService):
 
     async def _binding_loop(self) -> None:
         while True:
-            await asyncio.sleep(2)
+            await asyncio.sleep(float(self._service_config["binding_poll_interval_sec"]))
             try:
                 await self._reload_bindings()
             except Exception:

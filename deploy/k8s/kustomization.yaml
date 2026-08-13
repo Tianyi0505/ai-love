@@ -4,5 +4,5 @@ namespace: ailove
 resources:
   - namespace.yaml
   - infrastructure.yaml
-  # - napcat.yaml  # QQ 暂留 Docker（用户规划），迁移完成后启用
+  # 启用 NapCat 时添加 napcat.yaml
   - apps.yaml

@@ -1,24 +1,24 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
 from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, ToolSchema, llm_registry
-from shared.infrastructure.runtime_config import required_setting, required_value
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
 @llm_registry.register("deepseek")
 class DeepSeekProvider(LLMProvider):
-    def __init__(self, api_key: str | None = None, base_url: str | None = None, model: str | None = None) -> None:
+    def __init__(self, model: str, request_timeout_sec: float, api_key: str | None = None, base_url: str | None = None, **_) -> None:
         self._client = AsyncOpenAI(
-            api_key=api_key or os.environ.get("DEEPSEEK_API_KEY", ""),
-            base_url=required_setting(base_url, "DEEPSEEK_BASE_URL"),
+            api_key=required_setting(api_key, ConfigKey.DEEPSEEK_API_KEY),
+            base_url=required_setting(base_url, ConfigKey.DEEPSEEK_BASE_URL),
+            timeout=request_timeout_sec,
         )
-        self._model = required_value(model, "模型路由中的 DeepSeek 模型 ID")
+        self._model = model
 
     def _to_messages(self, msgs: list[ChatMessage]) -> list[dict]:
         out = []

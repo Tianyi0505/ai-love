@@ -57,15 +57,17 @@ class MemoryAccessContext:
 class MemoryPolicy:
     def __init__(
         self,
-        half_life_sec: float = 30 * 86400,
-        dormant_threshold: float = 0.2,
-        delete_threshold: float = 0.05,
-        recall_boost: float = 0.12,
+        half_life_sec: float,
+        dormant_threshold: float,
+        delete_threshold: float,
+        recall_boost: float,
+        retrieval_weights: dict,
     ) -> None:
         self._half_life = half_life_sec
         self._dormant_threshold = dormant_threshold
         self._delete_threshold = delete_threshold
         self._recall_boost = recall_boost
+        self._retrieval_weights = retrieval_weights
 
     def current_strength(self, memory: MemoryRecord, now: float | None = None) -> float:
         if memory.protected or memory.memory_type in PROTECTED_TYPES:
@@ -112,9 +114,9 @@ class MemoryPolicy:
         relevance = max(0.0, min(1.0, relevance))
         strength = self.current_strength(memory, now)
         return (
-            relevance * 0.45
-            + strength * 0.25
-            + max(0.0, min(1.0, memory.importance)) * 0.15
-            + max(0.0, min(1.0, memory.confidence)) * 0.1
-            + max(0.0, min(1.0, memory.emotion_intensity)) * 0.05
+            relevance * float(self._retrieval_weights["relevance"])
+            + strength * float(self._retrieval_weights["strength"])
+            + max(0.0, min(1.0, memory.importance)) * float(self._retrieval_weights["importance"])
+            + max(0.0, min(1.0, memory.confidence)) * float(self._retrieval_weights["confidence"])
+            + max(0.0, min(1.0, memory.emotion_intensity)) * float(self._retrieval_weights["emotion_intensity"])
         )

@@ -5,18 +5,12 @@ import asyncio
 import logging
 from typing import AsyncIterator
 
+from services.ai_agent.llm.errors import LLMErrorMessage
 from services.ai_agent.llm.model import ModelHealthStore, ModelSelector, ModelTarget
 from services.ai_agent.llm.tier import Tier
 from services.ai_agent.llm.types import ChatRequest, ChatStreamChunk, LLMProvider
 
 logger = logging.getLogger("ailove.llm.routing")
-
-NO_PROVIDER = "无可用大模型提供者"
-START_FAILED = "流式请求启动失败"
-FIRST_PACKET_TIMEOUT = "流式首包超时"
-NO_CONTENT = "流式请求未返回内容"
-ALL_FAILED = "大模型调用失败，请稍后再试..."
-
 
 class RoutingLLMService:
 
@@ -30,7 +24,7 @@ class RoutingLLMService:
         thinking = getattr(req, "thinking", False)
         targets = self._selector.select_chat_candidates(thinking, tier, preferred)
         if not targets:
-            raise RuntimeError(NO_PROVIDER)
+            raise RuntimeError(LLMErrorMessage.NO_PROVIDER.value)
 
         last_error: Exception | None = None
         for target in targets:
@@ -50,9 +44,9 @@ class RoutingLLMService:
 
             self._health.mark_failure(target.candidate.id)
             logger.warning("[routing] 模型失败切换: %s", target.candidate.id)
-            last_error = last_error or RuntimeError(START_FAILED)
+            last_error = last_error or RuntimeError(LLMErrorMessage.START_FAILED.value)
 
-        raise RuntimeError(ALL_FAILED) from last_error
+        raise RuntimeError(LLMErrorMessage.ALL_FAILED.value) from last_error
 
     async def _try_first_packet(self, provider: LLMProvider, req: ChatRequest, target: ModelTarget) -> tuple[ChatStreamChunk | None, AsyncIterator]:
         try:

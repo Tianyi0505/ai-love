@@ -2,20 +2,21 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any
 
 import httpx
 
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
+
 
 class QWeatherClient:
-    def __init__(self) -> None:
-        self._api_key = os.environ.get("QWEATHER_API_KEY", "").strip()
-        host = os.environ.get("QWEATHER_API_HOST", "").strip()
+    def __init__(self, request_timeout_sec: float) -> None:
+        self._api_key = required_setting(None, ConfigKey.QWEATHER_API_KEY)
+        host = required_setting(None, ConfigKey.QWEATHER_API_HOST)
         self._host = host.removeprefix("https://").rstrip("/")
+        self._request_timeout_sec = request_timeout_sec
 
-    async def weather(self, city: str, days: int = 3, lang: str = "zh") -> dict[str, Any]:
-        self._ensure_configured()
+    async def weather(self, city: str, days: int, lang: str) -> dict[str, Any]:
         location = await self._get(
             "/geo/v2/city/lookup",
             {"location": city, "number": 1, "lang": lang},
@@ -38,15 +39,9 @@ class QWeatherClient:
         )
         return self._normalize(place, current, daily)
 
-    def _ensure_configured(self) -> None:
-        if not self._api_key:
-            raise RuntimeError("天气 MCP 未配置 QWEATHER_API_KEY")
-        if not self._host:
-            raise RuntimeError("天气 MCP 未配置账号专属 QWEATHER_API_HOST")
-
     async def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         async with httpx.AsyncClient(
-            timeout=10,
+            timeout=self._request_timeout_sec,
             follow_redirects=False,
             headers={"X-QW-Api-Key": self._api_key, "Accept-Encoding": "gzip"},
         ) as client:

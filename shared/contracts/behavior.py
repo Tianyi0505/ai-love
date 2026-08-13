@@ -24,11 +24,11 @@ class BehaviorSchedule:
 
     @classmethod
     def from_config(cls, config: dict) -> "BehaviorSchedule":
-        proactive = config.get("proactive", {})
+        proactive = config["proactive"]
         periods = []
-        for item in proactive.get("work_hours", []):
-            periods.append(WorkPeriod(cls._time(item.get("start", "00:00")), cls._time(item.get("end", "00:00"))))
-        return cls(str(proactive.get("timezone", "Asia/Shanghai")), periods)
+        for item in proactive["work_hours"]:
+            periods.append(WorkPeriod(cls._time(item["start"]), cls._time(item["end"])))
+        return cls(str(proactive["timezone"]), periods)
 
     def allows_proactive(self, moment: dt.datetime | None = None) -> bool:
         if not self._periods:

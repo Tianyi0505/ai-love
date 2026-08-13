@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ailove.ai;
 
-// LLM 与 TTS 协议（供应商必须实现，流式/首字延迟优先）
+// 定义大模型与语音合成协议
 
 enum Role {
   ROLE_UNSPECIFIED = 0;

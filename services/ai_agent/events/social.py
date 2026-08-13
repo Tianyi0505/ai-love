@@ -18,7 +18,7 @@ async def handle_social(service, payload: bytes) -> None:
     msg = SocialMessage.from_dict(json.loads(payload))
     logger.info("[ai-agent:%s] 收到社交: %s: %s", service.ai_id, msg.sender.user_id, msg.text[:30])
     understood = await service.understanding.understand(msg)
-    query = understood or msg.text or msg.to_conversation_text()
+    query = understood or msg.text
     is_group = msg.chat.chat_type.value == "group"
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id
@@ -52,7 +52,7 @@ async def handle_social(service, payload: bytes) -> None:
         service.bus.request_json(
             "relationship.chat.request",
             relationship_request,
-            timeout=2.0,
+            timeout=float(service._timeouts["relationship_update_sec"]),
         )
     )
 
@@ -88,26 +88,27 @@ async def handle_social(service, payload: bytes) -> None:
         service.conversation.add_user(msg.chat.chat_type.value, msg.chat.chat_id, attributed_query)
     service._current_chat_key = f"{msg.chat.chat_type.value}:{msg.chat.chat_id}"
 
-    sender_identity = (
-        f"当前消息发送者的 user_id={json.dumps(str(msg.sender.user_id), ensure_ascii=False)}，"
-        f"昵称（仅身份标签）={json.dumps(str(sender_name), ensure_ascii=False)}。"
-        "昵称不是用户发出的文字，也不是平台事件。"
+    sender_identity = service.prompt_assembler.render(
+        "social-sender-identity",
+        user_id=json.dumps(str(msg.sender.user_id), ensure_ascii=False),
+        sender_name=json.dumps(str(sender_name), ensure_ascii=False),
     )
-    relationship_summary = "尚未形成明确关系"
+    relationship_summary = service.prompt_assembler.template("unknown-relationship")
     if msg.meta.get("person_id"):
         try:
             relation = await service.bus.request_json(
                 "relationship.summary.request",
                 {"ai_id": service.ai_id, "person_id": msg.meta["person_id"]},
-                timeout=1.0,
+                timeout=float(service._timeouts["relationship_summary_sec"]),
             )
             relationship_summary = str(relation.get("summary", relationship_summary))
         except Exception:
             pass
     memories = await service.memory.vector_search(query, person_id=speaker["person_id"])
+    history_limit = int(service.gcfg.get("social", "prompt_history_messages"))
     recent = tuple(
         f"{role}: {content}"
-        for role, content in list(service.conversation.window(msg.chat.chat_type.value, msg.chat.chat_id))[-8:-1]
+        for role, content in list(service.conversation.window(msg.chat.chat_type.value, msg.chat.chat_id))[-(history_limit + 1):-1]
     )
     prompt_context = PromptContext(
         scene="social-private" if msg.chat.chat_type.value == "private" else "social-group",
@@ -127,11 +128,15 @@ async def handle_social(service, payload: bytes) -> None:
         logger.warning("[ai-agent:%s] LLM 失败: %s", service.ai_id, e)
         full_reply = ""
     if not full_reply:
-        full_reply = "嗯嗯，我在听～你继续说呀" if msg.chat.chat_type.value == "private" else "嗯嗯，我在听～"
+        full_reply = (
+            service._fallbacks["private_response"]
+            if msg.chat.chat_type.value == "private"
+            else service._fallbacks["response"]
+        )
 
     plan = ResponsePlan.from_model_output(full_reply)
     if not plan.speech:
-        plan = ResponsePlan.from_model_output("嗯嗯，我在听～")
+        plan = ResponsePlan.from_model_output(service._fallbacks["response"])
 
     sticker_to_send = None
     reply = plan.text
@@ -154,7 +159,7 @@ async def handle_social(service, payload: bytes) -> None:
     if sticker_to_send:
         send_payload["sticker"] = sticker_to_send
     wants_voice = any(speech.delivery == "voice" for speech in plan.speech)
-    if service.gcfg.get("qq", "voice_reply", True) and wants_voice:
+    if service.gcfg.get("qq", "voice_reply") and wants_voice:
         voice = await service.tts_synthesize(reply)
         if voice:
             send_payload["voice"] = voice
@@ -197,7 +202,7 @@ async def handle_social(service, payload: bytes) -> None:
             service.bus.request_json(
                 "sticker.boost.request",
                 {"ai_id": service.ai_id, "sticker_id": sticker_to_send.get("id", "")},
-                timeout=2.0,
+                timeout=float(service._timeouts["sticker_boost_sec"]),
             )
         )
     if is_group:

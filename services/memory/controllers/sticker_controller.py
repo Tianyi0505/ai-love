@@ -35,7 +35,10 @@ class StickerController:
 
     async def _on_list(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
-        stickers = self._service.list(req.get("ai_id", ""), top_k=req.get("top_k", 20))
+        stickers = self._service.list(
+            req.get("ai_id", ""),
+            top_k=int(req.get("top_k", self._service.list_limit)),
+        )
         return json.dumps({"stickers": stickers}).encode()
 
     async def _on_boost(self, payload: bytes) -> bytes:

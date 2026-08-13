@@ -1,5 +1,5 @@
 #!/bin/bash
-# 发布 Nacos 配置。
+# 发布 Nacos 配置
 
 set -e
 
@@ -84,19 +84,19 @@ require_file() {
 
 echo "=== 写入配置 ==="
 
-# 发布服务配置。
+# 发布服务配置
 for service_name in gateway orchestrator ai-agent tts stream memory avatar extension-host music; do
   publish_file "service.${service_name}" "${SCRIPT_DIR}/nacos/service.${service_name}.yaml"
 done
 
-# 发布 AI 定义。
+# 发布 AI 定义
 publish_file "ailove.config" "${SCRIPT_DIR}/nacos/ailove.config.yaml"
 publish_file "agent.catalog" "${SCRIPT_DIR}/nacos/agent.catalog.yaml"
 AGENT_CONFIG_PATH="${SCRIPT_DIR}/${AILOVE_AGENT_CONFIG_FILE}"
 require_file "$AGENT_CONFIG_PATH"
 publish_file "agent.${AILOVE_AI_ID}" "$AGENT_CONFIG_PATH"
 
-# 发布导演配置。
+# 发布导演配置
 publish_file "director.session-default" "${SCRIPT_DIR}/nacos/director.session-default.yaml"
 
 echo "=== 配置初始化完成 ==="

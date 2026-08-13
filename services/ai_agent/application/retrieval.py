@@ -16,7 +16,8 @@ class Retrieval:
         vector_texts = await svc.memory.vector_search(query)
         chat_type, _, chat_id = chat_key.partition(":")
         bm25_texts = svc.conversation.bm25_search(chat_type, chat_id, query)
-        return vector_texts[:3] + bm25_texts[:3]
+        limit = int(svc.gcfg.get("search", "each_source_limit"))
+        return vector_texts[:limit] + bm25_texts[:limit]
 
     async def search_sticker(self, query: str) -> dict | None:
         svc = self._service
@@ -24,7 +25,7 @@ class Retrieval:
             resp = await svc.bus.request_json(
                 "sticker.search.request",
                 {"ai_id": svc.ai_id, "query": query},
-                timeout=2.0,
+                timeout=float(svc._timeouts["memory_search_sec"]),
             )
         except Exception:
             return None

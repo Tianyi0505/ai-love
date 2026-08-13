@@ -1,21 +1,30 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import asyncpg
 
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
+
 
 class Database:
-    def __init__(self, url: str | None = None) -> None:
-        self._url = url or os.environ.get("AILOVE_DATABASE_URL", "")
+    def __init__(self) -> None:
+        self._url = required_setting(None, ConfigKey.AILOVE_DATABASE_URL)
+        self._pool_min_size = int(
+            required_setting(None, ConfigKey.AILOVE_DATABASE_POOL_MIN_SIZE)
+        )
+        self._pool_max_size = int(
+            required_setting(None, ConfigKey.AILOVE_DATABASE_POOL_MAX_SIZE)
+        )
         self._pool = None
 
     async def connect(self) -> None:
-        if not self._url:
-            raise RuntimeError("未配置 AILOVE_DATABASE_URL")
-        self._pool = await asyncpg.create_pool(self._url, min_size=1, max_size=10)
+        self._pool = await asyncpg.create_pool(
+            self._url,
+            min_size=self._pool_min_size,
+            max_size=self._pool_max_size,
+        )
 
     async def close(self) -> None:
         if self._pool is not None:

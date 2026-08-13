@@ -18,17 +18,17 @@
 
 ```text
 shared/
-├── contracts/        # 跨服务事件、响应、社交消息和领域契约
-├── infrastructure/   # NATS、Nacos、数据库连接与服务生命周期
-└── vision/           # Gateway 与 AI Agent 共用的图像描述协议
+├── contracts/        # 维护跨服务事件、响应、社交消息和领域契约
+├── infrastructure/   # 维护 NATS、Nacos、数据库连接与服务生命周期
+└── vision/           # 维护 Gateway 与 AI Agent 共用的图像描述协议
 
 services/
-├── gateway/          # 渠道适配器、QQ/空间协议和社交路由
-├── ai_agent/         # Agent Loop、Prompt、LLM、消息理解与运行时
-├── memory/           # 记忆策略、存储与关系处理
-├── extension_host/   # Tool/Skill/MCP 协议、权限与 Provider
-├── tts/              # TTS 协议与引擎
-└── ...               # 其余服务各自维护私有实现
+├── gateway/          # 处理渠道适配、QQ 空间协议和社交路由
+├── ai_agent/         # 处理 Agent Loop、Prompt、大模型、消息理解与运行时
+├── memory/           # 处理记忆策略、存储与关系
+├── extension_host/   # 处理 Tool、Skill、MCP 协议、权限与 Provider
+├── tts/              # 处理语音合成协议与引擎
+└── ...               # 维护其余服务的私有实现
 ```
 
 服务实现只能依赖自身包和 `shared`，不能直接导入其他微服务的内部代码。Docker 每个 target 也只复制 `shared` 和对应服务目录，以便在构建阶段暴露越界依赖。
@@ -46,11 +46,11 @@ AI 定义只从 Nacos 读取，完整结构示例位于 `deploy/nacos/`。运行
 ## 配置
 
 ```text
-agent.catalog             # active_ai_ids
-agent.<ai_id>             # 身份/人格/Prompt/关系/作息/模型/工具
-service.<service-name>    # 服务和 Adapter 参数
-director.<session_id>     # 仅直播场次
-ailove.config             # 全局运行参数与 QQ 白名单
+agent.catalog             # 声明 active_ai_ids
+agent.<ai_id>             # 配置身份、人格、Prompt、关系、作息、模型与工具
+service.<service-name>    # 配置服务与 Adapter 参数
+director.<session_id>     # 配置直播场次
+ailove.config             # 配置全局运行参数与 QQ 白名单
 ```
 
 新增 AI：发布一个新的 `agent.<ai_id>`，把 ID 加入 `agent.catalog`，并在账号绑定表中建立显式绑定。无需新增容器或复制记忆实现。

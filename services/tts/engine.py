@@ -20,8 +20,8 @@ class SynthesizeRequest:
 @dataclass
 class AudioResult:
     pcm: bytes
-    format: str = "pcm_s16le_16k"
-    latency_ms: int = 0
+    format: str
+    latency_ms: int
 
 
 class TTSEngine(ABC):
@@ -48,4 +48,4 @@ class TTSEngine(ABC):
 
 def create_tts(kind: str, **opts) -> TTSEngine:
     cls = tts_registry.get(kind)
-    return cls(**opts)  # type: ignore
+    return cls(**opts)

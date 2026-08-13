@@ -8,14 +8,15 @@ from typing import AsyncIterator
 import httpx
 
 from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, llm_registry
-from shared.infrastructure.runtime_config import required_setting, required_value
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
 @llm_registry.register("ollama")
 class OllamaProvider(LLMProvider):
-    def __init__(self, base_url: str | None = None, model: str | None = None, **_) -> None:
-        self._url = required_setting(base_url, "OLLAMA_BASE_URL").rstrip("/")
-        self._model = required_value(model, "模型路由中的 Ollama 模型 ID")
+    def __init__(self, model: str, request_timeout_sec: float, base_url: str | None = None, **_) -> None:
+        self._url = required_setting(base_url, ConfigKey.OLLAMA_BASE_URL).rstrip("/")
+        self._model = model
+        self._request_timeout_sec = request_timeout_sec
 
     async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatStreamChunk]:
         payload = {
@@ -31,7 +32,7 @@ class OllamaProvider(LLMProvider):
 
         t0 = time.perf_counter()
         sent_first = False
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=self._request_timeout_sec) as client:
             async with client.stream("POST", f"{self._url}/api/chat", json=payload) as resp:
                 async for line in resp.aiter_lines():
                     if not line:

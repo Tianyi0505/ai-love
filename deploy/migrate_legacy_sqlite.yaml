@@ -1,0 +1,12 @@
+namespace: ca6e7b15-60c6-45b2-9ca4-3bf94cfe3f9d
+memory:
+  scope: private
+  default_type: episodic
+  default_importance: 0.5
+  strength: 0.65
+  confidence: 0.7
+  consolidated: true
+conversation:
+  assistant_role: assistant
+  default_role: user
+  retention_days: 180

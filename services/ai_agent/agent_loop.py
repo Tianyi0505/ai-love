@@ -8,17 +8,12 @@ from services.ai_agent.llm.service import ChatMessage, ChatRequest, ChatStreamCh
 
 logger = logging.getLogger("ailove.agent_loop")
 
-TOOL_PROMPT = (
-    "你有以下工具可用（仅在资料不足时调用，资料足够就直接回答）：\n"
-    "{tools}\n"
-    "如果当前资料足以回答，直接回答，不要调用工具。"
-)
-
 
 class AgentLoop:
 
-    def __init__(self, llm: LLMService, ai_id: str = "agent", max_rounds: int = 3) -> None:
+    def __init__(self, llm: LLMService, prompts, ai_id: str, max_rounds: int) -> None:
         self._llm = llm
+        self._prompts = prompts
         self._ai_id = ai_id
         self._max_rounds = max_rounds
         self._tools: dict[str, Callable[[dict], Awaitable[str]]] = {}
@@ -31,7 +26,8 @@ class AgentLoop:
     async def run(self, messages: list[ChatMessage]) -> str:
         tool_schemas = [ToolSchema(name=n, description=i.get("description", ""), parameters=i.get("parameters", {})) for n, i in getattr(self, "_tool_infos", {}).items()]
         if tool_schemas:
-            prompt = TOOL_PROMPT.format(
+            prompt = self._prompts.render(
+                "tool-usage",
                 tools="\n".join(f"- {s.name}: {s.description}" for s in tool_schemas)
             )
             if messages and messages[0].role == "system":
@@ -64,6 +60,9 @@ class AgentLoop:
                         result = f"工具执行失败: {e}"
                 logger.info("[agent_loop] 调用工具 %s: %s", tc.name, str(result)[:50])
                 current.append(ChatMessage(role="assistant", content=text))
-                current.append(ChatMessage(role="user", content=f"[工具 {tc.name} 结果]\n{result}\n请基于以上信息继续回答。"))
+                current.append(ChatMessage(
+                    role="user",
+                    content=self._prompts.render("tool-result", tool_name=tc.name, result=result),
+                ))
 
-        return "".join(parts).strip() or "嗯嗯，我在听～"
+        return "".join(parts).strip()

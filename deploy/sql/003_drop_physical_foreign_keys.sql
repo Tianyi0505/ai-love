@@ -1,4 +1,4 @@
--- AI-Love 只使用逻辑外键。清理旧数据库由早期 schema 创建的物理外键。
+-- 删除旧数据库的物理外键
 DO $$
 DECLARE
     item record;

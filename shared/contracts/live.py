@@ -40,9 +40,9 @@ class InteractionEvent:
 
     type: InteractionType
     actor: Viewer
+    importance: int
     content: str = ""
     meta: dict = field(default_factory=dict)
-    importance: int = 10
     ai_target: str = ""
     context_metadata: dict = field(default_factory=dict)
     event_id: str = field(default_factory=lambda: f"{int(time.time() * 1000)}-{id(object())}")
@@ -68,7 +68,7 @@ class InteractionEvent:
             actor=Viewer(**data.get("actor", {})),
             content=data.get("content", ""),
             meta=data.get("meta", {}),
-            importance=data.get("importance", 10),
+            importance=data["importance"],
             ai_target=data.get("ai_target", ""),
             context_metadata=data.get("context_metadata", {}),
             event_id=data.get("event_id", ""),
@@ -84,7 +84,7 @@ class EventDispatcher:
     def __init__(self) -> None:
         self._handlers: dict[InteractionType, list[tuple[int, int, HandlerT]]] = {}
 
-    def on(self, event_type: InteractionType, priority: int = 0) -> Callable[[HandlerT], HandlerT]:
+    def on(self, event_type: InteractionType, priority: int) -> Callable[[HandlerT], HandlerT]:
 
         def deco(fn: HandlerT) -> HandlerT:
             seq = len(self._handlers.get(event_type, []))

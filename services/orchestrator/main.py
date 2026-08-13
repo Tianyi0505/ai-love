@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 
 from shared.contracts.live import InteractionEvent
 from shared.infrastructure.config import ServiceConfig
@@ -23,9 +22,9 @@ class OrchestratorService(BaseService):
 
     async def on_start(self) -> None:
         section = await self.cfg.section()
-        self._session_id = section.get("session_id", f"session-{int(time.time())}")
+        self._session_id = section["session_id"]
         self._director_cfg = await self.cfg.director(self._session_id)
-        self._actors = [a.get("ai_id") for a in self._director_cfg.get("actors", [])]
+        self._actors = [a["ai_id"] for a in self._director_cfg["actors"]]
         self._policy = DeterministicDirectorPolicy(self._actors)
 
         await self.bus.subscribe(SUBJ_LIVE_EVENTS, self._on_interaction)
@@ -51,10 +50,10 @@ class OrchestratorService(BaseService):
         logger.info("[orchestrator] 互动已分配: %s -> %s", evt.type.value, ai_id)
 
     async def _proactive_loop(self) -> None:
-        interval = self._director_cfg.get("proactive_interval_sec", 300)
+        interval = self._director_cfg["proactive_interval_sec"]
         while True:
             await asyncio.sleep(interval)
-            # TODO: 向 AI 发自由发言权请求
+            # 向 AI 请求自由发言内容
             logger.info("[orchestrator] 主动发言机会触发")
 
 

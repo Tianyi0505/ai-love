@@ -1,0 +1,8 @@
+actors:
+  - ai_id: __AILOVE_AI_ID__
+    is_lead: true
+    talk_weight: 3
+allow_banters: true
+interrupt_threshold: 60
+max_plan_steps: 5
+proactive_interval_sec: 300

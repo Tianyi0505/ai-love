@@ -9,7 +9,7 @@ import os
 
 import httpx
 
-from services.gateway.channels import bilibili, qq, wechat  # noqa: F401
+from services.gateway.channels import bilibili, qq, wechat
 from services.gateway.channels.base import Channel, create_channel
 from services.gateway.qzone import QZoneService
 from services.gateway.social_router import SocialRouter, StaticOwnershipResolver
@@ -51,13 +51,20 @@ class GatewayService(BaseService):
         section = await self.cfg.section()
         self._gcfg = GlobalConfig(provider=self.cfg.nacos)
         await self._gcfg.load()
-        self._describer_kind = section.get("describer", "mcp_default")
-        self._image_describer = create_describer(self._describer_kind)
+        self._timeouts = self._gcfg.section("timeouts")
+        image_config = self._gcfg.section("image")
+        self._describer_kind = image_config["describer"]
+        describer_options = {
+            key: value for key, value in image_config.items() if key != "describer"
+        }
+        self._image_describer = create_describer(
+            self._describer_kind,
+            **describer_options,
+        )
         account_specs = self._account_specs(section)
         static_owners = {
-            spec["account_id"]: spec.get("owner_ai_id", "")
+            spec["account_id"]: spec["owner_ai_id"]
             for spec in account_specs
-            if spec.get("owner_ai_id")
         }
         self._db = None
         if os.environ.get("AILOVE_DATABASE_URL"):
@@ -74,14 +81,18 @@ class GatewayService(BaseService):
             self._conversations = None
         self._social_router = SocialRouter(ownership)
 
-        whitelist = self._user_id_set(section.get("qq_whitelist", []))
-        whitelist.update(self._user_id_set(self._gcfg.get("qq", "whitelist", [])))
-        self._qq_whitelist = whitelist
+        self._qq_whitelist = self._user_id_set(self._gcfg.get("qq", "whitelist"))
 
         self._account_configs: dict[str, dict] = {}
         for spec in account_specs:
             kind = spec["adapter"]
-            ch_cfg = {**spec.get("config", {}), "account_id": spec["account_id"]}
+            ch_cfg = {**spec["config"], "account_id": spec["account_id"]}
+            if kind == "qq":
+                ch_cfg.update(
+                    message_timeout_sec=self._timeouts["qq_message_sec"],
+                    forward_timeout_sec=self._timeouts["qq_forward_sec"],
+                    reconnect_delay_sec=self._gcfg.get("qq", "reconnect_delay_sec"),
+                )
             channel = create_channel(kind, ch_cfg)
             channel.set_message_handler(self._on_channel_message)
             self._channels[spec["account_id"]] = channel
@@ -100,21 +111,18 @@ class GatewayService(BaseService):
             qq_cfg = self._account_configs[qq_account_id]
             self._qq_account_id = qq_account_id
             owner_ai_id = await self._social_router.owner_for(qq_account_id)
-            try:
-                definition = await NacosAgentDefinitionStore(self.cfg.nacos).load(owner_ai_id or "")
-                proactive_schedule = BehaviorSchedule.from_config(definition.behavior_policy)
-            except Exception:
-                logger.exception("[gateway] 未能加载 QQ 所属 AI 的主动行为作息，QQ 空间主动互动保持关闭")
-                proactive_schedule = BehaviorSchedule.from_config({})
+            definition = await NacosAgentDefinitionStore(self.cfg.nacos).load(owner_ai_id)
+            proactive_schedule = BehaviorSchedule.from_config(definition.behavior_policy)
             self.spawn(
                 QZoneService(
                     napcat_http_url=qq_cfg["http_url"],
                     gcfg=self._gcfg,
-                    qq_uin=qq_cfg.get("uin", ""),
+                    qq_uin=qq_cfg["uin"],
                     relationship_provider=self._relationship_profile,
                     comment_generator=self._generate_comment,
                     proactive_allowed=proactive_schedule.allows_proactive,
                     image_describer=self._image_describer,
+                    timeouts=self._timeouts,
                 ).loop()
             )
             logger.info("[gateway] QQ空间定时任务已挂载")
@@ -129,23 +137,16 @@ class GatewayService(BaseService):
 
     @staticmethod
     def _account_specs(section: dict) -> list[dict]:
-        specs = section.get("accounts", [])
-        if isinstance(specs, list) and specs:
-            result = [dict(spec) for spec in specs if isinstance(spec, dict)]
-            for spec in result:
-                if not spec.get("account_id") or not spec.get("adapter"):
-                    raise ValueError("gateway.accounts 每项必须包含 account_id 和 adapter")
-            return result
-        result = []
-        for kind, config in section.get("channels", {}).items():
-            result.append(
-                {
-                    "account_id": config.get("account_id", f"{kind}-main"),
-                    "adapter": kind,
-                    "owner_ai_id": config.get("owner_ai_id", section.get("default_ai_id", "")),
-                    "config": dict(config),
-                }
-            )
+        specs = section["accounts"]
+        if not isinstance(specs, list):
+            raise ValueError("service.gateway.accounts 必须是列表")
+        result = [dict(spec) for spec in specs if isinstance(spec, dict)]
+        if len(result) != len(specs):
+            raise ValueError("service.gateway.accounts 每项必须是对象")
+        for spec in result:
+            for key in ("account_id", "adapter", "owner_ai_id", "config"):
+                if key not in spec:
+                    raise ValueError(f"service.gateway.accounts 每项必须包含 {key}")
         return result
 
     async def _sync_qq_whitelist(self) -> None:
@@ -159,9 +160,9 @@ class GatewayService(BaseService):
                 logger.warning("[gateway] 白名单身份未同步：账号 %s 没有绑定 AI", account_id)
                 continue
             names: dict[str, str] = {}
-            base_url = str(cfg.get("http_url", "")).rstrip("/")
+            base_url = str(cfg["http_url"]).rstrip("/")
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
+                async with httpx.AsyncClient(timeout=float(self._timeouts["friend_list_sec"])) as client:
                     response = await client.post(f"{base_url}/get_friend_list", json={})
                     response.raise_for_status()
                     for friend in response.json().get("data") or []:
@@ -179,10 +180,14 @@ class GatewayService(BaseService):
     async def _relationship_profile(self, user_id: str) -> dict:
         try:
             ai_id = await self._social_router.owner_for(self._qq_account_id)
-            resp = await self.bus.request_json("relationship.list.request", {"ai_id": ai_id}, timeout=3.0)
+            resp = await self.bus.request_json(
+                "relationship.list.request",
+                {"ai_id": ai_id},
+                timeout=float(self._timeouts["relationship_list_sec"]),
+            )
             relationships = resp.get("relationships", [])
             top_familiarity = max((float(p.get("familiarity", 0.0)) for p in relationships), default=0.0)
-            whitelist = self._user_id_set(self._gcfg.get("qq", "whitelist", []))
+            whitelist = self._user_id_set(self._gcfg.get("qq", "whitelist"))
             for p in relationships:
                 if str(p.get("user_id", "")) == str(user_id):
                     familiarity = float(p.get("familiarity", 0.0))
@@ -212,7 +217,7 @@ class GatewayService(BaseService):
                     "feed_text": feed_text,
                     "author_name": author_name,
                 },
-                timeout=15.0,
+                timeout=float(self._timeouts["comment_generation_sec"]),
             )
             text = resp.get("comment", "")
             if text:
@@ -266,7 +271,7 @@ class GatewayService(BaseService):
     async def _collect_sticker(self, image_url: str, ai_id: str) -> None:
         try:
             desc = await self._image_describer.describe(image_url)
-            min_quality = float(self._gcfg.get("sticker", "collect_min_quality", 0.65))
+            min_quality = float(self._gcfg.get("sticker", "collect_min_quality"))
             if desc.match_quality < min_quality or not desc.sticker_description:
                 logger.info("[gateway] 跳过非表情图片: quality=%.2f %s", desc.match_quality, desc.description[:30])
                 return
@@ -281,7 +286,7 @@ class GatewayService(BaseService):
                     "tags": desc.tags,
                     "match_quality": desc.match_quality,
                 },
-                timeout=3.0,
+                timeout=float(self._timeouts["sticker_add_sec"]),
             )
             if result.get("ok"):
                 logger.info("[gateway] 收藏表情: %s", desc.description)
@@ -292,8 +297,14 @@ class GatewayService(BaseService):
 
     async def _as_interaction(self, msg: SocialMessage) -> None:
         evt = InteractionEvent(
-            type=InteractionType(msg.meta.get("bili_type", "danmaku")),
+            type=InteractionType(
+                msg.meta.get(
+                    "bili_type",
+                    str(self._gcfg.get("live", "default_interaction_type")),
+                )
+            ),
             actor=Viewer(uid=int(msg.sender.user_id or 0), name=msg.sender.name),
+            importance=int(self._gcfg.get("live", "default_importance")),
             content=msg.text,
             meta=msg.meta,
             ai_target=msg.at_user_id or "",
@@ -329,7 +340,11 @@ class GatewayService(BaseService):
         channel = self._channels.get(req.get("account_id", ""))
         if channel is None:
             return json.dumps({"messages": [], "has_more": False}).encode()
-        msgs = await channel.list_history(req.get("chat", {}), since=req.get("since", 0), limit=req.get("limit", 50))
+        msgs = await channel.list_history(
+            req.get("chat", {}),
+            since=req.get("since", int(self._gcfg.get("social", "channel_history_since"))),
+            limit=req.get("limit", int(self._gcfg.get("social", "channel_history_limit"))),
+        )
         return json.dumps({"messages": [m.to_dict() for m in msgs], "has_more": False}).encode()
 
 

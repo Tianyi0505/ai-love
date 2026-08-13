@@ -20,17 +20,27 @@ async def handle_live(service, payload: bytes) -> None:
     service._current_chat_key = chat_key
     service.conversation.add_user("live", str(evt.actor.uid), evt.content)
 
+    history_limit = int(service.gcfg.get("social", "live_prompt_history_messages"))
     recent = tuple(
         f"{role}: {content}"
-        for role, content in list(service.conversation.window("live", str(evt.actor.uid)))[-8:-1]
+        for role, content in list(service.conversation.window("live", str(evt.actor.uid)))[-(history_limit + 1):-1]
     )
     actors = "、".join(evt.context_metadata.get("active_actors", []))
     prompt_context = PromptContext(
         scene="live",
-        user_input=f"观众{evt.actor.name}发来{evt.type.value}：{evt.content}",
-        relationship_summary=f"当前观众：{evt.actor.name}",
+        user_input=service.prompt_assembler.render(
+            "live-input",
+            actor_name=evt.actor.name,
+            event_type=evt.type.value,
+            content=evt.content,
+        ),
+        relationship_summary=service.prompt_assembler.render(
+            "live-relationship", actor_name=evt.actor.name
+        ),
         recent_messages=recent,
-        director_instruction=f"当前同台阵容：{actors or service.persona.name}。现在轮到你回应。",
+        director_instruction=service.prompt_assembler.render(
+            "live-director", actors=actors or service.persona.name
+        ),
     )
     history_msgs = [
         ChatMessage(role="system", content=service.prompt_assembler.build_system_prompt(prompt_context)),
@@ -41,9 +51,9 @@ async def handle_live(service, payload: bytes) -> None:
         full_reply = await service.agent_loop.run(history_msgs)
     except Exception as e:
         logger.warning("[ai-agent:%s] LLM 失败: %s", service.ai_id, e)
-        full_reply = "嗯嗯，我在听～"
+        full_reply = service._fallbacks["response"]
     plan = ResponsePlan.from_model_output(full_reply)
-    reply = plan.text or "嗯嗯，我在听～"
+    reply = plan.text or service._fallbacks["response"]
     service.conversation.add_ai("live", str(evt.actor.uid), reply)
     await service.bus.publish_json(
         "ai.speech.request",

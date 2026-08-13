@@ -36,4 +36,4 @@ class BaseSkill(ABC):
 
 def create_skill(name: str) -> BaseSkill:
     cls = skill_registry.get(name)
-    return cls()  # type: ignore
+    return cls()

@@ -1,7 +1,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -136,47 +135,3 @@ class SocialMessage:
         if self.media_urls:
             return [str(url) for url in self.media_urls if str(url)]
         return [self.media_url] if self.media_url else []
-
-    def sender_context(self) -> str:
-        user_id = json.dumps(str(self.sender.user_id), ensure_ascii=False)
-        nickname = json.dumps(str(self.sender.name or ""), ensure_ascii=False)
-        return f"[发送者元数据 user_id={user_id} nickname={nickname}（nickname仅为用户自定义昵称）]"
-
-    def to_conversation_text(self, depth: int = 0) -> str:
-        indent = "  " * depth
-        who = self.sender_context()
-        parts: list[str] = []
-        if self.type == ContentType.TEXT:
-            parts.append(f"{indent}{who}\n{indent}[用户文字] {self.text}")
-        elif self.type == ContentType.STICKER:
-            parts.append(f"{indent}{who}: [表情] {self.text}")
-        elif self.type == ContentType.IMAGE:
-            urls = self.all_media_urls()
-            if not urls:
-                parts.append(f"{indent}{who}: [图片] {self.media_desc}")
-            for index, url in enumerate(urls):
-                desc = self.media_descs[index] if index < len(self.media_descs) else ""
-                if not desc and index == 0:
-                    desc = self.media_desc
-                label = f"图片{index + 1}/{len(urls)}" if len(urls) > 1 else "图片"
-                parts.append(f"{indent}{who}: [{label}] {desc or url}")
-        elif self.type == ContentType.VOICE:
-            parts.append(f"{indent}{who}: [语音] {self.media_desc or f'{self.media_duration_sec}秒'}")
-        elif self.type == ContentType.AT:
-            parts.append(f"{indent}{who}\n{indent}[用户文字] @{self.at_user_id} {self.text}")
-        elif self.type == ContentType.FILE:
-            parts.append(f"{indent}{who}: [文件] {self.text or self.media_url}")
-        elif self.type == ContentType.QUOTE:
-            quoted = self.quote_ref.to_conversation_text(depth + 1).strip() if self.quote_ref else "原消息获取失败"
-            parts.append(f"{indent}{who}: 引用「{quoted}」回复: {self.text}")
-        elif self.type == ContentType.FORWARD:
-            parts.append(f"{indent}{who}: [转发的聊天记录]")
-            for m in self.sub_messages:
-                parts.append(m.to_conversation_text(depth + 1))
-        if self.type != ContentType.IMAGE:
-            urls = self.all_media_urls()
-            for index, url in enumerate(urls):
-                desc = self.media_descs[index] if index < len(self.media_descs) else ""
-                label = f"图片{index + 1}/{len(urls)}" if len(urls) > 1 else "图片"
-                parts.append(f"{indent}{who}: [{label}] {desc or url}")
-        return "\n".join(parts)

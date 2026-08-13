@@ -27,10 +27,11 @@ services:
     environment:
       - POSTGRES_DB=ailove
       - POSTGRES_USER=ailove
-      - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?请在 deploy/.env 中配置}
+      - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./sql:/docker-entrypoint-initdb.d:ro
+      - ${AILOVE_PERSONAL_BOOTSTRAP_SQL:?}:/docker-entrypoint-initdb.d/002_bootstrap_personal.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ailove -d ailove"]
       interval: 5s
@@ -41,12 +42,18 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile, target: gateway }
     container_name: ailove-gateway
     environment:
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
-      - VISION_BASE_URL=${VISION_BASE_URL:?请在 deploy/.env 中配置}
-      - VISION_MODEL=${VISION_MODEL:?请在 deploy/.env 中配置}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
+      - VISION_BASE_URL=${VISION_BASE_URL:?}
+      - VISION_MODEL=${VISION_MODEL:?}
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
       - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -58,6 +65,10 @@ services:
     container_name: ailove-orchestrator
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
     depends_on: [nacos, nats]
     networks: [ailove]
@@ -66,16 +77,19 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile, target: ai-agent }
     container_name: ailove-ai-agent
     environment:
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?请在 deploy/.env 中配置}
-      - VISION_BASE_URL=${VISION_BASE_URL:?请在 deploy/.env 中配置}
-      - VISION_MODEL=${VISION_MODEL:?请在 deploy/.env 中配置}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?}
+      - VISION_BASE_URL=${VISION_BASE_URL:?}
+      - VISION_MODEL=${VISION_MODEL:?}
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
       - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -87,14 +101,11 @@ services:
     container_name: ailove-tts
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - GPT_SOVITS_URL=${GPT_SOVITS_URL:-}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 deploy/.env 中配置}
-      - MIMO_BASE_URL=${MIMO_BASE_URL:-}
-      - MIMO_MODEL=${MIMO_MODEL:-}
-      - MIMO_REF_AUDIO=${MIMO_REF_AUDIO:-}
-      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
-      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}
     depends_on: [nacos, nats]
     networks: [ailove]
 
@@ -103,6 +114,10 @@ services:
     container_name: ailove-avatar
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
     ports:
       - "8081:8081"
@@ -114,6 +129,10 @@ services:
     container_name: ailove-stream
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
     depends_on: [nacos, nats]
     networks: [ailove]
@@ -123,8 +142,11 @@ services:
     container_name: ailove-extension-host
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
-      - MCP_WEATHER_URL=http://mcp-weather:8011/mcp
     depends_on: [nacos, nats, mcp-weather]
     networks: [ailove]
 
@@ -132,9 +154,8 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile, target: mcp-weather }
     container_name: ailove-mcp-weather
     environment:
-      - QWEATHER_API_KEY=${QWEATHER_API_KEY:?请在 deploy/.env 中配置}
-      - QWEATHER_CREDENTIAL_ID=${QWEATHER_CREDENTIAL_ID:-}
-      - QWEATHER_API_HOST=${QWEATHER_API_HOST:-}
+      - QWEATHER_API_KEY=${QWEATHER_API_KEY:?}
+      - QWEATHER_API_HOST=${QWEATHER_API_HOST:?}
     expose:
       - "8011"
     networks: [ailove]
@@ -144,8 +165,14 @@ services:
     container_name: ailove-memory
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
       - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -157,6 +184,10 @@ services:
     container_name: ailove-music
     environment:
       - AILOVE_NACOS_ADDRS=nacos:8848
+      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
+      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
+      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
       - AILOVE_BUS_URL=nats://nats:4222
     depends_on: [nacos, nats]
     networks: [ailove]

@@ -9,8 +9,9 @@ from services.extension_host.web_search import WebSearchTool
 class BuiltinToolProvider:
     provider_id = "builtin"
 
-    def __init__(self) -> None:
-        self._web_search = WebSearchTool()
+    def __init__(self, config: dict) -> None:
+        self._web_search = WebSearchTool(config["web_search"])
+        self._unknown_skill = str(config["messages"]["unknown_skill"])
 
     def definitions(self) -> list[ToolDefinition]:
         definitions = [
@@ -23,12 +24,12 @@ class BuiltinToolProvider:
             )
         ]
         for name, cls in skill_registry.all():
-            info = getattr(cls, "info", {})
+            info = cls.info
             definitions.append(
                 ToolDefinition(
                     tool_id=name,
-                    description=info.get("description", ""),
-                    input_schema=info.get("parameters", {"type": "object"}),
+                    description=info["description"],
+                    input_schema=info["parameters"],
                     provider_id=self.provider_id,
                 )
             )
@@ -39,7 +40,7 @@ class BuiltinToolProvider:
             content = await self._web_search.execute(invocation.arguments)
             return ToolResult(True, content)
         if not skill_registry.contains(invocation.tool_id):
-            return ToolResult(False, "未知本地 Skill", error_code="unknown_skill")
+            return ToolResult(False, self._unknown_skill, error_code="unknown_skill")
         skill = skill_registry.get(invocation.tool_id)()
         if hasattr(skill, "execute"):
             content = await skill.execute(invocation.arguments)

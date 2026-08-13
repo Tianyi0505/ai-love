@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from string import Template
 
 
 @dataclass(frozen=True)
@@ -22,34 +23,37 @@ class GroupRelationship:
 
 @dataclass(frozen=True)
 class RelationshipCeilings:
-    default: float = 0.7
-    person_whitelist: frozenset[str] = frozenset()
-    group_whitelist: frozenset[str] = frozenset()
+    default: float
+    whitelist: float
+    person_whitelist: frozenset[str]
+    group_whitelist: frozenset[str]
 
     def person(self, person_id: str) -> float:
-        return 1.0 if person_id in self.person_whitelist else self.default
+        return self.whitelist if person_id in self.person_whitelist else self.default
 
     def group(self, group_id: str) -> float:
-        return 1.0 if group_id in self.group_whitelist else self.default
+        return self.whitelist if group_id in self.group_whitelist else self.default
 
 
 class RelationshipPolicy:
 
-    def __init__(self, ceilings: RelationshipCeilings | None = None) -> None:
-        self._ceilings = ceilings or RelationshipCeilings()
+    def __init__(self, ceilings: RelationshipCeilings, config: dict) -> None:
+        self._ceilings = ceilings
+        self._config = config
 
     def on_conversation(
         self,
         person_id: str,
         current: PersonRelationship,
-        quality: float = 0.0,
+        quality: float,
     ) -> PersonRelationship:
         ceiling = self._ceilings.person(person_id)
         quality = max(-1.0, min(1.0, quality))
+        config = self._config["conversation"]
         return replace(
             current,
-            familiarity=min(ceiling, current.familiarity + 0.02),
-            affinity=max(-ceiling, min(ceiling, current.affinity + quality * 0.02)),
+            familiarity=min(ceiling, current.familiarity + float(config["familiarity_delta"])),
+            affinity=max(-ceiling, min(ceiling, current.affinity + quality * float(config["affinity_quality_multiplier"]))),
         )
 
     def on_gift(
@@ -60,8 +64,15 @@ class RelationshipPolicy:
     ) -> PersonRelationship:
 
         ceiling = self._ceilings.person(person_id)
-        familiarity_delta = min(0.03, max(0.0, amount) / 10000.0)
-        importance_delta = min(0.05, max(0.0, amount) / 5000.0)
+        config = self._config["gift"]
+        familiarity_delta = min(
+            float(config["familiarity_max_delta"]),
+            max(0.0, amount) / float(config["familiarity_amount_divisor"]),
+        )
+        importance_delta = min(
+            float(config["importance_max_delta"]),
+            max(0.0, amount) / float(config["importance_amount_divisor"]),
+        )
         return replace(
             current,
             familiarity=min(ceiling, current.familiarity + familiarity_delta),
@@ -75,28 +86,54 @@ class RelationshipPolicy:
         positive: bool,
     ) -> PersonRelationship:
         ceiling = self._ceilings.person(person_id)
-        delta = 0.02 if positive else -0.08
+        config = self._config["trust"]
+        delta = float(config["positive_delta"] if positive else config["negative_delta"])
         return replace(current, trust=max(0.0, min(ceiling, current.trust + delta)))
 
     def on_group_conversation(
         self,
         group_id: str,
         current: GroupRelationship,
-        quality: float = 0.0,
+        quality: float,
     ) -> GroupRelationship:
         ceiling = self._ceilings.group(group_id)
         quality = max(-1.0, min(1.0, quality))
+        config = self._config["group_conversation"]
         return replace(
             current,
-            familiarity=min(ceiling, current.familiarity + 0.02),
-            belonging=min(ceiling, current.belonging + max(0.0, quality) * 0.01),
-            affinity=max(-ceiling, min(ceiling, current.affinity + quality * 0.02)),
-            activity_willingness=max(0.0, min(ceiling, current.activity_willingness + quality * 0.02)),
+            familiarity=min(ceiling, current.familiarity + float(config["familiarity_delta"])),
+            belonging=min(ceiling, current.belonging + max(0.0, quality) * float(config["belonging_quality_multiplier"])),
+            affinity=max(-ceiling, min(ceiling, current.affinity + quality * float(config["affinity_quality_multiplier"]))),
+            activity_willingness=max(0.0, min(ceiling, current.activity_willingness + quality * float(config["activity_quality_multiplier"]))),
         )
 
-    @staticmethod
-    def summarize_person(relationship: PersonRelationship) -> str:
-        familiarity = "很熟悉" if relationship.familiarity >= 0.7 else "熟悉" if relationship.familiarity >= 0.3 else "还不熟悉"
-        affinity = "很喜欢" if relationship.affinity >= 0.6 else "有好感" if relationship.affinity >= 0.2 else "有些反感" if relationship.affinity < -0.2 else "态度平常"
-        trust = "高度信任" if relationship.trust >= 0.7 else "逐渐信任" if relationship.trust >= 0.3 else "尚未建立充分信任"
-        return f"你对对方{familiarity}，{affinity}，并且{trust}。"
+    def summarize_person(self, relationship: PersonRelationship) -> str:
+        config = self._config["summary"]
+        familiarity = (
+            config["familiarity_high_text"]
+            if relationship.familiarity >= float(config["familiarity_high_threshold"])
+            else config["familiarity_medium_text"]
+            if relationship.familiarity >= float(config["familiarity_medium_threshold"])
+            else config["familiarity_low_text"]
+        )
+        affinity = (
+            config["affinity_high_text"]
+            if relationship.affinity >= float(config["affinity_high_threshold"])
+            else config["affinity_positive_text"]
+            if relationship.affinity >= float(config["affinity_positive_threshold"])
+            else config["affinity_negative_text"]
+            if relationship.affinity < float(config["affinity_negative_threshold"])
+            else config["affinity_neutral_text"]
+        )
+        trust = (
+            config["trust_high_text"]
+            if relationship.trust >= float(config["trust_high_threshold"])
+            else config["trust_medium_text"]
+            if relationship.trust >= float(config["trust_medium_threshold"])
+            else config["trust_low_text"]
+        )
+        return Template(str(config["template"])).substitute(
+            familiarity=familiarity,
+            affinity=affinity,
+            trust=trust,
+        )

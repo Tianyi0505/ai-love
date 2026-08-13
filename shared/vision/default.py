@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 
 import httpx
 
-from shared.infrastructure.runtime_config import required_setting
+from shared.infrastructure.runtime_config import ConfigKey, required_setting
 from shared.vision.registry import describer_registry
 from shared.vision.types import ImageDesc, ImageDescriber
 
@@ -15,24 +14,44 @@ from shared.vision.types import ImageDesc, ImageDescriber
 @describer_registry.register("mcp_default")
 class DefaultDescriber(ImageDescriber):
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None, model: str | None = None, **_) -> None:
-        self._api_key = api_key or os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
-        self._base_url = required_setting(base_url, "VISION_BASE_URL")
-        self._model = required_setting(model, "VISION_MODEL")
+    def __init__(
+        self,
+        fetch_timeout_sec: float,
+        request_timeout_sec: float,
+        max_tokens: int,
+        prompt: str,
+        fetch_headers: dict,
+        anthropic_version: str,
+        media_type: str,
+        limits: dict,
+        fallbacks: dict,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        **_,
+    ) -> None:
+        self._api_key = required_setting(api_key, ConfigKey.ANTHROPIC_AUTH_TOKEN)
+        self._base_url = required_setting(base_url, ConfigKey.VISION_BASE_URL)
+        self._model = required_setting(model, ConfigKey.VISION_MODEL)
+        self._prompt = prompt
+        self._fetch_timeout_sec = fetch_timeout_sec
+        self._request_timeout_sec = request_timeout_sec
+        self._max_tokens = max_tokens
+        self._fetch_headers = fetch_headers
+        self._anthropic_version = anthropic_version
+        self._media_type = media_type
+        self._limits = limits
+        self._fallbacks = fallbacks
 
     async def _fetch(self, image_url: str) -> str:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://qzone.qq.com/",
-        }
         try:
-            async with httpx.AsyncClient(timeout=15, headers=headers, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=self._fetch_timeout_sec, headers=self._fetch_headers, follow_redirects=True) as client:
                 resp = await client.get(image_url)
                 resp.raise_for_status()
             return base64.b64encode(resp.content).decode()
         except Exception:
             try:
-                async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                async with httpx.AsyncClient(timeout=self._fetch_timeout_sec, follow_redirects=True) as client:
                     resp = await client.get(image_url)
                     resp.raise_for_status()
                 return base64.b64encode(resp.content).decode()
@@ -41,37 +60,32 @@ class DefaultDescriber(ImageDescriber):
 
     async def _do_describe(self, image_b64: str) -> ImageDesc:
         if not image_b64:
-            return ImageDesc(description="图片内容暂时无法读取", tags=[], match_quality=0.0)
+            return ImageDesc(
+                description=str(self._fallbacks["unreadable"]),
+                tags=[],
+                match_quality=float(self._fallbacks["match_quality"]),
+            )
         payload = {
             "model": self._model,
-            "max_tokens": 400,
+            "max_tokens": self._max_tokens,
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
+                        {"type": "image", "source": {"type": "base64", "media_type": self._media_type, "data": image_b64}},
                         {
                             "type": "text",
-                            "text": (
-                                "同时完成聊天识图和表情素材判断，只输出紧凑 JSON，不要 Markdown："
-                                "{\"description\":\"客观描述画面和可见文字，不超过100字\","
-                                "\"sticker_description\":\"若作为表情，它表达的情绪、态度和适用语境，不超过40字\","
-                                "\"tags\":[\"核心情绪\",\"聊天意图\",\"适用语境\"],"
-                                "\"match_quality\":0到1}。"
-                                "match_quality 只衡量能否作为聊天表情反复发送：含明确情绪/态度的表情包可为0.7到1；"
-                                "普通照片、角色立绘、风景、游戏截图、信息截图、头像即使画面精美也应为0到0.4。"
-                                "表情语义不要罗列服饰背景，只写对话中代表什么。"
-                            ),
+                            "text": self._prompt,
                         },
                     ],
                 }
             ],
         }
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=self._request_timeout_sec) as client:
                 resp = await client.post(
                     self._base_url,
-                    headers={"x-api-key": self._api_key, "anthropic-version": "2023-06-01"},
+                    headers={"x-api-key": self._api_key, "anthropic-version": self._anthropic_version},
                     json=payload,
                 )
                 resp.raise_for_status()
@@ -84,19 +98,32 @@ class DefaultDescriber(ImageDescriber):
             start, end = text.find("{"), text.rfind("}")
             if start >= 0 and end > start:
                 parsed = json.loads(text[start : end + 1])
-                description = str(parsed.get("description") or "图片")[:200]
-                sticker_description = str(parsed.get("sticker_description") or "")[:100]
+                description = str(parsed.get("description") or self._fallbacks["default_description"])[
+                    : int(self._limits["description_chars"])
+                ]
+                sticker_description = str(parsed.get("sticker_description") or "")[
+                    : int(self._limits["sticker_description_chars"])
+                ]
                 tags = parsed.get("tags", [])
                 if not isinstance(tags, list):
                     tags = []
-                match_quality = float(parsed.get("match_quality", 0.0))
+                match_quality = float(parsed.get("match_quality", self._fallbacks["match_quality"]))
                 return ImageDesc(
                     description=description,
                     sticker_description=sticker_description,
-                    tags=tags[:8],
+                    tags=tags[: int(self._limits["tags"])],
                     match_quality=match_quality,
                 )
             plain = text.replace("```json", "").replace("```", "").strip()
-            return ImageDesc(description=plain[:120] or "图片内容暂时无法识别", tags=[], match_quality=0.0)
+            return ImageDesc(
+                description=plain[: int(self._limits["plain_description_chars"])]
+                or str(self._fallbacks["unrecognized"]),
+                tags=[],
+                match_quality=float(self._fallbacks["match_quality"]),
+            )
         except Exception:
-            return ImageDesc(description="图片内容暂时无法识别", tags=[], match_quality=0.0)
+            return ImageDesc(
+                description=str(self._fallbacks["unrecognized"]),
+                tags=[],
+                match_quality=float(self._fallbacks["match_quality"]),
+            )

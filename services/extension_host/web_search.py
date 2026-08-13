@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from string import Template
 
 import httpx
+
+from shared.infrastructure.runtime_config import required_config
 
 
 @dataclass
@@ -19,33 +22,36 @@ class WebSearchTool:
 
     name = "web_search"
 
-    info = {
-        "description": "网络搜索：查询最新信息、事实、新闻等（当前资料不足时用）",
-        "parameters": {
-            "type": "object",
-            "properties": {"query": {"type": "string", "description": "搜索关键词"}},
-            "required": ["query"],
-        },
-    }
+    def __init__(self, config: dict) -> None:
+        self.info = dict(required_config(config, "definition", "service.extension-host.web_search.definition"))
+        self._request_timeout_sec = float(required_config(config, "request_timeout_sec", "service.extension-host.web_search.request_timeout_sec"))
+        self._endpoint = str(required_config(config, "endpoint", "service.extension-host.web_search.endpoint"))
+        self._user_agent = str(required_config(config, "user_agent", "service.extension-host.web_search.user_agent"))
+        self._result_limit = int(required_config(config, "result_limit", "service.extension-host.web_search.result_limit"))
+        messages = dict(required_config(config, "messages", "service.extension-host.web_search.messages"))
+        self._missing_query = str(required_config(messages, "missing_query", "service.extension-host.web_search.messages.missing_query"))
+        self._no_result = Template(str(required_config(messages, "no_result", "service.extension-host.web_search.messages.no_result")))
+        self._result = Template(str(required_config(messages, "result", "service.extension-host.web_search.messages.result")))
 
     async def execute(self, args: dict) -> str:
         query = args.get("query", "")
         if not query:
-            return "搜索失败：缺少 query"
+            return self._missing_query
         results = await self._search(query)
         if not results:
-            return f"搜索「{query}」无结果"
+            return self._no_result.substitute(query=query)
         return "\n".join(
-            f"[{i + 1}] {r.title}\n{r.url}\n{r.snippet}" for i, r in enumerate(results[:5])
+            self._result.substitute(index=i + 1, title=r.title, url=r.url, snippet=r.snippet)
+            for i, r in enumerate(results[: self._result_limit])
         )
 
     async def _search(self, query: str) -> list[SearchResult]:
         try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=self._request_timeout_sec, follow_redirects=True) as client:
                 resp = await client.get(
-                    "https://www.bing.com/search",
+                    self._endpoint,
                     params={"q": query},
-                    headers={"User-Agent": "Mozilla/5.0"},
+                    headers={"User-Agent": self._user_agent},
                 )
                 resp.raise_for_status()
             return self._parse_html(resp.text)
@@ -60,6 +66,6 @@ class WebSearchTool:
             if not url.startswith("http"):
                 continue
             results.append(SearchResult(title=title, url=url, snippet=""))
-            if len(results) >= 5:
+            if len(results) >= self._result_limit:
                 break
         return results

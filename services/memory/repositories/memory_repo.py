@@ -9,7 +9,7 @@ from pathlib import Path
 
 class MemoryRepo:
 
-    def __init__(self, data_dir: str = "/app/data") -> None:
+    def __init__(self, data_dir: str) -> None:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(Path(data_dir) / "memory.db")
         self._conn.execute("""
@@ -37,13 +37,13 @@ class MemoryRepo:
             self._conn.execute(
                 "INSERT INTO memories (ai_id, person_id, content, importance, layer, kind, channel, created_at, last_access_at) VALUES (?,?,?,?,?,?,?,?,?)",
                 (ai_id, e.get("person_id") or None, e.get("content", ""),
-                 e.get("importance", 50),
-                 e.get("layer", "long_term"), e.get("kind", "episodic"),
+                 e["importance"],
+                 e.get("layer", "long_term"), e["memory_type"],
                  e.get("channel", ""), time.time(), time.time()),
             )
         self._conn.commit()
 
-    async def search(self, ai_id: str, query: str, top_k: int = 5, person_id: str = "", **_) -> list[dict]:
+    async def search(self, ai_id: str, query: str, top_k: int, person_id: str = "", **_) -> list[dict]:
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE ai_id=? AND (?='' OR person_id IS NULL OR person_id=?) "
             "ORDER BY importance DESC LIMIT ?",

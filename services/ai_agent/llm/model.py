@@ -26,7 +26,7 @@ class ModelTarget:
 
 class ModelHealthStore:
 
-    def __init__(self, fail_threshold: int = 3, recover_after_sec: int = 60) -> None:
+    def __init__(self, fail_threshold: int, recover_after_sec: int) -> None:
         self._fail_threshold = fail_threshold
         self._recover_after_sec = recover_after_sec
         self._fails: dict[str, int] = {}
@@ -49,21 +49,21 @@ class ModelHealthStore:
 
 class ModelSelector:
 
-    def __init__(self, model_cfg: dict, timeout_ms: int, health_store: ModelHealthStore | None = None) -> None:
+    def __init__(self, model_cfg: dict, timeout_ms: int, health_store: ModelHealthStore) -> None:
         self._cfg = model_cfg
         self._timeout_ms = int(timeout_ms)
-        self._health = health_store or ModelHealthStore()
+        self._health = health_store
 
     def _models_in_tier(self, tier: Tier) -> list[ModelCandidate]:
         tier_key = tier.value
         models = []
-        for m in self._cfg.get(tier_key, []):
+        for m in self._cfg[tier_key]:
             models.append(
                 ModelCandidate(
                     id=m["id"],
                     provider=m["provider"],
                     tier=tier,
-                    supports_thinking=m.get("thinking", False),
+                    supports_thinking=m["thinking"],
                 )
             )
         return models

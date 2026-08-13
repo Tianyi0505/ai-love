@@ -16,7 +16,7 @@ class ChatSession:
 
 class SessionManager:
 
-    def __init__(self, data_dir: str = "/app/data") -> None:
+    def __init__(self, data_dir: str) -> None:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(Path(data_dir) / "session.db")
         self._conn.execute("""

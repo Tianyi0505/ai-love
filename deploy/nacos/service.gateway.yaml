@@ -1,0 +1,9 @@
+instance_addr: 127.0.0.1:0
+accounts:
+  - account_id: qq-main
+    adapter: qq
+    owner_ai_id: __AILOVE_AI_ID__
+    config:
+      ws_url: __NAPCAT_WS_URL__
+      http_url: __NAPCAT_HTTP_URL__
+      uin: __AILOVE_QQ_UIN__

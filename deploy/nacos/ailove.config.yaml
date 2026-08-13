@@ -1,0 +1,165 @@
+qq:
+  whitelist: __AILOVE_QQ_WHITELIST__
+  reconnect_delay_sec: 5
+  voice_reply: true
+  space_interval_sec: 3600
+  qzone_comments_context_limit: 3
+  qzone_comments_fetch_limit: 20
+  qzone_feeds_per_friend: 10
+  qzone_friend_scan_delay_sec: 2
+  qzone_action_delay_sec: 3
+  qzone_comment_max_sentences: 2
+  qzone_data_dir: /app/data
+  qzone_relationship_curve_exponent: 2
+  qzone_picture_template: '[动态图片${index}：${description}]'
+  qzone_picture_unavailable_template: '[附 ${count} 张图片，暂时无法识别]'
+  qzone_existing_comments_template: '，已有评论: ${names}'
+  qzone_reply_template: |-
+    对方刚回复：${content}
+  qzone_feed_template: |-
+    ${content}
+    ${pictures}${comments}${reply}
+  qzone_fallback_comments:
+    - 看到${author_name}的动态啦，支持支持～
+    - 哇，这个有意思！
+    - 哈哈哈太真实了
+    - 今天也要开心呀！
+    - 来啦来啦，踩踩～
+
+sticker:
+  capacity: 50
+  half_life_sec: 2592000
+  boost_delta: 10.0
+  threshold: 20.0
+  collect_min_quality: 0.65
+  list_limit: 20
+  initial_match_quality: 0.5
+  initial_usage_strength: 0.2
+  legacy_value_divisor: 100.0
+  retention_weights:
+    match_quality: 0.45
+    usage_strength: 0.35
+    freshness: 0.2
+  search_weights:
+    token_overlap: 3.0
+    match_quality: 0.25
+    usage_strength: 0.15
+    freshness: 0.1
+
+social:
+  contact_names: {}
+  send_timeout_sec: 15
+  window_size: 20
+  compensate_interval_sec: 600
+  consolidate_interval_sec: 600
+  consolidate_threshold: 0.6
+  prompt_history_messages: 7
+  live_prompt_history_messages: 7
+  compensation_history_messages: 6
+  channel_history_since: 0
+  channel_history_limit: 50
+  drain_poll_interval_sec: 0.01
+
+live:
+  default_interaction_type: danmaku
+  default_importance: 10
+
+search:
+  bm25_k1: 1.5
+  bm25_b: 0.75
+  top_k: 5
+  reciprocal_rank_k: 60
+  each_source_limit: 3
+
+llm:
+  timeout_ms: 60000
+  health_fail_threshold: 3
+  health_recover_after_sec: 60
+  max_tool_rounds: 3
+  max_tokens: 4096
+  provider_request_timeout_sec: 60
+
+image:
+  describer: mcp_default
+  fetch_timeout_sec: 15
+  request_timeout_sec: 30
+  max_tokens: 400
+  anthropic_version: "2023-06-01"
+  media_type: image/jpeg
+  fetch_headers:
+    User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+    Referer: https://qzone.qq.com/
+  limits:
+    description_chars: 200
+    sticker_description_chars: 100
+    plain_description_chars: 120
+    tags: 8
+  fallbacks:
+    unreadable: 图片内容暂时无法读取
+    unrecognized: 图片内容暂时无法识别
+    default_description: 图片
+    match_quality: 0.0
+  prompt: |-
+    同时完成聊天识图和表情素材判断，只输出紧凑 JSON，不要 Markdown：
+    {"description":"客观描述画面和可见文字，不超过100字","sticker_description":"若作为表情，它表达的情绪、态度和适用语境，不超过40字","tags":["核心情绪","聊天意图","适用语境"],"match_quality":0到1}。
+    match_quality 只衡量能否作为聊天表情反复发送：含明确情绪/态度的表情包可为0.7到1；普通照片、角色立绘、风景、游戏截图、信息截图、头像即使画面精美也应为0到0.4。
+    表情语义不要罗列服饰背景，只写对话中代表什么。
+
+memory:
+  data_dir: /app/data
+  cleanup_interval_sec: 86400
+  file_max_age_sec: 604800
+  default_scope: private
+  default_type: observation
+  default_importance: 0.5
+  default_strength: 0.6
+  default_confidence: 0.7
+  default_emotion_intensity: 0.0
+  default_consolidated: true
+  generic_person_terms: [该用户, 用户, 对方]
+  retained_window_messages: 2
+  search_top_k: 5
+  database_candidate_limit: 100
+  empty_query_relevance: 0.5
+  half_life_sec: 2592000
+  dormant_threshold: 0.2
+  delete_threshold: 0.05
+  recall_boost: 0.12
+  retrieval_weights:
+    relevance: 0.45
+    strength: 0.25
+    importance: 0.15
+    confidence: 0.1
+    emotion_intensity: 0.05
+
+timeouts:
+  relationship_update_sec: 2
+  relationship_summary_sec: 1
+  relationship_list_sec: 3
+  relationship_group_sec: 2
+  memory_write_sec: 5
+  memory_search_sec: 2
+  tool_list_sec: 3
+  tool_execute_sec: 30
+  tts_request_sec: 30
+  social_history_sec: 2
+  sticker_add_sec: 3
+  sticker_boost_sec: 2
+  comment_generation_sec: 15
+  friend_list_sec: 5
+  qzone_http_sec: 10
+  qzone_api_sec: 15
+  qq_message_sec: 10
+  qq_forward_sec: 15
+  web_search_sec: 10
+
+fallbacks:
+  response: 嗯嗯，我在听～
+  private_response: 嗯嗯，我在听～你继续说呀
+  proactive_reason: 有一段时间没有联系，想自然地问候近况
+  proactive_unspecified_reason: 想自然地关心近况
+  image_unreadable: 图片内容暂时无法识别
+  voice_unrecognized: （无法识别）
+  qzone_empty_feed: （无文本）
+  relationship_unknown: 尚未形成明确关系
+  person_name: 朋友

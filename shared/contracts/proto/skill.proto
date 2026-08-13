@@ -2,13 +2,13 @@ syntax = "proto3";
 
 package ailove.skill;
 
-// 技能系统协议：全局技能池 + 每 AI 白名单
+// 定义技能系统协议
 
 message SkillInfo {
   string name        = 1;
   string description = 2;
   map<string, string> parameters = 3;
-  bool   is_heavy    = 4;   // 重技能（独立子服务）
+  bool   is_heavy    = 4;
   string service     = 5;
 }
 

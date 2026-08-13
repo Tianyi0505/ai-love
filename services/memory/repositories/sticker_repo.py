@@ -18,8 +18,9 @@ def _tokenize(text: str) -> list[str]:
 
 class StickerRepo:
 
-    def __init__(self, ai_id: str, data_dir: str) -> None:
+    def __init__(self, ai_id: str, data_dir: str, config: dict) -> None:
         self._ai_id = ai_id
+        self._config = config
         db_dir = Path(data_dir)
         db_dir.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(db_dir / f"stickers_{ai_id}.db")
@@ -27,7 +28,7 @@ class StickerRepo:
         self._init_db()
 
     def _init_db(self) -> None:
-        self._conn.execute("""
+        self._conn.execute(f"""
             CREATE TABLE IF NOT EXISTS stickers (
                 id TEXT PRIMARY KEY,
                 image_url TEXT,
@@ -38,22 +39,28 @@ class StickerRepo:
                 boost_count INTEGER DEFAULT 0,
                 last_boost_at REAL,
                 created_at REAL,
-                match_quality REAL DEFAULT 0.5,
-                usage_strength REAL DEFAULT 0.2,
+                match_quality REAL DEFAULT {float(self._config['initial_match_quality'])},
+                usage_strength REAL DEFAULT {float(self._config['initial_usage_strength'])},
                 last_used_at REAL
             )
         """)
         columns = {row[1] for row in self._conn.execute("PRAGMA table_info(stickers)")}
         added_match_quality = "match_quality" not in columns
         if added_match_quality:
-            self._conn.execute("ALTER TABLE stickers ADD COLUMN match_quality REAL DEFAULT 0.5")
+            self._conn.execute(
+                f"ALTER TABLE stickers ADD COLUMN match_quality REAL DEFAULT {float(self._config['initial_match_quality'])}"
+            )
         if "usage_strength" not in columns:
-            self._conn.execute("ALTER TABLE stickers ADD COLUMN usage_strength REAL DEFAULT 0.2")
+            self._conn.execute(
+                f"ALTER TABLE stickers ADD COLUMN usage_strength REAL DEFAULT {float(self._config['initial_usage_strength'])}"
+            )
         if "last_used_at" not in columns:
             self._conn.execute("ALTER TABLE stickers ADD COLUMN last_used_at REAL")
         if added_match_quality:
             self._conn.execute(
-                "UPDATE stickers SET match_quality=MAX(0.0, MIN(1.0, COALESCE(value, 50.0) / 100.0))"
+                "UPDATE stickers SET match_quality=MAX(0.0, MIN(1.0, "
+                f"COALESCE(value, {float(self._config['initial_match_quality']) * float(self._config['legacy_value_divisor'])}) "
+                f"/ {float(self._config['legacy_value_divisor'])}))"
             )
         self._conn.commit()
 
@@ -66,17 +73,16 @@ class StickerRepo:
         d.pop("importance", None)
         return d
 
-    @staticmethod
-    def _freshness(row: sqlite3.Row) -> float:
+    def _freshness(self, row: sqlite3.Row) -> float:
         anchor = row["last_used_at"] or row["created_at"] or time.time()
         elapsed = max(0.0, time.time() - anchor)
-        return 0.5 ** (elapsed / 2592000)
+        return 0.5 ** (elapsed / float(self._config["half_life_sec"]))
 
     def _retention_score(self, row: sqlite3.Row) -> float:
         return (
-            float(row["match_quality"] or 0.0) * 0.45
-            + float(row["usage_strength"] or 0.0) * 0.35
-            + self._freshness(row) * 0.20
+            float(row["match_quality"] or 0.0) * float(self._config["retention_weights"]["match_quality"])
+            + float(row["usage_strength"] or 0.0) * float(self._config["retention_weights"]["usage_strength"])
+            + self._freshness(row) * float(self._config["retention_weights"]["freshness"])
         )
 
     def count(self) -> int:
@@ -91,7 +97,7 @@ class StickerRepo:
             "last_boost_at, created_at, match_quality, usage_strength, last_used_at) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (sticker["id"], sticker["image_url"], sticker["description"], json.dumps(sticker.get("tags", [])),
-             None, None, 0, None, time.time(), self._unit(sticker.get("match_quality", 0.5)), 0.2, None),
+             None, None, 0, None, time.time(), self._unit(sticker.get("match_quality", self._config["initial_match_quality"])), self._config["initial_usage_strength"], None),
         )
         self._conn.commit()
 

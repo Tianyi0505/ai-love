@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 
@@ -55,4 +55,3 @@ class Persona:
         if join_checker is not None:
             return await join_checker(chat_id)
         return False
-

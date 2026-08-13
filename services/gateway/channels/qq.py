@@ -22,13 +22,16 @@ class QQChannel(Channel):
 
     def __init__(self, cfg: dict) -> None:
         super().__init__(cfg)
-        self._ws_url = required_value(cfg.get("ws_url"), "service.gateway QQ ws_url")
-        self._http_url = required_value(cfg.get("http_url"), "service.gateway QQ http_url")
+        self._ws_url = required_value(cfg["ws_url"], "service.gateway QQ ws_url")
+        self._http_url = required_value(cfg["http_url"], "service.gateway QQ http_url")
         self._self_uin = required_value(
-            str(cfg.get("uin", "") or ""),
+            str(cfg["uin"]),
             "service.gateway QQ uin",
         )
-        self.account_id = str(cfg.get("account_id", "qq-main"))
+        self.account_id = str(cfg["account_id"])
+        self._message_timeout_sec = float(cfg["message_timeout_sec"])
+        self._forward_timeout_sec = float(cfg["forward_timeout_sec"])
+        self._reconnect_delay_sec = float(cfg["reconnect_delay_sec"])
         self._ws = None
         self._stop = False
 
@@ -44,7 +47,7 @@ class QQChannel(Channel):
                             await self._on_message(msg)
             except Exception as e:
                 print(f"[qq] WS 断开: {e}，重连中...")
-                await asyncio.sleep(5)
+                await asyncio.sleep(self._reconnect_delay_sec)
 
     async def stop(self) -> None:
         self._stop = True
@@ -179,7 +182,7 @@ class QQChannel(Channel):
     async def _get_message(self, message_id: str) -> SocialMessage | None:
         try:
             value: int | str = int(message_id) if message_id.lstrip("-").isdigit() else message_id
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=self._message_timeout_sec) as client:
                 resp = await client.post(f"{self._http_url}/get_msg", json={"message_id": value})
                 resp.raise_for_status()
             data = resp.json().get("data") or {}
@@ -192,7 +195,7 @@ class QQChannel(Channel):
         if not forward_id:
             return []
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=self._forward_timeout_sec) as client:
                 resp = await client.post(f"{self._http_url}/get_forward_msg", json={"id": forward_id})
                 resp.raise_for_status()
             messages = (resp.json().get("data") or {}).get("messages") or []
@@ -233,7 +236,7 @@ class QQChannel(Channel):
             payload["user_id"] = int(chat_id)
         else:
             payload["group_id"] = int(chat_id)
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=self._message_timeout_sec) as client:
             resp = await client.post(f"{self._http_url}/{action}", json=payload)
         if resp.status_code == 200:
             data = resp.json()
@@ -246,8 +249,8 @@ class QQChannel(Channel):
             }
         return {"ok": False, "message_id": "", "fallback_note": f"HTTP {resp.status_code}"}
 
-    async def list_history(self, chat: Chat, since: int = 0, limit: int = 50) -> list[SocialMessage]:
-        # TODO: 本地缓存历史
+    async def list_history(self, chat: Chat, since: int, limit: int) -> list[SocialMessage]:
+        # 缓存本地聊天历史
         return []
 
     @property

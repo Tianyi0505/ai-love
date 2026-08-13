@@ -25,7 +25,7 @@ def _tokenize(text: str) -> list[str]:
 
 class BM25Index:
 
-    def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
+    def __init__(self, k1: float, b: float) -> None:
         self._k1 = k1
         self._b = b
         self._docs: list[Doc] = []
@@ -39,7 +39,7 @@ class BM25Index:
             self._doc_freq[t] = self._doc_freq.get(t, 0) + 1
         self._avg_len = sum(len(_tokenize(d.text)) for d in self._docs) / max(1, len(self._docs))
 
-    def search(self, query: str, top_k: int = 5) -> list[tuple[str, float]]:
+    def search(self, query: str, top_k: int) -> list[tuple[str, float]]:
         q_tokens = _tokenize(query)
         n = len(self._docs)
         scores: list[tuple[str, float]] = []
@@ -63,10 +63,18 @@ class BM25Index:
 
 class HybridSearch:
 
-    def __init__(self, top_k: int = 5) -> None:
+    def __init__(self, config: dict) -> None:
         self._docs: dict[str, Doc] = {}
-        self._bm25 = BM25Index()
-        self._top_k = top_k
+        self._config = config
+        self._bm25 = self._new_bm25()
+        self._top_k = int(config["top_k"])
+        self._reciprocal_rank_k = int(config["reciprocal_rank_k"])
+
+    def _new_bm25(self) -> BM25Index:
+        return BM25Index(
+            k1=float(self._config["bm25_k1"]),
+            b=float(self._config["bm25_b"]),
+        )
 
     def add(self, doc: Doc) -> None:
         self._docs[doc.id] = doc
@@ -74,14 +82,14 @@ class HybridSearch:
 
     def remove(self, doc_id: str) -> None:
         self._docs.pop(doc_id, None)
-        self._bm25 = BM25Index()
+        self._bm25 = self._new_bm25()
         for d in self._docs.values():
             self._bm25.add(d)
 
     def search(self, query: str, vector_results: list[tuple[str, float]] | None = None, top_k: int | None = None) -> list[tuple[str, float]]:
         top_k = top_k or self._top_k
         bm25_results = self._bm25.search(query, top_k=top_k)
-        k = 60
+        k = self._reciprocal_rank_k
         fused: dict[str, float] = {}
         for rank, (doc_id, _) in enumerate(bm25_results):
             fused[doc_id] = fused.get(doc_id, 0.0) + 1.0 / (k + rank + 1)

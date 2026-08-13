@@ -9,7 +9,7 @@ class WeChatChannel(Channel):
     name = "wechat"
 
     async def start(self) -> None:
-        # TODO: 接入方案待定（wechaty/wechatferry）
+        # 接入微信消息通道
         pass
 
     async def stop(self) -> None:

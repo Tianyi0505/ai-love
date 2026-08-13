@@ -1,4 +1,4 @@
-# 使用 AILOVE_DATABASE_URL 连接阿里云 RDS。
+# 使用 AILOVE_DATABASE_URL 连接阿里云 RDS
 apiVersion: v1
 kind: Service
 metadata:

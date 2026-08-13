@@ -1,0 +1,16 @@
+instance_addr: 127.0.0.1:0
+engine: gpt_sovits
+engine_options:
+  base_url: __GPT_SOVITS_URL__
+  request_timeout_sec: 30
+  text_lang: zh
+  prompt_lang: zh
+  output_format: pcm_s16le_16k
+voices:
+  __AILOVE_AI_ID__:
+    ref_audio_path: __AILOVE_VOICE_REF_AUDIO_PATH__
+    ref_text: __AILOVE_VOICE_REF_TEXT__
+output:
+  audio_dir: /app/data/voice
+  file_extension: wav
+  pcm_bytes_per_sec: 32000

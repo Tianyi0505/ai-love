@@ -13,7 +13,7 @@ from services.ai_agent.application.proactive import GroupChatManager, ProactiveC
 from services.ai_agent.application.retrieval import Retrieval
 from services.ai_agent.application.session import SessionManager
 from services.ai_agent.events.handlers import EventHandlers
-from services.ai_agent.llm.providers import anthropic_gw, deepseek, ollama  # noqa: F401
+from services.ai_agent.llm.providers import anthropic_gw, deepseek, ollama
 from services.ai_agent.llm.service import ChatMessage, create_llm
 from services.ai_agent.memory.manager import MemoryManager
 from services.ai_agent.message_understanding import MessageUnderstanding
@@ -30,7 +30,7 @@ logger = logging.getLogger("ailove.ai-agent")
 
 
 class AIRuntime:
-    def __init__(self, host, definition: AgentDefinition, account_ids: tuple[str, ...] = ()) -> None:
+    def __init__(self, host, definition: AgentDefinition, account_ids: tuple[str, ...]) -> None:
         self._host = host
         self.definition = definition
         self.cfg = host.cfg
@@ -45,28 +45,45 @@ class AIRuntime:
 
         self.gcfg = GlobalConfig(provider=self.cfg.nacos)
         await self.gcfg.load()
+        self._timeouts = self.gcfg.section("timeouts")
+        self._fallbacks = self.gcfg.section("fallbacks")
         self.persona = Persona.from_definition(self.definition, self.gcfg)
-        self._llm = create_llm(
-            self.persona.llm_models,
-            timeout_ms=int(self.gcfg.get("llm", "timeout_ms")),
-        )
+        llm_config = self.gcfg.section("llm")
+        self._llm = create_llm(self.persona.llm_models, llm_config)
 
         self.conversation = ConversationContext(
-            window_size=int(self.gcfg.get("social", "window_size", 20)),
+            window_size=int(self.gcfg.get("social", "window_size")),
             data_dir=f"/app/data/agents/{self.ai_id}",
+            search_config=self.gcfg.section("search"),
         )
 
-        self.understanding = MessageUnderstanding(
-            asr=None,
-            image_describer=create_describer(self.gcfg.get("image", "describer", "mcp_default")),
-        )
-
+        image_config = self.gcfg.section("image")
+        image_options = {
+            key: value for key, value in image_config.items() if key != "describer"
+        }
         self.prompt_assembler = PromptAssembler(self.definition)
-        self.agent_loop = AgentLoop(self._llm, ai_id=self.ai_id)
+        self.understanding = MessageUnderstanding(
+            self.prompt_assembler,
+            self._fallbacks,
+            asr=None,
+            image_describer=create_describer(
+                image_config["describer"],
+                **image_options,
+            ),
+        )
 
-        await register_tools(self.agent_loop, self.bus, self.ai_id)
+        self.agent_loop = AgentLoop(
+            self._llm,
+            self.prompt_assembler,
+            ai_id=self.ai_id,
+            max_rounds=int(llm_config["max_tool_rounds"]),
+        )
 
-        self.memory = MemoryManager(self.bus, self._llm, self.ai_id, self.gcfg)
+        await register_tools(self.agent_loop, self.bus, self.ai_id, self._timeouts)
+
+        self.memory = MemoryManager(
+            self.bus, self._llm, self.ai_id, self.gcfg, self.prompt_assembler
+        )
 
         self.retrieval = Retrieval(self)
 
@@ -77,17 +94,15 @@ class AIRuntime:
 
         self.spawn(self._compensation_loop())
 
-        self._proactive_config = dict(self.definition.behavior_policy.get("proactive", {}))
-        self._proactive_enabled = self._proactive_config.get(
-            "enabled", self.gcfg.get("proactive", "enabled", True)
-        )
+        self._proactive_config = dict(self.definition.behavior_policy["proactive"])
+        self._proactive_enabled = self._proactive_config["enabled"]
         self.group_manager = GroupChatManager()
-        self.proactive = ProactiveChat(self.definition.behavior_policy)
+        self.proactive = ProactiveChat(self.definition.behavior_policy, self._fallbacks)
         if self._account_ids and self._proactive_enabled:
             self.spawn(self.proactive.loop(
                 self,
-                int(self._proactive_config.get("private_interval_sec", 1800)),
-                float(self._proactive_config.get("min_weight", 0.15)),
+                int(self._proactive_config["private_interval_sec"]),
+                float(self._proactive_config["min_weight"]),
             ))
         self.spawn(self.memory.consolidate_loop(self.conversation.all_windows))
 
@@ -97,7 +112,7 @@ class AIRuntime:
 
     async def drain(self) -> None:
         while self._in_flight:
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(float(self.gcfg.get("social", "drain_poll_interval_sec")))
 
     async def stop(self) -> None:
         tasks = list(self._tasks)
@@ -149,7 +164,11 @@ class AIRuntime:
 
     async def _list_personas(self) -> list[dict]:
         try:
-            resp = await self.bus.request_json("relationship.list.request", {"ai_id": self.ai_id}, timeout=3.0)
+            resp = await self.bus.request_json(
+                "relationship.list.request",
+                {"ai_id": self.ai_id},
+                timeout=float(self._timeouts["relationship_list_sec"]),
+            )
             return resp.get("relationships", [])
         except Exception:
             return []
@@ -160,7 +179,7 @@ class AIRuntime:
     async def send_private(self, p: dict) -> None:
         await self._send_proactive(p)
 
-    def _can_speak_in_group(self, chat_id: str, cooldown_sec: int = 0) -> bool:
+    def _can_speak_in_group(self, chat_id: str, cooldown_sec: int) -> bool:
         chat_key = f"group:{chat_id}"
         if cooldown_sec > 0:
             return self.sessions.can_initiate(chat_key, cooldown_sec)
@@ -175,10 +194,10 @@ class AIRuntime:
     def _observe_group_message(self, chat_id: str) -> None:
         self.group_manager.observe(
             chat_id,
-            join_window_sec=int(self._proactive_config.get("group_join_window_sec", 180)),
-            idle_sec=int(self._proactive_config.get("group_session_idle_sec", 300)),
-            max_active_sec=int(self._proactive_config.get("group_session_max_sec", 1200)),
-            rest_sec=int(self._proactive_config.get("group_session_rest_sec", 600)),
+            join_window_sec=int(self._proactive_config["group_join_window_sec"]),
+            idle_sec=int(self._proactive_config["group_session_idle_sec"]),
+            max_active_sec=int(self._proactive_config["group_session_max_sec"]),
+            rest_sec=int(self._proactive_config["group_session_rest_sec"]),
         )
 
     def _activate_group_session(self, chat_id: str) -> None:
@@ -193,7 +212,9 @@ class AIRuntime:
     ) -> bool:
         now = time.monotonic()
         started_at = self._group_turns_in_flight.get(chat_id)
-        if started_at is not None and now - started_at < 60:
+        if started_at is not None and now - started_at < float(
+            self._proactive_config["group_turn_in_flight_sec"]
+        ):
             return False
         if not force:
             relationship = relationship or await self._group_relationship(chat_id)
@@ -215,29 +236,30 @@ class AIRuntime:
                     "account_id": self.primary_social_account_id,
                     "group_id": chat_id,
                 },
-                timeout=2.0,
+                timeout=float(self._timeouts["relationship_group_sec"]),
             )
             return dict(response.get("relationship", {}))
         except Exception as exc:
             logger.warning("[ai-agent:%s] 读取群关系失败: %s", self.ai_id, exc)
             return {}
 
-    @staticmethod
-    def _group_participation_score(relationship: dict) -> float:
+    def _group_participation_score(self, relationship: dict) -> float:
+        weights = self._proactive_config["group_participation_weights"]
         score = (
-            float(relationship.get("activity_willingness", 0.0)) * 0.40
-            + float(relationship.get("belonging", 0.0)) * 0.25
-            + float(relationship.get("affinity", 0.0)) * 0.20
-            + float(relationship.get("familiarity", 0.0)) * 0.15
+            float(relationship.get("activity_willingness", 0.0)) * float(weights["activity_willingness"])
+            + float(relationship.get("belonging", 0.0)) * float(weights["belonging"])
+            + float(relationship.get("affinity", 0.0)) * float(weights["affinity"])
+            + float(relationship.get("familiarity", 0.0)) * float(weights["familiarity"])
         )
         return max(0.0, min(1.0, score))
 
     def _group_cooldown(self, participation_score: float) -> int:
-        minimum = int(self._proactive_config.get("group_min_cooldown_sec", 60))
-        maximum = int(self._proactive_config.get("group_max_cooldown_sec", 300))
-        return round(minimum + (maximum - minimum) * (1.0 - participation_score) ** 2)
+        minimum = int(self._proactive_config["group_min_cooldown_sec"])
+        maximum = int(self._proactive_config["group_max_cooldown_sec"])
+        exponent = float(self._proactive_config["group_cooldown_curve_exponent"])
+        return round(minimum + (maximum - minimum) * (1.0 - participation_score) ** exponent)
 
-    def _limit_sentences(self, text: str, max_sentences: int = 3) -> str:
+    def _limit_sentences(self, text: str, max_sentences: int) -> str:
         sentences = re.split(r"(?<=[。！？!?])", text.strip())
         if len(sentences) <= max_sentences:
             return text
@@ -261,18 +283,20 @@ class AIRuntime:
     async def _send_proactive(self, p: dict) -> None:
         user_id = p.get("user_id", "")
         name = self.persona.name_for(user_id) or p.get("display_name") or p.get("name", "朋友")
-        reason = str(p.get("reason", "想自然地关心近况"))
+        reason = str(p.get("reason", self._fallbacks["proactive_unspecified_reason"]))
         if not user_id:
             return
         session_key = f"proactive-private:{user_id}"
-        cooldown = int(self._proactive_config.get("private_cooldown_sec", 43200))
+        cooldown = int(self._proactive_config["private_cooldown_sec"])
         if not self.sessions.can_initiate(session_key, cooldown):
             return
         context = PromptContext(
             scene="proactive-private",
-            user_input=f"现在主动给朋友{name}发一条私聊消息。",
-            relationship_summary=f"联系人：{name}。本次联系动机：{reason}。",
-            scene_state="这是主动联系，只能在工作作息内执行；一两句话即可。",
+            user_input=self.prompt_assembler.render("proactive-private-input", name=name),
+            relationship_summary=self.prompt_assembler.render(
+                "proactive-private-relationship", name=name, reason=reason
+            ),
+            scene_state=self.prompt_assembler.template("proactive-private-state"),
         )
         text = (await self._generate_plan(context)).text
         if not text:
@@ -294,7 +318,7 @@ class AIRuntime:
         session = self.group_manager.session(chat_id)
         ready = self.group_manager.ready_to_join(
             chat_id,
-            int(self._proactive_config.get("group_join_min_messages", 2)),
+            int(self._proactive_config["group_join_min_messages"]),
         )
         logger.info(
             "[ai-agent:%s] 群聊判断: active=%s ready=%s recent=%d",
@@ -303,47 +327,44 @@ class AIRuntime:
         if not explicitly_addressed and not session.active and not ready:
             return False
         window = self.conversation.window("group", chat_id)
-        recent = list(window)[-5:]
+        recent = list(window)[-int(self._proactive_config["group_join_history_messages"]):]
         if not recent:
             logger.info("[ai-agent:%s] 群聊跳过: 会话窗口空", self.ai_id)
             return False
         relationship = await self._group_relationship(chat_id)
         score = self._group_participation_score(relationship)
-        logger.info("[ai-agent:%s] 群聊判断: score=%.3f 门槛=%.2f", self.ai_id, score, float(self._proactive_config.get("group_min_score", 0.2)))
-        if not explicitly_addressed and score < float(self._proactive_config.get("group_min_score", 0.2)):
+        logger.info("[ai-agent:%s] 群聊判断: score=%.3f 门槛=%.2f", self.ai_id, score, float(self._proactive_config["group_min_score"]))
+        if not explicitly_addressed and score < float(self._proactive_config["group_min_score"]):
             return False
         if explicitly_addressed:
-            session_state = "对方在当前消息中明确 @ 了你"
+            session_state = self.prompt_assembler.template("group-join-session-addressed")
         else:
-            session_state = "已经在这个群的当前聊天中" if session.active else "尚未加入当前群聊会话"
+            session_state = self.prompt_assembler.template(
+                "group-join-session-active" if session.active else "group-join-session-inactive"
+            )
         context = PromptContext(
             scene="group-join",
-            user_input=(
-                "对方明确 @ 了你。判断这条消息此刻是否适合回应。"
+            user_input=self.prompt_assembler.template(
+                "group-join-addressed-input"
                 if explicitly_addressed
-                else "判断此刻是否适合参与群聊。"
+                else "group-join-input"
             ),
             recent_messages=tuple(f"{role}: {content}" for role, content in recent),
-            relationship_summary=(
-                f"群关系：熟悉度 {float(relationship.get('familiarity', 0.0)):.2f}，"
-                f"归属感 {float(relationship.get('belonging', 0.0)):.2f}，"
-                f"好感 {float(relationship.get('affinity', 0.0)):.2f}，"
-                f"活动意愿 {float(relationship.get('activity_willingness', 0.0)):.2f}；"
-                f"综合参与度 {score:.2f}。当前状态：{session_state}。"
+            relationship_summary=self.prompt_assembler.render(
+                "group-join-relationship",
+                familiarity=f"{float(relationship.get('familiarity', 0.0)):.2f}",
+                belonging=f"{float(relationship.get('belonging', 0.0)):.2f}",
+                affinity=f"{float(relationship.get('affinity', 0.0)):.2f}",
+                activity_willingness=f"{float(relationship.get('activity_willingness', 0.0)):.2f}",
+                score=f"{score:.2f}",
+                session_state=session_state,
             ),
-            scene_state=(
-                (
-                    "明确 @ 已绕过潜水、关系门槛、普通冷却和主动作息限制，但不代表必须发送。"
-                    "结合消息与上下文判断是否确实适合接话；适合则 participate=true，不适合则 false。"
-                )
+            scene_state=self.prompt_assembler.template(
+                "group-join-addressed-state"
                 if explicitly_addressed
-                else (
-                    "像真人一样判断：未加入时，对话已形成且有自然切入点就加入，不必刻意等待；"
-                    "已加入时，对能回应、能推进话题或与你有关的消息积极回复。"
-                    "融入群聊比保持沉默更重要，只要不刷屏即可。"
-                )
+                else "group-join-state"
             ),
-            output_protocol='只输出 JSON 对象：{"participate": true, "reason": "简短原因"}。',
+            output_protocol=self.prompt_assembler.template("participation-output"),
         )
         try:
             messages = [
@@ -359,7 +380,7 @@ class AIRuntime:
             return False
 
     async def _compensation_loop(self) -> None:
-        interval = int(self.gcfg.get("social", "compensate_interval_sec", 600))
+        interval = int(self.gcfg.get("social", "compensate_interval_sec"))
         while True:
             await asyncio.sleep(interval)
             try:
@@ -373,14 +394,15 @@ class AIRuntime:
 
     async def _compensate(self, chat_key: str, window) -> None:
         chat_id = chat_key.split(":", 1)[1]
-        recent = "\n".join(f"{role}: {content}" for role, content in list(window)[-6:])
+        history_limit = int(self.gcfg.get("social", "compensation_history_messages"))
+        recent = "\n".join(f"{role}: {content}" for role, content in list(window)[-history_limit:])
         context = PromptContext(
             scene="social-compensation",
-            user_input="请补回最后一条尚未回复的私聊消息。",
+            user_input=self.prompt_assembler.template("social-compensation-input"),
             recent_messages=(recent,),
-            scene_state="这是被动私聊补偿，24 小时均应回复，不受主动联系作息限制。",
+            scene_state=self.prompt_assembler.template("social-compensation-state"),
         )
-        reply = (await self._generate_plan(context, "嗯嗯，我在听～")).text
+        reply = (await self._generate_plan(context, self._fallbacks["response"])).text
         await self.bus.publish_json(
             "social.send.request",
             {"ai_id": self.ai_id, "account_id": self.primary_social_account_id, "channel": "qq", "chat": {"chat_id": chat_id, "chat_type": "private"}, "type": "text", "text": reply},
@@ -394,22 +416,34 @@ class AIRuntime:
         author_name = req.get("author_name", "朋友")
         context = PromptContext(
             scene="qzone-comment",
-            user_input=f"朋友{author_name}发了一条 QQ 空间动态：{feed_text}",
-            relationship_summary=f"动态作者：{author_name}",
-            scene_state="写一条一两句话、针对内容且像真人朋友的评论，不要官方客套。",
+            user_input=self.prompt_assembler.render(
+                "qzone-comment-input", author_name=author_name, feed_text=feed_text
+            ),
+            relationship_summary=self.prompt_assembler.render(
+                "qzone-comment-relationship", author_name=author_name
+            ),
+            scene_state=self.prompt_assembler.template("qzone-comment-state"),
         )
         plan = await self._generate_plan(context)
-        return json.dumps({"comment": self._limit_sentences(plan.text, 2)}, ensure_ascii=False).encode()
+        return json.dumps(
+            {
+                "comment": self._limit_sentences(
+                    plan.text,
+                    int(self.gcfg.get("qq", "qzone_comment_max_sentences")),
+                )
+            },
+            ensure_ascii=False,
+        ).encode()
 
     async def tts_synthesize(self, text: str) -> dict | None:
         try:
             resp = await self.bus.request_json(
                 "tts.synthesize.request",
                 {"ai_id": self.ai_id, "text": text},
-                timeout=30.0,
+                timeout=float(self._timeouts["tts_request_sec"]),
             )
             if resp.get("ok"):
-                return {"audio_path": resp["audio_path"], "duration_sec": resp.get("duration_sec", 3)}
+                return {"audio_path": resp["audio_path"], "duration_sec": resp["duration_sec"]}
         except Exception as e:
             logger.warning("[ai-agent:%s] 语音合成失败: %s", self.ai_id, e)
         return None

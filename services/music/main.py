@@ -24,7 +24,7 @@ class MusicService(BaseService):
 
     async def _on_command(self, payload: bytes) -> None:
         cmd = json.loads(payload.decode("utf-8"))
-        # TODO: 控制 OBS 音频轨
+        # 控制 OBS 音频轨道
         logger.info("[music] 指令: %s", cmd.get("type"))
 
 

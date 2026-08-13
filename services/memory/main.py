@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 
 from shared.contracts.relationship import RelationshipCeilings, RelationshipPolicy
 from shared.infrastructure.agent_store import NacosAgentDefinitionStore
@@ -15,14 +16,12 @@ from shared.infrastructure.repositories import RelationshipRepository
 from shared.infrastructure.service import BaseService
 
 from services.memory.controllers.sticker_controller import StickerController
+from services.memory.memory_policy import MemoryPolicy
 from services.memory.repositories.memory_repo import MemoryRepo
 from services.memory.repositories.postgres_memory_repo import PostgresMemoryRepo
 from services.memory.services.sticker_service import StickerService
 
 logger = logging.getLogger("ailove.memory")
-
-DEFAULT_CLEANUP_INTERVAL_SEC = 86400
-
 
 class MemoryService(BaseService):
     name = "memory"
@@ -30,6 +29,7 @@ class MemoryService(BaseService):
     async def on_start(self) -> None:
         self._gcfg = GlobalConfig(provider=self.cfg.nacos)
         await self._gcfg.load()
+        self._memory_config = self._gcfg.section("memory")
 
         self._sticker_svc = StickerService(self._gcfg)
         self._db = None
@@ -38,10 +38,20 @@ class MemoryService(BaseService):
         if os.environ.get("AILOVE_DATABASE_URL"):
             self._db = Database()
             await self._db.connect()
-            self._memory_repo = PostgresMemoryRepo(self._db)
+            self._memory_repo = PostgresMemoryRepo(
+                self._db,
+                MemoryPolicy(
+                    half_life_sec=float(self._memory_config["half_life_sec"]),
+                    dormant_threshold=float(self._memory_config["dormant_threshold"]),
+                    delete_threshold=float(self._memory_config["delete_threshold"]),
+                    recall_boost=float(self._memory_config["recall_boost"]),
+                    retrieval_weights=dict(self._memory_config["retrieval_weights"]),
+                ),
+                self._memory_config,
+            )
             self._relationship_repo = RelationshipRepository(self._db)
         else:
-            self._memory_repo = MemoryRepo()
+            self._memory_repo = MemoryRepo(str(self._memory_config["data_dir"]))
 
         self._sticker_ctrl = StickerController(self._sticker_svc)
         self._controllers = {"sticker": self._sticker_ctrl}
@@ -76,10 +86,13 @@ class MemoryService(BaseService):
 
     async def _cleanup_loop(self) -> None:
         while True:
-            await asyncio.sleep(DEFAULT_CLEANUP_INTERVAL_SEC)
+            await asyncio.sleep(float(self._memory_config["cleanup_interval_sec"]))
             removed = self._sticker_svc.cleanup()
             memory_result = await self._memory_repo.cleanup()
-            files = self._cleanup_old_files("/app/data", max_age_days=7)
+            files = self._cleanup_old_files(
+                str(self._memory_config["data_dir"]),
+                float(self._memory_config["file_max_age_sec"]),
+            )
             logger.info(
                 "[memory] 每日清理（表情 %s 个，记忆休眠 %s 个，记忆删除 %s 个，过期文件 %s 个）",
                 removed,
@@ -88,8 +101,8 @@ class MemoryService(BaseService):
                 files,
             )
 
-    def _cleanup_old_files(self, data_dir: str, max_age_days: int = 7) -> int:
-        cutoff = time.time() - max_age_days * 86400
+    def _cleanup_old_files(self, data_dir: str, max_age_sec: float) -> int:
+        cutoff = time.time() - max_age_sec
         removed = 0
         for root, _, files in os.walk(data_dir):
             for f in files:
@@ -109,12 +122,13 @@ class MemoryService(BaseService):
         ai_id = req.get("ai_id", "")
         entries = req.get("entries", [])
         for e in entries:
-            e.setdefault("scope", "private")
-            e.setdefault("memory_type", e.get("kind", "observation"))
-            e.setdefault("importance", 0.5)
-            e.setdefault("strength", 0.6)
-            e.setdefault("confidence", 0.7)
-            e.setdefault("consolidated", True)
+            e.setdefault("scope", self._memory_config["default_scope"])
+            e.setdefault("memory_type", e.get("kind", self._memory_config["default_type"]))
+            e.setdefault("importance", self._memory_config["default_importance"])
+            e.setdefault("strength", self._memory_config["default_strength"])
+            e.setdefault("confidence", self._memory_config["default_confidence"])
+            e.setdefault("emotion_intensity", self._memory_config["default_emotion_intensity"])
+            e.setdefault("consolidated", self._memory_config["default_consolidated"])
         await self._memory_repo.write(ai_id, entries)
         logger.info("[memory] 写入 %s 条: ai=%s", len(entries), ai_id)
         return json.dumps({"ok": True}).encode()
@@ -124,7 +138,7 @@ class MemoryService(BaseService):
         results = await self._memory_repo.search(
             req.get("ai_id", ""),
             req.get("query", ""),
-            req.get("top_k", 5),
+            int(req.get("top_k", self._memory_config["search_top_k"])),
             person_id=req.get("person_id", ""),
             session_id=req.get("session_id", ""),
             active_session_actors=req.get("active_session_actors", []),
@@ -139,23 +153,24 @@ class MemoryService(BaseService):
 
     async def _relationship_policy(self, ai_id: str) -> RelationshipPolicy:
         raw = (await self._definitions.load(ai_id)).relationship_policy
-        person_whitelist = {str(item) for item in raw.get("person_ceiling_whitelist", [])}
-        if raw.get("inherit_qq_whitelist_ceiling", False):
-            qq_whitelist = self._gcfg.get("qq", "whitelist", [])
+        person_whitelist = {str(item) for item in raw["person_ceiling_whitelist"]}
+        if raw["inherit_qq_whitelist_ceiling"]:
+            qq_whitelist = self._gcfg.get("qq", "whitelist")
             if isinstance(qq_whitelist, dict):
-                qq_whitelist = qq_whitelist.get("user_ids", [])
+                qq_whitelist = qq_whitelist["user_ids"]
             person_whitelist.update(str(item) for item in qq_whitelist)
         ceilings = RelationshipCeilings(
-            default=float(raw.get("default_ceiling", 0.7)),
+            default=float(raw["default_ceiling"]),
+            whitelist=float(raw["whitelist_ceiling"]),
             person_whitelist=frozenset(person_whitelist),
-            group_whitelist=frozenset(str(item) for item in raw.get("group_ceiling_whitelist", [])),
+            group_whitelist=frozenset(str(item) for item in raw["group_ceiling_whitelist"]),
         )
-        return RelationshipPolicy(ceilings)
+        return RelationshipPolicy(ceilings, raw)
 
     def _is_priority_user(self, platform_user_id: str) -> bool:
-        whitelist = self._gcfg.get("qq", "whitelist", [])
+        whitelist = self._gcfg.get("qq", "whitelist")
         if isinstance(whitelist, dict):
-            whitelist = whitelist.get("user_ids", [])
+            whitelist = whitelist["user_ids"]
         return str(platform_user_id) in {str(item) for item in whitelist}
 
     async def _on_relationship_chat(self, payload: bytes) -> bytes:
@@ -194,7 +209,10 @@ class MemoryService(BaseService):
     async def _on_relationship_summary(self, payload: bytes) -> bytes:
         req = json.loads(payload)
         if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
-            return json.dumps({"summary": "尚未形成明确关系"}, ensure_ascii=False).encode()
+            return json.dumps(
+                {"summary": self._gcfg.get("fallbacks", "relationship_unknown")},
+                ensure_ascii=False,
+            ).encode()
         ai_id = str(req["ai_id"])
         relationship = await self._relationship_repo.get_person(ai_id, str(req["person_id"]))
         summary = (await self._relationship_policy(ai_id)).summarize_person(relationship)
@@ -205,9 +223,9 @@ class MemoryService(BaseService):
         if self._relationship_repo is None:
             return json.dumps({"relationships": []}).encode()
         relationships = await self._relationship_repo.list_people(str(req.get("ai_id", "")))
-        whitelist = self._gcfg.get("qq", "whitelist", [])
+        whitelist = self._gcfg.get("qq", "whitelist")
         if isinstance(whitelist, dict):
-            whitelist = whitelist.get("user_ids", [])
+            whitelist = whitelist["user_ids"]
         priority_user_ids = {str(item) for item in whitelist}
         for relationship in relationships:
             relationship["priority_contact"] = str(relationship.get("user_id", "")) in priority_user_ids

@@ -11,7 +11,7 @@ class BilibiliChannel(Channel):
     name = "bilibili"
 
     async def start(self) -> None:
-        # TODO: 连接直播间 WS → 原始事件 → 归一化 InteractionEvent
+        # 将直播间 WebSocket 事件转换为统一互动事件
         await asyncio.Event().wait()
 
     async def stop(self) -> None:

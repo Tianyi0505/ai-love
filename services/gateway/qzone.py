@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import random
+from string import Template
 
 import httpx
 
@@ -20,49 +21,50 @@ class QZoneService:
         self,
         napcat_http_url: str,
         gcfg,
-        qq_uin: str = "",
-        relationship_provider=None,
-        comment_generator=None,
-        proactive_allowed=None,
-        image_describer=None,
+        qq_uin: str,
+        relationship_provider,
+        comment_generator,
+        proactive_allowed,
+        image_describer,
+        timeouts: dict,
     ) -> None:
         self._napcat_url = napcat_http_url
         self._gcfg = gcfg
         self._relationship_provider = relationship_provider
         self._comment_generator = comment_generator
-        self._proactive_allowed = proactive_allowed or (lambda: False)
+        self._proactive_allowed = proactive_allowed
         self._image_describer = image_describer
-        self._commented = CommentedRepo()
+        self._commented = CommentedRepo(str(gcfg.get("qq", "qzone_data_dir")))
         self._api = None
         self._uin = qq_uin
+        self._timeouts = timeouts
 
     async def _ensure_api(self) -> None:
         if self._api is not None:
             return
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=float(self._timeouts["qzone_http_sec"])) as client:
             resp = await client.post(f"{self._napcat_url}/get_cookies", json={"domain": "user.qzone.qq.com"})
             cookies = resp.json().get("data", {}).get("cookies", "")
         if not cookies:
             raise RuntimeError("拿不到 QQ 空间 cookie")
-        self._api = QZoneAPI(cookies, uin=self._uin)
+        self._api = QZoneAPI(
+            cookies,
+            timeout_sec=float(self._timeouts["qzone_api_sec"]),
+            uin=self._uin,
+        )
 
     async def _relationship(self, user_id: str) -> dict:
-        if self._relationship_provider is None:
-            return {}
         return await self._relationship_provider(user_id)
 
-    @staticmethod
-    def _action_probabilities(relationship: dict) -> tuple[float, float]:
+    def _action_probabilities(self, relationship: dict) -> tuple[float, float]:
         top_familiarity = max(
             0.0,
             min(1.0, float(relationship.get("top_familiarity", 0.0) or 0.0)),
         )
         familiarity = max(0.0, min(1.0, float(relationship.get("familiarity", 0.0))))
-        affinity = max(-1.0, min(1.0, float(relationship.get("affinity", 0.0))))
-        importance = max(0.0, min(1.0, float(relationship.get("importance", 0.0))))
-        positive_affinity = max(0.0, affinity)
         if top_familiarity > 0 and familiarity > 0:
-            normalized = (familiarity / top_familiarity) ** 2
+            exponent = float(self._gcfg.get("qq", "qzone_relationship_curve_exponent"))
+            normalized = (familiarity / top_familiarity) ** exponent
         else:
             normalized = familiarity
         like_probability = min(1.0, normalized)
@@ -71,7 +73,11 @@ class QZoneService:
 
     async def _reply_if_replied(self, tid: str, owner_uin: str, feed: dict, author_name: str) -> None:
         try:
-            comments = await self._api.list_comments(tid, owner_uin)
+            comments = await self._api.list_comments(
+                tid,
+                owner_uin,
+                num=int(self._gcfg.get("qq", "qzone_comments_fetch_limit")),
+            )
             for c in comments:
                 reply_to = c.get("replyUin", "") or c.get("replyUin2", "") or ""
                 if reply_to == self._uin:
@@ -90,34 +96,50 @@ class QZoneService:
         picture_descriptions = await self._describe_pictures(picture_urls)
         if picture_descriptions:
             pic_desc = "\n".join(
-                f"[动态图片{index}：{description}]"
+                Template(str(self._gcfg.get("qq", "qzone_picture_template"))).substitute(
+                    index=index, description=description
+                )
                 for index, description in enumerate(picture_descriptions, start=1)
             )
         else:
-            pic_desc = f"[附 {len(picture_urls)} 张图片，暂时无法识别]" if picture_urls else ""
+            pic_desc = (
+                Template(str(self._gcfg.get("qq", "qzone_picture_unavailable_template"))).substitute(
+                    count=len(picture_urls)
+                )
+                if picture_urls
+                else ""
+            )
         comments = feed.get("commentlist") or []
         comment_summary = ""
         if comments:
-            names = [c.get("name") or c.get("nickname") or "朋友" for c in comments[:3]]
-            comment_summary = f"，已有评论: {', '.join(names)}"
+            limit = int(self._gcfg.get("qq", "qzone_comments_context_limit"))
+            person_name = str(self._gcfg.get("fallbacks", "person_name"))
+            names = [c.get("name") or c.get("nickname") or person_name for c in comments[:limit]]
+            comment_summary = Template(str(self._gcfg.get("qq", "qzone_existing_comments_template"))).substitute(
+                names=", ".join(names)
+            )
         reply_context = feed.get("reply_context", "")
-        reply_summary = f"\n对方刚回复：{reply_context}" if reply_context else ""
-        feed_text = f"{content}\n{pic_desc}{comment_summary}{reply_summary}".strip() or "（无文本）"
+        reply_summary = (
+            Template(str(self._gcfg.get("qq", "qzone_reply_template"))).substitute(
+                content=reply_context
+            )
+            if reply_context
+            else ""
+        )
+        feed_text = Template(str(self._gcfg.get("qq", "qzone_feed_template"))).substitute(
+            content=content,
+            pictures=pic_desc,
+            comments=comment_summary,
+            reply=reply_summary,
+        ).strip() or str(self._gcfg.get("fallbacks", "qzone_empty_feed"))
         try:
-            if self._comment_generator is not None:
-                resp = await self._comment_generator(feed_text, author_name)
-                if resp:
-                    return resp
+            resp = await self._comment_generator(feed_text, author_name)
+            if resp:
+                return resp
         except Exception as e:
             logger.warning("[qzone] 智能评论生成失败: %s", e)
-        templates = [
-            f"看到{author_name}的动态啦，支持支持～",
-            "哇，这个有意思！",
-            "哈哈哈太真实了",
-            "今天也要开心呀！",
-            "来啦来啦，踩踩～",
-        ]
-        return random.choice(templates)
+        templates = self._gcfg.get("qq", "qzone_fallback_comments")
+        return Template(str(random.choice(templates))).substitute(author_name=author_name)
 
     @staticmethod
     def _picture_urls(feed: dict) -> list[str]:
@@ -144,16 +166,16 @@ class QZoneService:
         return urls
 
     async def _describe_pictures(self, urls: list[str]) -> list[str]:
-        if not urls or self._image_describer is None:
+        if not urls:
             return []
 
         async def describe(url: str) -> str:
             try:
                 result = await self._image_describer.describe(url)
-                return str(result.description or "图片内容无法识别")
+                return str(result.description or self._gcfg.get("fallbacks", "image_unreadable"))
             except Exception as exc:
                 logger.warning("[qzone] 动态图片理解失败: %s", exc)
-                return "图片内容无法识别"
+                return str(self._gcfg.get("fallbacks", "image_unreadable"))
 
         return await asyncio.gather(*(describe(url) for url in urls))
 
@@ -169,7 +191,7 @@ class QZoneService:
             stats["skipped"] = True
             return stats
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=float(self._timeouts["qzone_http_sec"])) as client:
                 resp = await client.post(f"{self._napcat_url}/get_friend_list", json={})
                 friends = resp.json().get("data", [])
         except Exception as e:
@@ -181,11 +203,14 @@ class QZoneService:
             if not friend_uin:
                 continue
             try:
-                friend_feeds = await self._api.list_feeds_by_uin(friend_uin, num=10)
+                friend_feeds = await self._api.list_feeds_by_uin(
+                    friend_uin,
+                    num=int(self._gcfg.get("qq", "qzone_feeds_per_friend")),
+                )
                 feeds.extend(friend_feeds)
             except Exception as e:
                 logger.warning("[qzone] 查好友 %s 动态失败: %s", friend_uin, e)
-            await asyncio.sleep(2)
+            await asyncio.sleep(float(self._gcfg.get("qq", "qzone_friend_scan_delay_sec")))
         stats["scanned"] = len(feeds)
         for feed in feeds:
             try:
@@ -193,7 +218,11 @@ class QZoneService:
                 if not tid:
                     continue
                 author_id = str(feed.get("uin", ""))
-                author_name = feed.get("name") or feed.get("nickname") or "朋友"
+                author_name = (
+                    feed.get("name")
+                    or feed.get("nickname")
+                    or self._gcfg.get("fallbacks", "person_name")
+                )
                 owner_uin = author_id or self._uin
                 if self._commented.has(tid):
                     await self._reply_if_replied(tid, owner_uin, feed, author_name)
@@ -205,14 +234,14 @@ class QZoneService:
                     ok = await self._api.like(tid, owner_uin=owner_uin, abstime=abstime)
                     if ok:
                         stats["liked"] += 1
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(float(self._gcfg.get("qq", "qzone_action_delay_sec")))
                 if random.random() < comment_prob:
                     text = await self._comment_text(feed, author_name)
                     ok = await self._api.comment(tid, text, owner_uin=owner_uin)
                     if ok:
                         stats["commented"] += 1
                         self._commented.add(tid)
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(float(self._gcfg.get("qq", "qzone_action_delay_sec")))
                 self._commented.add(tid)
             except Exception as e:
                 stats["errors"] += 1
@@ -221,7 +250,7 @@ class QZoneService:
         return stats
 
     async def loop(self) -> None:
-        interval = int(self._gcfg.get("qq", "space_interval_sec", 3600))
+        interval = int(self._gcfg.get("qq", "space_interval_sec"))
         while True:
             try:
                 stats = await self.run_once()

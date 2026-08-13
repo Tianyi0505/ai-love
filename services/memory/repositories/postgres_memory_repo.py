@@ -13,14 +13,15 @@ from services.memory.memory_policy import (
 
 
 class PostgresMemoryRepo:
-    def __init__(self, db, policy: MemoryPolicy | None = None) -> None:
+    def __init__(self, db, policy: MemoryPolicy, config: dict) -> None:
         self._db = db
-        self._policy = policy or MemoryPolicy()
+        self._policy = policy
+        self._config = config
 
     async def write(self, ai_id: str, entries: list[dict]) -> None:
         for entry in entries:
-            scope = self._enum(MemoryScope, entry.get("scope"), MemoryScope.PRIVATE)
-            memory_type = self._enum(MemoryType, entry.get("memory_type") or entry.get("kind"), MemoryType.OBSERVATION)
+            scope = MemoryScope(entry["scope"])
+            memory_type = MemoryType(entry["memory_type"])
             await self._db.execute(
                 "INSERT INTO memories("
                 "memory_id, owner_ai_id, person_id, session_id, scope, memory_type, content, "
@@ -34,14 +35,14 @@ class PostgresMemoryRepo:
                 scope.value,
                 memory_type.value,
                 str(entry.get("content", "")),
-                self._unit(entry.get("importance", 0.5)),
-                self._unit(entry.get("strength", 0.6)),
-                self._unit(entry.get("confidence", 0.7)),
-                self._unit(entry.get("emotion_intensity", 0.0)),
+                self._unit(entry["importance"]),
+                self._unit(entry["strength"]),
+                self._unit(entry["confidence"]),
+                self._unit(entry["emotion_intensity"]),
                 bool(entry.get("protected", memory_type == MemoryType.COMMITMENT)),
                 __import__("json").dumps(entry.get("source", {}), ensure_ascii=False),
                 list(entry.get("shared_with", [])),
-                bool(entry.get("consolidated", True)),
+                bool(entry["consolidated"]),
                 int(entry.get("reference_count", 0)),
             )
 
@@ -49,7 +50,7 @@ class PostgresMemoryRepo:
         self,
         ai_id: str,
         query: str,
-        top_k: int = 5,
+        top_k: int,
         person_id: str = "",
         session_id: str = "",
         active_session_actors: list[str] | None = None,
@@ -61,9 +62,10 @@ class PostgresMemoryRepo:
             "extract(epoch from last_recalled_at) AS last_recalled_at, recall_count "
             "FROM memories WHERE dormant=false AND (owner_ai_id=$1 OR $1=ANY(shared_with) OR scope='session') "
             "AND ($2::uuid IS NULL OR person_id IS NULL OR person_id=$2::uuid) "
-            "ORDER BY last_recalled_at DESC NULLS LAST, created_at DESC LIMIT 100",
+            "ORDER BY last_recalled_at DESC NULLS LAST, created_at DESC LIMIT $3",
             ai_id,
             person_id or None,
+            int(self._config["database_candidate_limit"]),
         )
         context = MemoryAccessContext(ai_id, session_id, frozenset(active_session_actors or []))
         ranked = []
@@ -150,10 +152,9 @@ class PostgresMemoryRepo:
             recall_count=int(row["recall_count"]),
         )
 
-    @staticmethod
-    def _relevance(content: str, query: str) -> float:
+    def _relevance(self, content: str, query: str) -> float:
         if not query:
-            return 0.5
+            return float(self._config["empty_query_relevance"])
         content_chars = set(content.lower())
         query_chars = set(query.lower())
         if not query_chars:
@@ -166,10 +167,3 @@ class PostgresMemoryRepo:
         if number > 1:
             number /= 100.0
         return max(0.0, min(1.0, number))
-
-    @staticmethod
-    def _enum(enum_type, value, default):
-        try:
-            return enum_type(value)
-        except (ValueError, TypeError):
-            return default

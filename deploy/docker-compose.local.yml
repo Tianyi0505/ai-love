@@ -1,26 +1,23 @@
-# AI-Love 本地直播机配套（混合部署的本地半区）
-# 云服务器跑无头服务（Nacos/NATS/9服务），本地跑：
-#   avatar 前端壳（Live2D 渲染，OBS 浏览器源指向 http://localhost:8081/）
-#   GPT-SoVITS（音色合成）
-# 本地服务通过公网连云端 NATS（需配置公网 NATS 暴露或隧道）
+# 部署本地直播服务
 
 services:
   avatar:
     image: ailove/avatar
     container_name: ailove-avatar-local
     environment:
-      - AILOVE_NACOS_ADDRS=${AILOVE_NACOS_ADDRS:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?请在 deploy/.env 中配置}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?请在 deploy/.env 中配置}
-      - AILOVE_BUS_URL=${AILOVE_BUS_URL:?请在 deploy/.env 中配置}
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?请在 deploy/.env 中配置}
+      - AILOVE_NACOS_ADDRS=${AILOVE_NACOS_ADDRS:?}
+      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
+      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
+      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
+      - AILOVE_BUS_URL=${AILOVE_BUS_URL:?}
+      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
     ports:
       - "8081:8081"
     restart: unless-stopped
     networks: [ailove]
 
   gpt-sovits:
-    image: ghcr.io/rvc-boss/gpt-sovits:latest   # 或本地构建
+    image: ghcr.io/rvc-boss/gpt-sovits:latest
     container_name: ailove-gpt-sovits
     environment:
       - GPT_SOVITS_URL=http://127.0.0.1:9880
