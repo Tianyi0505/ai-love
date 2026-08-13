@@ -4,25 +4,15 @@ from __future__ import annotations
 import asyncio
 import json
 
-from abc import ABC, abstractmethod
-from typing import Awaitable, Callable
+from typing import Callable
 
+from ai.asr.provider import ASRProvider
 from shared.contracts.social import ContentType, SocialMessage
-from shared.infrastructure.registry import Registry
-
-asr_registry = Registry("asr")
-
-
-class ASREngine(ABC):
-
-    @abstractmethod
-    async def transcribe(self, audio_url: str) -> str:
-        pass
 
 
 class MessageUnderstanding:
 
-    def __init__(self, prompts, fallbacks: dict, asr: ASREngine | None = None, image_describer=None) -> None:
+    def __init__(self, prompts, fallbacks: dict, asr: ASRProvider | None = None, image_describer=None) -> None:
         self._prompts = prompts
         self._fallbacks = fallbacks
         self._asr = asr
@@ -125,8 +115,3 @@ class MessageUnderstanding:
             parts.extend(await understand_images())
 
         return self._prompts.template("message-separator").join(p for p in parts if p)
-
-
-def create_asr(kind: str, **opts) -> ASREngine:
-    cls = asr_registry.get(kind)
-    return cls(**opts)
