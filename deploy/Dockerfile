@@ -38,14 +38,11 @@ COPY extensions/host/ ./extensions/host/
 COPY extensions/__init__.py ./extensions/__init__.py
 CMD ["python", "-m", "extensions.host.main"]
 
-FROM base AS mcp-weather
-COPY services/mcp_weather/ ./services/mcp_weather/
-CMD ["python", "-m", "services.mcp_weather.main"]
+FROM base AS mcp
+COPY extensions/mcp/ ./extensions/mcp/
+COPY extensions/__init__.py ./extensions/__init__.py
+CMD ["python", "-m", "extensions.mcp.main"]
 
 FROM base AS memory
 COPY memory/ ./memory/
 CMD ["python", "-m", "memory.main"]
-
-FROM base AS music
-COPY services/music/ ./services/music/
-CMD ["python", "-m", "services.music.main"]
