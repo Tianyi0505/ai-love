@@ -23,7 +23,6 @@ async def handle_live(service, payload: bytes) -> None:
         f"{role}: {content}"
         for role, content in list(service.conversation.window("live", str(evt.actor.uid)))[-(history_limit + 1):-1]
     )
-    actors = "、".join(evt.context_metadata.get("active_actors", []))
     prompt_context = PromptContext(
         scene="live",
         user_input=service.prompt_assembler.render(
@@ -36,9 +35,6 @@ async def handle_live(service, payload: bytes) -> None:
             "live-relationship", actor_name=evt.actor.name
         ),
         recent_messages=recent,
-        director_instruction=service.prompt_assembler.render(
-            "live-director", actors=actors or service.persona.name
-        ),
     )
     history_msgs = [
         ChatMessage(role="system", content=service.prompt_assembler.build_system_prompt(prompt_context)),

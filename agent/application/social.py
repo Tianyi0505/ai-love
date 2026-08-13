@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -104,7 +105,13 @@ async def handle_social(service, payload: bytes) -> None:
             relationship_summary = str(relation.get("summary", relationship_summary))
         except Exception:
             pass
-    memories = await service.memory.search(query, person_id=speaker["person_id"])
+    memories, memory_context = await asyncio.gather(
+        service.memory.search(query, person_id=speaker["person_id"]),
+        service.memory.context(
+            person_id=speaker["person_id"],
+            conversation_id=str(msg.meta.get("conversation_id") or ""),
+        ),
+    )
     history_limit = int(service.gcfg.get("social", "prompt_history_messages"))
     recent = tuple(
         f"{role}: {content}"
@@ -115,6 +122,9 @@ async def handle_social(service, payload: bytes) -> None:
         user_input=query,
         relationship_summary=f"{sender_identity}{relationship_summary}",
         memories=tuple(memories),
+        self_document=str(memory_context.get("self_markdown") or ""),
+        person_document=str(memory_context.get("person_markdown") or ""),
+        conversation_summary=str(memory_context.get("conversation_summary") or ""),
         recent_messages=recent,
     )
     history_msgs = [

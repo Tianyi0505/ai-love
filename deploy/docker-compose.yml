@@ -15,10 +15,12 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: ailove-nats
-    command: ["-js", "-m", "8222"]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
     ports:
       - "4222:4222"
       - "8222:8222"
+    volumes:
+      - nats-data:/data
     networks: [ailove]
 
   postgres:
@@ -161,6 +163,8 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile, target: memory }
     container_name: ailove-memory
     environment:
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?}
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -182,3 +186,4 @@ networks:
 
 volumes:
   postgres-data:
+  nats-data:

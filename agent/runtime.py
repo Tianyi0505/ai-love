@@ -21,12 +21,12 @@ from agent.application.social import handle_social
 from ai.llm.providers import anthropic_gw, deepseek, ollama
 from ai.llm.factory import create_llm
 from ai.llm.types import ChatMessage
-from agent.application.memory_consolidation import MemoryConsolidator
 from agent.context.understanding import MessageUnderstanding
 from agent.persona.model import Persona
 from agent.generation.prompting import PromptAssembler, PromptContext
 from shared.contracts.agent import AgentDefinition
 from shared.contracts.events import TurnRequest
+from shared.contracts.social import SocialMessage
 from agent.generation.response import ResponsePlan
 from shared.infrastructure.global_config import GlobalConfig
 from ai.vision.factory import create_vision
@@ -96,10 +96,6 @@ class AIRuntime:
             self.gcfg.section("memory"),
             self._timeouts,
         )
-        self.memory_consolidator = MemoryConsolidator(
-            self.memory, self._llm, self.ai_id, self.gcfg, self.prompt_assembler
-        )
-
         self.join_checker = self._join_group_checker
         self.sessions = SessionManager(data_dir=f"/app/data/agents/{self.ai_id}")
 
@@ -115,9 +111,6 @@ class AIRuntime:
                 int(self._proactive_config["private_interval_sec"]),
                 float(self._proactive_config["min_weight"]),
             ))
-        self.spawn(
-            self.memory_consolidator.consolidate_loop(self.conversation.all_windows)
-        )
 
     @property
     def primary_social_account_id(self) -> str:
@@ -152,6 +145,15 @@ class AIRuntime:
         try:
             await handle_social(self, payload)
         finally:
+            try:
+                message = SocialMessage.from_dict(json.loads(payload))
+                await self.memory.activity(
+                    person_id=str(message.meta.get("person_id") or ""),
+                    conversation_id=str(message.meta.get("conversation_id") or ""),
+                    message_id=str(message.message_id or ""),
+                )
+            except Exception as exc:
+                logger.warning("[ai-agent:%s] 发布记忆活动失败: %s", self.ai_id, exc)
             self._in_flight -= 1
 
     async def handle_live(self, payload: bytes) -> None:
@@ -303,6 +305,7 @@ class AIRuntime:
         cooldown = int(self._proactive_config["private_cooldown_sec"])
         if not self.sessions.can_initiate(session_key, cooldown):
             return
+        memory_context = await self.memory.context(person_id=str(p.get("person_id") or ""))
         context = PromptContext(
             scene="proactive-private",
             user_input=self.prompt_assembler.render("proactive-private-input", name=name),
@@ -310,6 +313,8 @@ class AIRuntime:
                 "proactive-private-relationship", name=name, reason=reason
             ),
             scene_state=self.prompt_assembler.template("proactive-private-state"),
+            self_document=str(memory_context.get("self_markdown") or ""),
+            person_document=str(memory_context.get("person_markdown") or ""),
         )
         text = (await self._generate_plan(context)).text
         if not text:
@@ -344,6 +349,8 @@ class AIRuntime:
         if not recent:
             logger.info("[ai-agent:%s] 群聊跳过: 会话窗口空", self.ai_id)
             return False
+        current_role, current_message = recent[-1]
+        history = recent[:-1]
         relationship = await self._group_relationship(chat_id)
         score = self._group_participation_score(relationship)
         logger.info("[ai-agent:%s] 群聊判断: score=%.3f 门槛=%.2f", self.ai_id, score, float(self._proactive_config["group_min_score"]))
@@ -357,12 +364,13 @@ class AIRuntime:
             )
         context = PromptContext(
             scene="group-join",
-            user_input=self.prompt_assembler.template(
+            user_input=self.prompt_assembler.render(
                 "group-join-addressed-input"
                 if explicitly_addressed
-                else "group-join-input"
+                else "group-join-input",
+                current_message=f"{current_role}: {current_message}",
             ),
-            recent_messages=tuple(f"{role}: {content}" for role, content in recent),
+            recent_messages=tuple(f"{role}: {content}" for role, content in history),
             relationship_summary=self.prompt_assembler.render(
                 "group-join-relationship",
                 familiarity=f"{float(relationship.get('familiarity', 0.0)):.2f}",
@@ -408,11 +416,17 @@ class AIRuntime:
     async def _compensate(self, chat_key: str, window) -> None:
         chat_id = chat_key.split(":", 1)[1]
         history_limit = int(self.gcfg.get("social", "compensation_history_messages"))
-        recent = "\n".join(f"{role}: {content}" for role, content in list(window)[-history_limit:])
+        recent = list(window)[-history_limit:]
+        current_role, current_message = recent[-1]
         context = PromptContext(
             scene="social-compensation",
-            user_input=self.prompt_assembler.template("social-compensation-input"),
-            recent_messages=(recent,),
+            user_input=self.prompt_assembler.render(
+                "social-compensation-input",
+                current_message=f"{current_role}: {current_message}",
+            ),
+            recent_messages=tuple(
+                f"{role}: {content}" for role, content in recent[:-1]
+            ),
             scene_state=self.prompt_assembler.template("social-compensation-state"),
         )
         reply = (await self._generate_plan(context, self._fallbacks["response"])).text

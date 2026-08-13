@@ -7,6 +7,7 @@ import logging
 import os
 import time
 
+from shared.contracts.memory import MemoryActivity
 from shared.contracts.relationship import RelationshipCeilings, RelationshipPolicy
 from shared.infrastructure.agent_store import NacosAgentDefinitionStore
 from shared.infrastructure.config import ServiceConfig
@@ -17,9 +18,12 @@ from shared.infrastructure.service import BaseService
 
 from memory.controllers.sticker_controller import StickerController
 from memory.memory_policy import MemoryPolicy
+from memory.pipeline import MemoryModelPool, MemoryPipeline
+from memory.repositories.episode_repo import EpisodeMemoryRepository
 from memory.repositories.memory_repo import MemoryRepo
 from memory.repositories.postgres_memory_repo import PostgresMemoryRepo
 from memory.services.sticker_service import StickerService
+from memory.state import MemoryStateStore
 
 logger = logging.getLogger("ailove.memory")
 
@@ -33,6 +37,7 @@ class MemoryService(BaseService):
 
         self._sticker_svc = StickerService(self._gcfg)
         self._db = None
+        self._memory_activity_sub = None
         self._relationship_repo = None
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
         if os.environ.get("AILOVE_DATABASE_URL"):
@@ -50,6 +55,11 @@ class MemoryService(BaseService):
                 self._memory_config,
             )
             self._relationship_repo = RelationshipRepository(self._db)
+            episode_config = self._memory_config["episode"]
+            self._episode_repo = EpisodeMemoryRepository(
+                self._db,
+                history_episode_limit=int(episode_config["history_episode_limit"]),
+            )
         else:
             self._memory_repo = MemoryRepo(str(self._memory_config["data_dir"]))
 
@@ -63,6 +73,7 @@ class MemoryService(BaseService):
         await self.bus.reply("memory.search.request", self._on_search)
         await self.bus.reply("memory.procedural.request", self._on_procedural)
         await self.bus.reply("memory.batch.request", self._on_batch)
+        await self.bus.reply("memory.context.request", self._on_context)
         await self.bus.reply("relationship.gift.request", self._on_relationship_gift)
         await self.bus.reply("relationship.chat.request", self._on_relationship_chat)
         await self.bus.reply("relationship.summary.request", self._on_relationship_summary)
@@ -70,8 +81,36 @@ class MemoryService(BaseService):
         await self.bus.reply("relationship.group.request", self._on_group_relationship)
 
         self.spawn(self._cleanup_loop())
+        if self._db is not None:
+            await self.bus.ensure_stream("MEMORY_ACTIVITY_EVENTS", ["memory.activity"])
+            activity_kv = await self.bus.key_value("MEMORY_ACTIVITY")
+            pending_kv = await self.bus.key_value("MEMORY_PENDING")
+            self._memory_state = MemoryStateStore(
+                activity_kv,
+                pending_kv,
+                quiet_window_sec=float(self._memory_config["extraction"]["quiet_window_sec"]),
+                lease_sec=float(self._memory_config["worker_lease_sec"]),
+            )
+            self._memory_pipeline = MemoryPipeline(
+                repo=self._episode_repo,
+                state=self._memory_state,
+                models=MemoryModelPool(self._definitions, self._gcfg.section("llm")),
+                bus=self.bus,
+                config=self._memory_config,
+                spawn=self.spawn,
+            )
+            self._memory_activity_sub = await self.bus.subscribe_durable(
+                "memory.activity",
+                durable="memory-activity-v1",
+                queue="memory-activity-v1",
+                handler=self._on_memory_activity,
+            )
+            self.spawn(self._memory_pipeline.activity_loop())
+            self.spawn(self._memory_pipeline.consolidation_loop())
 
     async def on_stop(self) -> None:
+        if self._memory_activity_sub is not None:
+            self._memory_activity_sub.unsubscribe()
         self._sticker_svc.close()
         if self._db is not None:
             await self._db.close()
@@ -150,6 +189,25 @@ class MemoryService(BaseService):
 
     async def _on_batch(self, payload: bytes) -> bytes:
         return json.dumps({"semantic": [], "rules": [], "viewer_profile": None}).encode()
+
+    async def _on_context(self, payload: bytes) -> bytes:
+        req = json.loads(payload.decode("utf-8"))
+        if self._db is None:
+            return json.dumps(
+                {"self_markdown": "", "person_markdown": "", "conversation_summary": ""}
+            ).encode()
+        result = await self._episode_repo.context(
+            str(req.get("ai_id") or ""),
+            str(req.get("person_id") or ""),
+            str(req.get("conversation_id") or ""),
+        )
+        return json.dumps(result, ensure_ascii=False).encode("utf-8")
+
+    async def _on_memory_activity(self, payload: bytes) -> None:
+        activity = MemoryActivity.from_dict(json.loads(payload.decode("utf-8")))
+        if not activity.ai_id or not activity.person_id or not activity.conversation_id:
+            return
+        await self._memory_state.record_activity(activity)
 
     async def _relationship_policy(self, ai_id: str) -> RelationshipPolicy:
         raw = (await self._definitions.load(ai_id)).relationship_policy

@@ -24,9 +24,11 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: ailove-nats
-    command: ["-js", "-m", "8222", "-auth", "${AILOVE_BUS_TOKEN:?}"]
+    command: ["-js", "-sd", "/data", "-m", "8222", "-auth", "${AILOVE_BUS_TOKEN:?}"]
     ports:
       - "4222:4222"
+    volumes:
+      - nats-data:/data
     restart: unless-stopped
     networks: [ailove]
 
@@ -224,6 +226,8 @@ services:
     volumes:
       - /opt/ailove/data:/app/data
     environment:
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?}
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -246,6 +250,7 @@ services:
 volumes:
   nacos-data:
   postgres-data:
+  nats-data:
 
 networks:
   ailove:

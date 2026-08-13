@@ -17,6 +17,9 @@ require_env() {
   fi
 }
 
+AILOVE_AI_ID="${AILOVE_AI_ID:-ai_luoyu}"
+AILOVE_AGENT_CONFIG_FILE="${AILOVE_AGENT_CONFIG_FILE:-nacos/agent.${AILOVE_AI_ID}.yaml}"
+
 require_env \
   AILOVE_NACOS_ADDRS \
   AILOVE_NACOS_USER \
@@ -92,6 +95,7 @@ done
 # 发布 AI 定义
 publish_file "ailove.config" "${SCRIPT_DIR}/nacos/ailove.config.yaml"
 publish_file "agent.catalog" "${SCRIPT_DIR}/nacos/agent.catalog.yaml"
+publish_file "agent.default" "${SCRIPT_DIR}/nacos/agent.default.yaml"
 AGENT_CONFIG_PATH="${SCRIPT_DIR}/${AILOVE_AGENT_CONFIG_FILE}"
 require_file "$AGENT_CONFIG_PATH"
 publish_file "agent.${AILOVE_AI_ID}" "$AGENT_CONFIG_PATH"

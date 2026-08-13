@@ -51,8 +51,6 @@ social:
   send_timeout_sec: 15
   window_size: 20
   compensate_interval_sec: 600
-  consolidate_interval_sec: 600
-  consolidate_threshold: 0.6
   prompt_history_messages: 7
   live_prompt_history_messages: 7
   compensation_history_messages: 6
@@ -116,8 +114,26 @@ memory:
   default_confidence: 0.7
   default_emotion_intensity: 0.0
   default_consolidated: true
-  generic_person_terms: [该用户, 用户, 对方]
-  retained_window_messages: 2
+  worker_concurrency: 4
+  worker_lease_sec: 300
+  episode:
+    history_episode_limit: 12
+  extraction:
+    quiet_window_sec: 600
+    scheduler_poll_sec: 5
+    retry_delay_sec: 60
+  consolidation:
+    scheduler_poll_sec: 10
+    person:
+      min_episode_count: 3
+      min_atom_count: 10
+      token_threshold: 1500
+      max_wait_sec: 21600
+    self:
+      min_episode_count: 10
+      min_atom_count: 30
+      token_threshold: 4000
+      max_wait_sec: 86400
   search_top_k: 5
   database_candidate_limit: 100
   empty_query_relevance: 0.5
@@ -139,6 +155,7 @@ timeouts:
   relationship_group_sec: 2
   memory_write_sec: 5
   memory_search_sec: 2
+  memory_context_sec: 2
   tool_list_sec: 3
   tool_execute_sec: 30
   tts_request_sec: 30

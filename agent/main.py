@@ -72,6 +72,7 @@ class AIAgentService(BaseService):
         definitions = await self._active_definitions()
         for definition in definitions:
             await self.cfg.nacos.watch(f"agent.{definition.ai_id}", _reload)
+        await self.cfg.nacos.watch("agent.default", _reload)
         await self.cfg.nacos.watch("agent.catalog", _reload)
 
     async def _active_definitions(self):

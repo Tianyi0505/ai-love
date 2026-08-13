@@ -16,10 +16,15 @@ class NacosAgentDefinitionStore:
         self._provider = provider
 
     async def load(self, ai_id: str) -> AgentDefinition:
+        default_key = "agent.default"
         key = f"agent.{ai_id}"
-        data = await self._provider.get(key)
-        if not data:
+        defaults = await self._provider.get(default_key)
+        if not defaults:
+            raise AgentDefinitionError(f"Nacos 缺少通用 AI 配置: {default_key}")
+        overrides = await self._provider.get(key)
+        if not overrides:
             raise AgentDefinitionError(f"Nacos 缺少 AI 定义: {key}")
+        data = self._deep_merge(defaults, overrides)
         configured_ai_id = required_value(
             str(required_config(data, "ai_id", f"{key}.ai_id")),
             f"{key}.ai_id",
@@ -85,3 +90,13 @@ class NacosAgentDefinitionStore:
         if not isinstance(value, dict):
             raise AgentDefinitionError(f"{config_name} 必须是对象")
         return dict(value)
+
+    @classmethod
+    def _deep_merge(cls, defaults: dict, overrides: dict) -> dict:
+        merged = dict(defaults)
+        for key, value in overrides.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = cls._deep_merge(merged[key], value)
+            else:
+                merged[key] = value
+        return merged

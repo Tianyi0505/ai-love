@@ -13,12 +13,14 @@ class PromptContext:
     user_input: str
     relationship_summary: str = ""
     memories: tuple[str, ...] = ()
+    self_document: str = ""
+    person_document: str = ""
+    conversation_summary: str = ""
     growth_summary: str = ""
     global_state: str = ""
     scene_state: str = ""
     recent_messages: tuple[str, ...] = ()
     tool_summary: str = ""
-    director_instruction: str = ""
     output_protocol: str = ""
     extra: dict[str, str] = field(default_factory=dict)
 
@@ -41,12 +43,14 @@ class PromptAssembler:
             catchphrases=catchphrases,
             taboos=taboos,
             growth_summary=context.growth_summary,
+            self_document=context.self_document or context.growth_summary,
+            person_document=context.person_document,
+            conversation_summary=context.conversation_summary,
             relationship_summary=context.relationship_summary,
             memories="\n".join(f"- {item}" for item in context.memories),
             global_state=context.global_state,
             scene_state=context.scene_state,
             scene_template=self.template(context.scene),
-            director_instruction=context.director_instruction,
             tool_summary=context.tool_summary,
             output_protocol=context.output_protocol or self.template("response-plan"),
         ).strip()

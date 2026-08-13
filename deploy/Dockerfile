@@ -49,4 +49,6 @@ CMD ["python", "-m", "extensions.mcp.main"]
 
 FROM base AS memory
 COPY memory/ ./memory/
+COPY ai/__init__.py ./ai/__init__.py
+COPY ai/llm/ ./ai/llm/
 CMD ["python", "-m", "memory.main"]

@@ -86,19 +86,33 @@ shared/
 
 音乐能力目前保持原实现范围：MCP 工具负责接收并记录控制指令，实际播放器适配器仍待接入。
 
-NATS 是运行时事件总线。Nacos 是 `agent.catalog`、`agent.<ai_id>`、服务配置和全局配置的来源。
+NATS 是运行时事件总线。Nacos 是 `agent.catalog`、`agent.default`、`agent.<ai_id>`、服务配置和全局配置的来源。
+
+## 长期记忆链路
+
+消息处理阶段不调用记忆模型。Agent 在一个真实消息回合结束后只发布 `memory.activity`；Memory 服务用 JetStream 持久订阅活动事件，并在 JetStream KV 中保存每个 `ai_id + person_id` 的最新活动水位。
+
+联系人进入静默期后，Memory 从 PostgreSQL 的真实 `messages` 调用链读取尚未处理的完整会话片段，一次生成 Episode 摘要和原子记忆。原子记忆先写入 `memory_atoms`，随后按联系人或 AI 自身进入 KV 聚合批次；达到 Episode 数、Atom 数、估算 token 数或最长等待时间任一阈值后，才调用一次合并模型更新 `memory_documents`。
+
+```text
+message → memory.activity → quiet episode → memory_atoms
+        → pending batch → person/self consolidation → memory_documents
+```
+
+同一 owner 的提取与合并通过 KV revision 的 CAS claim 串行化，不同 owner 可以并行。`person` 和 `self` 使用独立阈值，`self` 的更新更保守。对话 Prompt 动态装配固定身份、自我 Markdown、联系人 Markdown、历史 Episode 摘要、近期原文和本轮消息。
 
 ## 配置
 
 ```text
 agent.catalog             # 声明 active_ai_ids
-agent.<ai_id>             # 配置身份、人格、Prompt、关系、作息、模型与工具
+agent.default             # 配置所有 AI 共用的 Prompt、关系、作息、模型与工具
+agent.<ai_id>             # 只配置身份、人格、声音与形象等个性化覆盖
 service.<service-name>    # 配置服务与平台 Adapter 参数
 director.<session_id>     # 配置直播场次
 ailove.config             # 配置全局运行参数与 QQ 白名单
 ```
 
-新增 AI：发布新的 `agent.<ai_id>`，把 ID 加入 `agent.catalog`，并在账号绑定表中建立显式绑定。无需新增容器或复制记忆实现。
+新增 AI：发布精简的 `agent.<ai_id>` 个性化覆盖，把 ID 加入 `agent.catalog`，并在账号绑定表中建立显式绑定。运行时会将它与 `agent.default` 递归合并，列表配置由个性化配置整体覆盖；无需复制通用 Prompt、关系策略或记忆实现。
 
 ## 当前约束
 
