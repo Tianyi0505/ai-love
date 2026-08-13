@@ -34,8 +34,9 @@ COPY services/stream/ ./services/stream/
 CMD ["python", "-m", "services.stream.main"]
 
 FROM base AS extension-host
-COPY services/extension_host/ ./services/extension_host/
-CMD ["python", "-m", "services.extension_host.main"]
+COPY extensions/host/ ./extensions/host/
+COPY extensions/__init__.py ./extensions/__init__.py
+CMD ["python", "-m", "extensions.host.main"]
 
 FROM base AS mcp-weather
 COPY services/mcp_weather/ ./services/mcp_weather/
