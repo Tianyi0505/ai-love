@@ -106,7 +106,7 @@ async def handle_social(service, payload: bytes) -> None:
             relationship_summary = str(relation.get("summary", relationship_summary))
         except Exception:
             pass
-    memories = await service.memory.vector_search(query, person_id=speaker["person_id"])
+    memories = await service.memory.search(query, person_id=speaker["person_id"])
     history_limit = int(service.gcfg.get("social", "prompt_history_messages"))
     recent = tuple(
         f"{role}: {content}"

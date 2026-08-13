@@ -6,19 +6,18 @@ import logging
 
 from ai.llm.types import ChatMessage, ChatRequest
 
-logger = logging.getLogger("ailove.ai-agent.memory")
+logger = logging.getLogger("ailove.agent.memory_consolidation")
 
 
-class MemoryManager:
+class MemoryConsolidator:
 
-    def __init__(self, bus, llm, ai_id: str, gcfg, prompts) -> None:
-        self._bus = bus
+    def __init__(self, memory, llm, ai_id: str, gcfg, prompts) -> None:
+        self._memory = memory
         self._llm = llm
         self._ai_id = ai_id
         self._gcfg = gcfg
         self._prompts = prompts
         self._config = gcfg.section("memory")
-        self._timeouts = gcfg.section("timeouts")
 
     async def consolidate_loop(self, windows_getter) -> None:
         interval = int(self._gcfg.get("social", "consolidate_interval_sec"))
@@ -104,11 +103,7 @@ class MemoryManager:
             logger.exception("[memory] 解析压缩结果失败")
         if entries:
             try:
-                await self._bus.request_json(
-                    "memory.write.request",
-                    {"ai_id": self._ai_id, "entries": entries},
-                    timeout=float(self._timeouts["memory_write_sec"]),
-                )
+                await self._memory.write(entries)
                 logger.info("记忆压缩写入 %s 条: %s", len(entries), text[:50])
             except Exception as e:
                 logger.warning("记忆压缩写入失败: %s", e)
@@ -153,20 +148,3 @@ class MemoryManager:
                 content = content.replace(labeled_name, name)
             content = content.replace(generic, name)
         return content
-
-    async def vector_search(self, query: str, top_k: int | None = None, person_id: str = "") -> list[str]:
-        limit = int(top_k if top_k is not None else self._config["search_top_k"])
-        try:
-            resp = await self._bus.request_json(
-                "memory.search.request",
-                {
-                    "ai_id": self._ai_id,
-                    "query": query,
-                    "top_k": limit,
-                    "person_id": person_id,
-                },
-                timeout=float(self._timeouts["memory_search_sec"]),
-            )
-            return [r.get("content", "") for r in resp.get("results", []) if r.get("content")]
-        except Exception:
-            return []

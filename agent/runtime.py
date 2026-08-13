@@ -10,6 +10,7 @@ from string import Template
 
 from agent.generation.agent_loop import AgentLoop
 from agent.clients.extensions import register_tools
+from agent.clients.memory import MemoryClient
 from agent.clients.sticker import StickerClient
 from agent.clients.tts import TTSClient
 from agent.context.conversation import ConversationContext
@@ -19,7 +20,7 @@ from agent.events.handlers import EventHandlers
 from ai.llm.providers import anthropic_gw, deepseek, ollama
 from ai.llm.factory import create_llm
 from ai.llm.types import ChatMessage
-from agent.memory.manager import MemoryManager
+from agent.application.memory_consolidation import MemoryConsolidator
 from agent.context.understanding import MessageUnderstanding
 from agent.persona.model import Persona
 from agent.generation.prompting import PromptAssembler, PromptContext
@@ -88,8 +89,14 @@ class AIRuntime:
         self.stickers = StickerClient(self.bus, self.ai_id, self._timeouts)
         self.tts = TTSClient(self.bus, self.ai_id, self._timeouts)
 
-        self.memory = MemoryManager(
-            self.bus, self._llm, self.ai_id, self.gcfg, self.prompt_assembler
+        self.memory = MemoryClient(
+            self.bus,
+            self.ai_id,
+            self.gcfg.section("memory"),
+            self._timeouts,
+        )
+        self.memory_consolidator = MemoryConsolidator(
+            self.memory, self._llm, self.ai_id, self.gcfg, self.prompt_assembler
         )
 
         self.handlers = EventHandlers(self)
@@ -109,7 +116,9 @@ class AIRuntime:
                 int(self._proactive_config["private_interval_sec"]),
                 float(self._proactive_config["min_weight"]),
             ))
-        self.spawn(self.memory.consolidate_loop(self.conversation.all_windows))
+        self.spawn(
+            self.memory_consolidator.consolidate_loop(self.conversation.all_windows)
+        )
 
     @property
     def primary_social_account_id(self) -> str:
