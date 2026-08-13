@@ -23,15 +23,8 @@ async def handle_social(service, payload: bytes) -> None:
     is_group = msg.chat.chat_type.value == "group"
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id
-    speaker = {
-        "person_id": str(msg.meta.get("person_id", "")),
-        "platform_user_id": str(msg.sender.user_id),
-        "display_name": str(sender_name),
-    }
-    attributed_query = (
-        f"[speaker] {json.dumps(speaker, ensure_ascii=False, separators=(',', ':'))}\n"
-        f"[message] {query}"
-    )
+    person_id = str(msg.meta.get("person_id", ""))
+    attributed_query = query
     if is_group:
         if query:
             service.conversation.add_user("group", msg.chat.chat_id, attributed_query)
@@ -91,7 +84,6 @@ async def handle_social(service, payload: bytes) -> None:
 
     sender_identity = service.prompt_assembler.render(
         "social-sender-identity",
-        user_id=json.dumps(str(msg.sender.user_id), ensure_ascii=False),
         sender_name=json.dumps(str(sender_name), ensure_ascii=False),
     )
     relationship_summary = service.prompt_assembler.template("unknown-relationship")
@@ -106,9 +98,9 @@ async def handle_social(service, payload: bytes) -> None:
         except Exception:
             pass
     memories, memory_context = await asyncio.gather(
-        service.memory.search(query, person_id=speaker["person_id"]),
+        service.memory.search(query, person_id=person_id),
         service.memory.context(
-            person_id=speaker["person_id"],
+            person_id=person_id,
             conversation_id=str(msg.meta.get("conversation_id") or ""),
         ),
     )

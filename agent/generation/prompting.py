@@ -17,8 +17,6 @@ class PromptContext:
     person_document: str = ""
     conversation_summary: str = ""
     growth_summary: str = ""
-    global_state: str = ""
-    scene_state: str = ""
     recent_messages: tuple[str, ...] = ()
     tool_summary: str = ""
     output_protocol: str = ""
@@ -34,22 +32,18 @@ class PromptAssembler:
         traits = "、".join(str(item) for item in personality["traits"])
         speaking_style = str(personality["speaking_style"])
         catchphrases = "、".join(str(item) for item in personality["catchphrases"])
-        taboos = "、".join(str(item) for item in personality["taboos"])
         return self.render(
             "system",
             identity=self._definition.identity,
             traits=traits,
             speaking_style=speaking_style,
             catchphrases=catchphrases,
-            taboos=taboos,
             growth_summary=context.growth_summary,
             self_document=context.self_document or context.growth_summary,
             person_document=context.person_document,
             conversation_summary=context.conversation_summary,
             relationship_summary=context.relationship_summary,
             memories="\n".join(f"- {item}" for item in context.memories),
-            global_state=context.global_state,
-            scene_state=context.scene_state,
             scene_template=self.template(context.scene),
             tool_summary=context.tool_summary,
             output_protocol=context.output_protocol or self.template("response-plan"),

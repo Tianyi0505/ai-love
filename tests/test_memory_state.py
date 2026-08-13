@@ -172,7 +172,7 @@ class MemoryDocumentTests(unittest.TestCase):
             behavior_policy={},
             extensions=[],
             prompts={
-                "system": "${identity}|${self_document}|${person_document}|${conversation_summary}|${relationship_summary}|${memories}|${global_state}|${scene_state}|${scene_template}|${tool_summary}|${output_protocol}|${traits}|${speaking_style}|${catchphrases}|${taboos}",
+                "system": "${identity}|${self_document}|${person_document}|${conversation_summary}|${relationship_summary}|${memories}|${scene_template}|${tool_summary}|${output_protocol}|${traits}|${speaking_style}|${catchphrases}",
                 "social-private": "scene",
                 "response-plan": "protocol",
                 "user": "current:${user_input}",

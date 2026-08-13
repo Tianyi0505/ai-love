@@ -173,8 +173,6 @@ timeouts:
 fallbacks:
   response: 嗯嗯，我在听～
   private_response: 嗯嗯，我在听～你继续说呀
-  proactive_reason: 有一段时间没有联系，想自然地问候近况
-  proactive_unspecified_reason: 想自然地关心近况
   image_unreadable: 图片内容暂时无法识别
   voice_unrecognized: （无法识别）
   qzone_empty_feed: （无文本）

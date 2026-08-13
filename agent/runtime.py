@@ -104,7 +104,7 @@ class AIRuntime:
         self._proactive_config = dict(self.definition.behavior_policy["proactive"])
         self._proactive_enabled = self._proactive_config["enabled"]
         self.group_manager = GroupChatManager()
-        self.proactive = ProactiveChat(self.definition.behavior_policy, self._fallbacks)
+        self.proactive = ProactiveChat(self.definition.behavior_policy)
         if self._account_ids and self._proactive_enabled:
             self.spawn(self.proactive.loop(
                 self,
@@ -298,8 +298,8 @@ class AIRuntime:
     async def _send_proactive(self, p: dict) -> None:
         user_id = p.get("user_id", "")
         name = self.persona.name_for(user_id) or p.get("display_name") or p.get("name", "朋友")
-        reason = str(p.get("reason", self._fallbacks["proactive_unspecified_reason"]))
-        if not user_id:
+        reason = str(p.get("reason") or "").strip()
+        if not user_id or not reason:
             return
         session_key = f"proactive-private:{user_id}"
         cooldown = int(self._proactive_config["private_cooldown_sec"])
@@ -308,11 +308,12 @@ class AIRuntime:
         memory_context = await self.memory.context(person_id=str(p.get("person_id") or ""))
         context = PromptContext(
             scene="proactive-private",
-            user_input=self.prompt_assembler.render("proactive-private-input", name=name),
-            relationship_summary=self.prompt_assembler.render(
-                "proactive-private-relationship", name=name, reason=reason
+            user_input=self.prompt_assembler.render(
+                "proactive-private-input", name=name, reason=reason
             ),
-            scene_state=self.prompt_assembler.template("proactive-private-state"),
+            relationship_summary=self.prompt_assembler.render(
+                "proactive-private-relationship", name=name
+            ),
             self_document=str(memory_context.get("self_markdown") or ""),
             person_document=str(memory_context.get("person_markdown") or ""),
         )
@@ -349,19 +350,16 @@ class AIRuntime:
         if not recent:
             logger.info("[ai-agent:%s] 群聊跳过: 会话窗口空", self.ai_id)
             return False
-        current_role, current_message = recent[-1]
+        _, current_message = recent[-1]
         history = recent[:-1]
         relationship = await self._group_relationship(chat_id)
         score = self._group_participation_score(relationship)
         logger.info("[ai-agent:%s] 群聊判断: score=%.3f 门槛=%.2f", self.ai_id, score, float(self._proactive_config["group_min_score"]))
         if not explicitly_addressed and score < float(self._proactive_config["group_min_score"]):
             return False
-        if explicitly_addressed:
-            session_state = self.prompt_assembler.template("group-join-session-addressed")
-        else:
-            session_state = self.prompt_assembler.template(
-                "group-join-session-active" if session.active else "group-join-session-inactive"
-            )
+        session_state = self.prompt_assembler.template(
+            "group-join-session-active" if session.active else "group-join-session-inactive"
+        )
         context = PromptContext(
             scene="group-join",
             user_input=self.prompt_assembler.render(
@@ -379,11 +377,6 @@ class AIRuntime:
                 activity_willingness=f"{float(relationship.get('activity_willingness', 0.0)):.2f}",
                 score=f"{score:.2f}",
                 session_state=session_state,
-            ),
-            scene_state=self.prompt_assembler.template(
-                "group-join-addressed-state"
-                if explicitly_addressed
-                else "group-join-state"
             ),
             output_protocol=self.prompt_assembler.template("participation-output"),
         )
@@ -417,17 +410,13 @@ class AIRuntime:
         chat_id = chat_key.split(":", 1)[1]
         history_limit = int(self.gcfg.get("social", "compensation_history_messages"))
         recent = list(window)[-history_limit:]
-        current_role, current_message = recent[-1]
+        _, current_message = recent[-1]
         context = PromptContext(
-            scene="social-compensation",
-            user_input=self.prompt_assembler.render(
-                "social-compensation-input",
-                current_message=f"{current_role}: {current_message}",
-            ),
+            scene="social-private",
+            user_input=current_message,
             recent_messages=tuple(
                 f"{role}: {content}" for role, content in recent[:-1]
             ),
-            scene_state=self.prompt_assembler.template("social-compensation-state"),
         )
         reply = (await self._generate_plan(context, self._fallbacks["response"])).text
         await self.bus.publish_json(
@@ -467,7 +456,6 @@ class AIRuntime:
             relationship_summary=self.prompt_assembler.render(
                 "qzone-comment-relationship", author_name=author_name
             ),
-            scene_state=self.prompt_assembler.template("qzone-comment-state"),
         )
         plan = await self._generate_plan(context)
         return json.dumps(

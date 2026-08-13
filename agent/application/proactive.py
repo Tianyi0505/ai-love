@@ -79,9 +79,8 @@ class GroupChatManager:
 
 class ProactiveChat:
 
-    def __init__(self, behavior_config: dict, fallback_config: dict) -> None:
+    def __init__(self, behavior_config: dict) -> None:
         self._config = behavior_config
-        self._fallback_config = fallback_config
         self._schedule = BehaviorSchedule.from_config(behavior_config)
 
     def in_work_hours(self) -> bool:
@@ -108,8 +107,11 @@ class ProactiveChat:
                     last_interaction = last_interaction.replace(tzinfo=dt.timezone.utc)
                 if (now - last_interaction.astimezone(dt.timezone.utc)).total_seconds() < quiet_period:
                     continue
+            reason = str(p.get("pending_commitment") or p.get("reason") or "").strip()
+            if not reason:
+                continue
             candidate = dict(p)
-            candidate["reason"] = p.get("pending_commitment") or self._fallback_config["proactive_reason"]
+            candidate["reason"] = reason
             chosen.append(candidate)
         chosen.sort(
             key=lambda item: (

@@ -31,8 +31,7 @@ class MessageUnderstanding:
         parts: list[str] = []
         who = self._prompts.render(
             "message-sender",
-            user_id=json.dumps(str(msg.sender.user_id), ensure_ascii=False),
-            nickname=json.dumps(str(msg.sender.name or ""), ensure_ascii=False),
+            name=str(msg.sender.name or msg.sender.user_id),
         )
 
         async def understand_images() -> list[str]:
