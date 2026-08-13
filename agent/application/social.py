@@ -8,12 +8,10 @@ from ai.llm.types import ChatMessage
 from agent.generation.prompting import PromptContext
 from agent.generation.response import ResponsePlan
 from shared.contracts.social import ContentType, SocialMessage
-from agent.events.registry import event_registry
 
 logger = logging.getLogger("ailove.ai-agent.events.social")
 
 
-@event_registry.register("social")
 async def handle_social(service, payload: bytes) -> None:
     msg = SocialMessage.from_dict(json.loads(payload))
     logger.info("[ai-agent:%s] 收到社交: %s: %s", service.ai_id, msg.sender.user_id, msg.text[:30])

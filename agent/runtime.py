@@ -16,7 +16,8 @@ from agent.clients.tts import TTSClient
 from agent.context.conversation import ConversationContext
 from agent.application.proactive import GroupChatManager, ProactiveChat
 from agent.context.speaking_state import SessionManager
-from agent.events.handlers import EventHandlers
+from agent.application.live import handle_live
+from agent.application.social import handle_social
 from ai.llm.providers import anthropic_gw, deepseek, ollama
 from ai.llm.factory import create_llm
 from ai.llm.types import ChatMessage
@@ -99,8 +100,6 @@ class AIRuntime:
             self.memory, self._llm, self.ai_id, self.gcfg, self.prompt_assembler
         )
 
-        self.handlers = EventHandlers(self)
-
         self.join_checker = self._join_group_checker
         self.sessions = SessionManager(data_dir=f"/app/data/agents/{self.ai_id}")
 
@@ -151,14 +150,14 @@ class AIRuntime:
     async def handle_social(self, payload: bytes) -> None:
         self._in_flight += 1
         try:
-            await self.handlers.on_social(payload)
+            await handle_social(self, payload)
         finally:
             self._in_flight -= 1
 
     async def handle_live(self, payload: bytes) -> None:
         self._in_flight += 1
         try:
-            await self.handlers.on_event(payload)
+            await handle_live(self, payload)
         finally:
             self._in_flight -= 1
 

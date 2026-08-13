@@ -8,12 +8,10 @@ from ai.llm.types import ChatMessage
 from agent.generation.prompting import PromptContext
 from shared.contracts.live import InteractionEvent
 from agent.generation.response import ResponsePlan
-from agent.events.registry import event_registry
 
 logger = logging.getLogger("ailove.ai-agent.events.live")
 
 
-@event_registry.register("live_event")
 async def handle_live(service, payload: bytes) -> None:
     evt = InteractionEvent.from_dict(json.loads(payload))
     chat_key = f"live:{evt.actor.uid}"
