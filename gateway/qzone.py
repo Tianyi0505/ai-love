@@ -9,8 +9,8 @@ from string import Template
 
 import httpx
 
-from services.gateway.commented_repo import CommentedRepo
-from services.gateway.qzone_api import QZoneAPI
+from gateway.commented_repo import CommentedRepo
+from gateway.qzone_api import QZoneAPI
 
 logger = logging.getLogger("ailove.qzone")
 

@@ -8,8 +8,8 @@ import logging
 import httpx
 import websockets
 
-from services.gateway.channels.base import Channel, ChannelCapabilities, channel_registry
-from services.gateway.enums import Channel as ChannelEnum, EventPostType, SegmentType, SendAction
+from gateway.channels.base import Channel, ChannelCapabilities, channel_registry
+from gateway.enums import Channel as ChannelEnum, EventPostType, SegmentType, SendAction
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 from shared.infrastructure.runtime_config import required_value
 

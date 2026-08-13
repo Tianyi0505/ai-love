@@ -8,10 +8,10 @@ import os
 
 import httpx
 
-from services.gateway.channels import bilibili, qq, wechat
-from services.gateway.channels.base import Channel, create_channel
-from services.gateway.qzone import QZoneService
-from services.gateway.social_router import SocialRouter, StaticOwnershipResolver
+from gateway.channels import bilibili, qq, wechat
+from gateway.channels.base import Channel, create_channel
+from gateway.qzone import QZoneService
+from gateway.social_router import SocialRouter, StaticOwnershipResolver
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.live import InteractionEvent, InteractionType, Viewer
 from shared.contracts.social import (

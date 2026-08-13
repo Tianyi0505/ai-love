@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 
-from services.gateway.channels.base import Channel, ChannelCapabilities, channel_registry
+from gateway.channels.base import Channel, ChannelCapabilities, channel_registry
 
 
 @channel_registry.register("wechat")
