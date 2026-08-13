@@ -6,11 +6,13 @@ from typing import AsyncIterator
 
 from anthropic import AsyncAnthropic
 
-from ai.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, ToolSchema, llm_registry
+from ai.llm.provider import LLMProvider
+from ai.llm.registry import provider_registry
+from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall, ToolSchema
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
-@llm_registry.register("anthropic_gw")
+@provider_registry.register("anthropic_gw")
 class AnthropicGatewayProvider(LLMProvider):
     def __init__(
         self,

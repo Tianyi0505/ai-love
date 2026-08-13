@@ -7,11 +7,13 @@ from typing import AsyncIterator
 
 import httpx
 
-from ai.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, llm_registry
+from ai.llm.provider import LLMProvider
+from ai.llm.registry import provider_registry
+from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
-@llm_registry.register("ollama")
+@provider_registry.register("ollama")
 class OllamaProvider(LLMProvider):
     def __init__(self, model: str, request_timeout_sec: float, base_url: str | None = None, **_) -> None:
         self._url = required_setting(base_url, ConfigKey.OLLAMA_BASE_URL).rstrip("/")

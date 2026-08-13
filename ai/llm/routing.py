@@ -8,7 +8,8 @@ from typing import AsyncIterator
 from ai.llm.errors import LLMErrorMessage
 from ai.llm.model import ModelHealthStore, ModelSelector, ModelTarget
 from ai.llm.tier import Tier
-from ai.llm.types import ChatRequest, ChatStreamChunk, LLMProvider
+from ai.llm.provider import LLMProvider
+from ai.llm.types import ChatRequest, ChatStreamChunk
 
 logger = logging.getLogger("ailove.llm.routing")
 

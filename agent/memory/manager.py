@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 
-from ai.llm.service import ChatMessage, ChatRequest
+from ai.llm.types import ChatMessage, ChatRequest
 
 logger = logging.getLogger("ailove.ai-agent.memory")
 

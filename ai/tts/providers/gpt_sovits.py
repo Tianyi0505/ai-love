@@ -5,7 +5,8 @@ import time
 
 import httpx
 
-from ai.tts.provider import TTSProvider, provider_registry
+from ai.tts.provider import TTSProvider
+from ai.tts.registry import provider_registry
 from ai.tts.types import AudioResult, SynthesizeRequest
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 

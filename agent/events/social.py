@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-from ai.llm.service import ChatMessage
+from ai.llm.types import ChatMessage
 from agent.generation.prompting import PromptContext
 from agent.generation.response import ResponsePlan
 from shared.contracts.social import ContentType, SocialMessage

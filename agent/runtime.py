@@ -16,7 +16,8 @@ from agent.application.retrieval import Retrieval
 from agent.application.session import SessionManager
 from agent.events.handlers import EventHandlers
 from ai.llm.providers import anthropic_gw, deepseek, ollama
-from ai.llm.service import ChatMessage, create_llm
+from ai.llm.factory import create_llm
+from ai.llm.types import ChatMessage
 from agent.memory.manager import MemoryManager
 from agent.message_understanding import MessageUnderstanding
 from agent.persona.model import Persona

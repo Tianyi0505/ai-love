@@ -4,11 +4,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from ai.tts.types import AudioResult, SynthesizeRequest
-from shared.infrastructure.registry import Registry
-
-provider_registry = Registry("tts_provider")
-
-
 class TTSProvider(ABC):
 
     async def synthesize(self, req: SynthesizeRequest) -> AudioResult:
@@ -29,8 +24,3 @@ class TTSProvider(ABC):
 
     async def _postprocess(self, result: AudioResult, req: SynthesizeRequest) -> AudioResult:
         return result
-
-
-def create_tts(kind: str, **opts) -> TTSProvider:
-    cls = provider_registry.get(kind)
-    return cls(**opts)

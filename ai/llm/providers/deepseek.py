@@ -6,11 +6,13 @@ from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
-from ai.llm.service import ChatMessage, ChatRequest, ChatStreamChunk, LLMProvider, ToolCall, ToolSchema, llm_registry
+from ai.llm.provider import LLMProvider
+from ai.llm.registry import provider_registry
+from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall, ToolSchema
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
-@llm_registry.register("deepseek")
+@provider_registry.register("deepseek")
 class DeepSeekProvider(LLMProvider):
     def __init__(self, model: str, request_timeout_sec: float, api_key: str | None = None, base_url: str | None = None, **_) -> None:
         self._client = AsyncOpenAI(

@@ -7,7 +7,7 @@ import logging
 import os
 import time
 
-from ai.tts.provider import create_tts
+from ai.tts.factory import create_tts
 from ai.tts.providers import azure, gpt_sovits, mimo
 from ai.tts.types import SynthesizeRequest
 from shared.infrastructure.config import ServiceConfig
