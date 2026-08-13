@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-logger = logging.getLogger("ailove.ai-agent.tools")
+logger = logging.getLogger("ailove.agent.clients.extensions")
 
 
 async def register_tools(agent_loop, bus, ai_id: str, timeouts: dict) -> None:

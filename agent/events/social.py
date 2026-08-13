@@ -148,7 +148,7 @@ async def handle_social(service, payload: bytes) -> None:
         sticker_query = str(sticker_actions[0].params.get("query") or "").strip()
         if not sticker_query:
             sticker_query = f"{query}\nAI回复：{reply}\n情绪：{plan.emotion.name}"
-        sticker_to_send = await service.retrieval.search_sticker(sticker_query)
+        sticker_to_send = await service.stickers.search(sticker_query)
     send_payload = {
         "ai_id": service.ai_id,
         "account_id": msg.account_id,
@@ -162,7 +162,7 @@ async def handle_social(service, payload: bytes) -> None:
         send_payload["sticker"] = sticker_to_send
     wants_voice = any(speech.delivery == "voice" for speech in plan.speech)
     if service.gcfg.get("qq", "voice_reply") and wants_voice:
-        voice = await service.tts_synthesize(reply)
+        voice = await service.tts.synthesize(reply)
         if voice:
             send_payload["voice"] = voice
             voice_sent = True

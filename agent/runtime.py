@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import re
@@ -10,9 +9,11 @@ import time
 from string import Template
 
 from agent.generation.agent_loop import AgentLoop
+from agent.clients.extensions import register_tools
+from agent.clients.sticker import StickerClient
+from agent.clients.tts import TTSClient
 from agent.context.conversation import ConversationContext
 from agent.application.proactive import GroupChatManager, ProactiveChat
-from agent.application.retrieval import Retrieval
 from agent.context.speaking_state import SessionManager
 from agent.events.handlers import EventHandlers
 from ai.llm.providers import anthropic_gw, deepseek, ollama
@@ -22,7 +23,6 @@ from agent.memory.manager import MemoryManager
 from agent.context.understanding import MessageUnderstanding
 from agent.persona.model import Persona
 from agent.generation.prompting import PromptAssembler, PromptContext
-from agent.tools import register_tools
 from shared.contracts.agent import AgentDefinition
 from shared.contracts.events import TurnRequest
 from agent.generation.response import ResponsePlan
@@ -85,11 +85,12 @@ class AIRuntime:
 
         await register_tools(self.agent_loop, self.bus, self.ai_id, self._timeouts)
 
+        self.stickers = StickerClient(self.bus, self.ai_id, self._timeouts)
+        self.tts = TTSClient(self.bus, self.ai_id, self._timeouts)
+
         self.memory = MemoryManager(
             self.bus, self._llm, self.ai_id, self.gcfg, self.prompt_assembler
         )
-
-        self.retrieval = Retrieval(self)
 
         self.handlers = EventHandlers(self)
 
@@ -477,33 +478,13 @@ class AIRuntime:
                 or not description.sticker_description
             ):
                 return
-            sticker_id = f"stk_{hashlib.md5(image_url.encode()).hexdigest()[:12]}"
-            result = await self.bus.request_json(
-                "sticker.add.request",
-                {
-                    "ai_id": self.ai_id,
-                    "id": sticker_id,
-                    "image_url": image_url,
-                    "description": description.sticker_description,
-                    "tags": description.tags,
-                    "match_quality": description.match_quality,
-                },
-                timeout=float(self._timeouts["sticker_add_sec"]),
+            added = await self.stickers.add(
+                image_url,
+                description.sticker_description,
+                description.tags,
+                description.match_quality,
             )
-            if result.get("ok"):
+            if added:
                 logger.info("[ai-agent:%s] 收藏表情: %s", self.ai_id, description.description)
         except Exception as exc:
             logger.warning("[ai-agent:%s] 收藏表情失败: %s", self.ai_id, exc)
-
-    async def tts_synthesize(self, text: str) -> dict | None:
-        try:
-            resp = await self.bus.request_json(
-                "tts.synthesize.request",
-                {"ai_id": self.ai_id, "text": text},
-                timeout=float(self._timeouts["tts_request_sec"]),
-            )
-            if resp.get("ok"):
-                return {"audio_path": resp["audio_path"], "duration_sec": resp["duration_sec"]}
-        except Exception as e:
-            logger.warning("[ai-agent:%s] 语音合成失败: %s", self.ai_id, e)
-        return None
