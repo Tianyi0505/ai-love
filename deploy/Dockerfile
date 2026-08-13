@@ -7,6 +7,8 @@ COPY shared/ ./shared/
 
 FROM base AS gateway
 COPY services/gateway/ ./services/gateway/
+COPY ai/__init__.py ./ai/__init__.py
+COPY ai/vision/ ./ai/vision/
 CMD ["python", "-m", "services.gateway.main"]
 
 FROM base AS orchestrator
@@ -15,6 +17,9 @@ CMD ["python", "-m", "services.orchestrator.main"]
 
 FROM base AS ai-agent
 COPY services/ai_agent/ ./services/ai_agent/
+COPY ai/__init__.py ./ai/__init__.py
+COPY ai/llm/ ./ai/llm/
+COPY ai/vision/ ./ai/vision/
 CMD ["python", "-m", "services.ai_agent.main"]
 
 FROM base AS tts
