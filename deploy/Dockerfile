@@ -14,11 +14,11 @@ COPY services/orchestrator/ ./services/orchestrator/
 CMD ["python", "-m", "services.orchestrator.main"]
 
 FROM base AS ai-agent
-COPY services/ai_agent/ ./services/ai_agent/
+COPY agent/ ./agent/
 COPY ai/__init__.py ./ai/__init__.py
 COPY ai/llm/ ./ai/llm/
 COPY ai/vision/ ./ai/vision/
-CMD ["python", "-m", "services.ai_agent.main"]
+CMD ["python", "-m", "agent.main"]
 
 FROM base AS tts
 COPY ai/tts/ ./ai/tts/
