@@ -7,8 +7,9 @@ import logging
 import os
 import time
 
-from services.tts.engine import SynthesizeRequest, create_tts
-from services.tts.engines import azure, gpt_sovits, mimo
+from ai.tts.provider import create_tts
+from ai.tts.providers import azure, gpt_sovits, mimo
+from ai.tts.types import SynthesizeRequest
 from shared.infrastructure.config import ServiceConfig
 from shared.infrastructure.service import BaseService
 
@@ -23,7 +24,7 @@ class TTSService(BaseService):
 
     async def on_start(self) -> None:
         tts_cfg = await self.cfg.section()
-        self._engine = create_tts(
+        self._provider = create_tts(
             tts_cfg["engine"],
             refs=tts_cfg["voices"],
             **tts_cfg["engine_options"],
@@ -34,7 +35,7 @@ class TTSService(BaseService):
 
     async def _on_synthesize(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
-        result = await self._engine.synthesize(
+        result = await self._provider.synthesize(
             SynthesizeRequest(ai_id=req.get("ai_id", ""), text=req.get("text", ""), emotion=req.get("emotion", ""))
         )
         audio_dir = str(self._output_config["audio_dir"])
@@ -48,12 +49,12 @@ class TTSService(BaseService):
         return json.dumps({"ok": True, "audio_path": path, "duration_sec": duration_sec}).encode()
 
     async def on_stop(self) -> None:
-        await self._engine.close()
+        await self._provider.close()
 
     async def _on_speech(self, payload: bytes) -> None:
         req = json.loads(payload.decode("utf-8"))
         # 切分句子、预合成语音并播放到虚拟声卡
-        await self._engine.synthesize(
+        await self._provider.synthesize(
             SynthesizeRequest(ai_id=req.get("ai_id", ""), text=req.get("text", ""), emotion=req.get("meta", {}).get("emotion", ""))
         )
         logger.info("[tts] 合成: %s", req.get("text", "")[:30])

@@ -2,29 +2,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
+from ai.tts.types import AudioResult, SynthesizeRequest
 from shared.infrastructure.registry import Registry
 
-tts_registry = Registry("tts")
+provider_registry = Registry("tts_provider")
 
 
-@dataclass
-class SynthesizeRequest:
-    ai_id: str
-    text: str
-    emotion: str = ""
-    options: dict = None
-
-
-@dataclass
-class AudioResult:
-    pcm: bytes
-    format: str
-    latency_ms: int
-
-
-class TTSEngine(ABC):
+class TTSProvider(ABC):
 
     async def synthesize(self, req: SynthesizeRequest) -> AudioResult:
         text = await self._preprocess(req.text, req)
@@ -46,6 +31,6 @@ class TTSEngine(ABC):
         return result
 
 
-def create_tts(kind: str, **opts) -> TTSEngine:
-    cls = tts_registry.get(kind)
+def create_tts(kind: str, **opts) -> TTSProvider:
+    cls = provider_registry.get(kind)
     return cls(**opts)

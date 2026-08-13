@@ -7,12 +7,13 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 
-from services.tts.engine import AudioResult, SynthesizeRequest, TTSEngine, tts_registry
+from ai.tts.provider import TTSProvider, provider_registry
+from ai.tts.types import AudioResult, SynthesizeRequest
 from shared.infrastructure.runtime_config import ConfigKey, required_setting, required_value
 
 
-@tts_registry.register("mimo")
-class MimoTTSEngine(TTSEngine):
+@provider_registry.register("mimo")
+class MimoTTSProvider(TTSProvider):
 
     def __init__(self, refs: dict[str, dict], request_timeout_sec: float, api_audio_format: str, output_format: str, api_key: str | None = None, base_url: str | None = None, model: str | None = None, **_) -> None:
         self._client = AsyncOpenAI(

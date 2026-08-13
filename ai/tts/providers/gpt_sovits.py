@@ -5,12 +5,13 @@ import time
 
 import httpx
 
-from services.tts.engine import AudioResult, SynthesizeRequest, TTSEngine, tts_registry
+from ai.tts.provider import TTSProvider, provider_registry
+from ai.tts.types import AudioResult, SynthesizeRequest
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
-@tts_registry.register("gpt_sovits")
-class GPTSovitsEngine(TTSEngine):
+@provider_registry.register("gpt_sovits")
+class GPTSovitsProvider(TTSProvider):
     def __init__(
         self,
         refs: dict[str, dict],

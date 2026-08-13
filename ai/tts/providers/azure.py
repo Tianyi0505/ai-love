@@ -1,12 +1,13 @@
 
 from __future__ import annotations
 
-from services.tts.engine import AudioResult, SynthesizeRequest, TTSEngine, tts_registry
+from ai.tts.provider import TTSProvider, provider_registry
+from ai.tts.types import AudioResult, SynthesizeRequest
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
-@tts_registry.register("azure")
-class AzureTTSEngine(TTSEngine):
+@provider_registry.register("azure")
+class AzureTTSProvider(TTSProvider):
     def __init__(self, refs: dict[str, str], key: str | None = None, region: str | None = None, **_) -> None:
         self._key = required_setting(key, ConfigKey.AZURE_SPEECH_KEY)
         self._region = required_setting(region, ConfigKey.AZURE_SPEECH_REGION)
