@@ -1,0 +1,43 @@
+# 环境变量与密钥（开源安全）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+napcat-qrcode.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 运行时数据
+data/
+logs/
+*.log
+memory_db/
+chroma/
+*.db
+*.sqlite3
+
+# 文档与归档文件
+docs/
+*.tar
+*.md
+!README.md
+deploy/.migration-*
+deploy/.napcat-qrcode.png
+
+# 系统
+.DS_Store
+Thumbs.db
