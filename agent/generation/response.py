@@ -83,7 +83,7 @@ class ResponsePlan:
                     except json.JSONDecodeError:
                         pass
                 return cls(speech=[])
-            return cls(speech=[Speech(text=text)] if text else [])
+            return cls(speech=[Speech(text=cls._plain_text(text))] if text else [])
 
         speech = []
         raw_speech = data.get("speech", [])
@@ -91,7 +91,12 @@ class ResponsePlan:
             raw_speech = [{"text": raw_speech, "delivery": "text"}]
         for item in raw_speech if isinstance(raw_speech, list) else []:
             if isinstance(item, dict) and item.get("text"):
-                speech.append(Speech(text=str(item["text"]), delivery=str(item.get("delivery", "text"))))
+                speech.append(
+                    Speech(
+                        text=cls._plain_text(str(item["text"])),
+                        delivery=str(item.get("delivery", "text")),
+                    )
+                )
 
         raw_emotion = data.get("emotion", {})
         if not isinstance(raw_emotion, dict):
@@ -111,3 +116,18 @@ class ResponsePlan:
             tool_calls=list(data.get("tool_calls", [])) if isinstance(data.get("tool_calls", []), list) else [],
             memory_candidates=list(data.get("memory_candidates", [])) if isinstance(data.get("memory_candidates", []), list) else [],
         )
+
+    # 清理文本中的 Markdown 痕迹
+    @staticmethod
+    def _plain_text(value: str) -> str:
+        text = value.strip()
+        text = re.sub(r"\x60\x60\x60[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+        text = re.sub(r"\*([^*]+)\*", r"\1", text)
+        text = re.sub(r"__([^_]+)__", r"\1", text)
+        text = re.sub(r"\x60([^\x60]*)\x60", r"\1", text)
+        text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+        text = re.sub(r"^#{1,6}\s*", "", text, flags=re.M)
+        text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.M)
+        text = re.sub(r"^>\s?", "", text, flags=re.M)
+        return text.strip()

@@ -17,6 +17,7 @@ except ModuleNotFoundError:
 
 from agent.application.turn_coordinator import TurnCoordinator
 from agent.generation.agent_loop import AgentLoop
+from agent.generation.response import ResponsePlan
 from ai.llm.types import ChatMessage, ChatStreamChunk, ToolCall
 from shared.contracts.entity import EntityCandidate, EntityContext, EntityReference
 from shared.contracts.social import Chat, ChatType, SocialMessage, SocialSender
@@ -195,6 +196,20 @@ class EntityContextTests(unittest.TestCase):
 
     def test_from_dict_tolerates_missing(self) -> None:
         self.assertEqual(EntityContext().to_dict(), EntityContext.from_dict(None).to_dict())
+
+
+class ResponsePlanTextTests(unittest.TestCase):
+    def test_markdown_is_stripped_from_text(self) -> None:
+        output = '{"speech":[{"text":"**嘿嘿** `好耶` [链接](http://x) 来了","delivery":"text"}],"emotion":{"name":"happy","intensity":0.5},"actions":[],"tool_calls":[],"memory_candidates":[]}'
+        plan = ResponsePlan.from_model_output(output)
+        self.assertEqual("嘿嘿 好耶 链接 来了", plan.text)
+        self.assertNotIn("*", plan.text)
+        self.assertNotIn("]", plan.text)
+
+    def test_plain_text_keeps_normal_content(self) -> None:
+        output = '{"speech":[{"text":"好耶，就这么办","delivery":"text"}],"emotion":{},"actions":[],"tool_calls":[],"memory_candidates":[]}'
+        plan = ResponsePlan.from_model_output(output)
+        self.assertEqual("好耶，就这么办", plan.text)
 
 
 class AgentRunSearchTests(unittest.IsolatedAsyncioTestCase):

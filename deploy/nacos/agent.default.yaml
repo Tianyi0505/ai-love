@@ -187,10 +187,17 @@ prompts:
     {
       "speech": [{"text": "已由上文决定的对外表达", "delivery": "text|voice|live"}],
       "emotion": {"name": "neutral|happy|sad|angry|surprised", "intensity": 0.0},
-      "actions": [{"type": "sticker|avatar_motion", "query": "可选"}],
+      "actions": [{"type": "sticker", "query": "可选"}],
       "tool_calls": [],
       "memory_candidates": []
     }
+    speech 决定本次发送的内容，可含多条，按顺序发送：
+    - 只发文本：一条 speech，delivery=text；
+    - 只发语音：一条 speech，delivery=voice（text 为语音内容）；
+    - 只发表情包：speech 为空数组，actions 放一条 {"type": "sticker", "query": "表情描述"}；
+    - 文本+表情包混合：一条 speech（delivery=text）+ 一条 sticker action，系统会一起发送。
+    text 必须是纯文本（txt 格式）：禁止 Markdown 语法（加粗、标题、代码块、列表、引用、链接等任何格式化符号）。
+    长度要求：默认控制在 20 字以内，一句话说完，符合真实聊天节奏；仅在确实需要解释或展开时写 20~200 字，不得超过 200 字。
     本协议只规定字段和格式，不新增说话内容。没有对应内容时使用空数组；emotion.intensity 范围为 0.0-1.0。
   tool-usage: |-
     ## 工具调用规则
