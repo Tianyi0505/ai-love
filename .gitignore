@@ -39,6 +39,7 @@ docs/
 *.tar
 *.md
 !README.md
+CLAUDE.md
 deploy/.migration-*
 deploy/.napcat-qrcode.png
 deploy/private/
