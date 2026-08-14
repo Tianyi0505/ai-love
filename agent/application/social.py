@@ -176,7 +176,7 @@ async def _process(service, msg, execution, run_repo) -> dict:
     await record_step("context", {
         "scene": prompt_context.scene,
         "input_chars": len(query),
-        "mentions": len(entity_context.mentions),
+        "mentions": len(entity_context.references),
         "recent_participants": len(entity_context.recent_participants),
         "recent_messages": len(prompt_context.recent_messages),
         "memories": len(prompt_context.memories),
