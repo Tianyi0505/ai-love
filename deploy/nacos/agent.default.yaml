@@ -105,13 +105,22 @@ model_config:
     - id: deepseek-v4-flash
       provider: deepseek
       thinking: false
+    - id: deepseek-v4-flash-0731
+      provider: anthropic_gw
+      thinking: false
   standard:
     - id: deepseek-v4-flash
       provider: deepseek
       thinking: false
+    - id: deepseek-v4-flash-0731
+      provider: anthropic_gw
+      thinking: false
   deep:
     - id: deepseek-v4-flash
       provider: deepseek
+      thinking: true
+    - id: deepseek-v4-flash-0731
+      provider: anthropic_gw
       thinking: true
 
 prompts:
