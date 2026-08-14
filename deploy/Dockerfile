@@ -52,3 +52,7 @@ COPY memory/ ./memory/
 COPY ai/__init__.py ./ai/__init__.py
 COPY ai/llm/ ./ai/llm/
 CMD ["python", "-m", "memory.main"]
+
+FROM base AS ops-panel
+COPY ops/ ./ops/
+CMD ["python", "-m", "ops.panel.server"]

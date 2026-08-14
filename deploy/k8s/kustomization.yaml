@@ -6,3 +6,4 @@ resources:
   - infrastructure.yaml
   # 启用 NapCat 时添加 napcat.yaml
   - apps.yaml
+  - ops-panel.yaml

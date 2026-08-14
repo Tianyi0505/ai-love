@@ -107,6 +107,43 @@ class AgentRunRepository:
         )
         return [dict(row) for row in rows]
 
+    # 按条件查询执行记录
+    async def search_runs(
+        self,
+        *,
+        ai_id: str = "",
+        conversation_id: str = "",
+        source: str = "",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        conditions: list[str] = []
+        args: list = []
+        if ai_id:
+            args.append(ai_id)
+            conditions.append(f"ai_id=${len(args)}")
+        if conversation_id:
+            try:
+                uuid.UUID(conversation_id)
+            except (ValueError, TypeError, AttributeError):
+                return []
+            args.append(conversation_id)
+            conditions.append(f"conversation_id=${len(args)}::uuid")
+        if source:
+            args.append(source)
+            conditions.append(f"source=${len(args)}")
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        args.append(int(max(1, min(200, limit))))
+        args.append(int(max(0, offset)))
+        rows = await self._db.fetch(
+            "SELECT run_id::text,ai_id,account_id,conversation_id::text,platform,chat_type,chat_id,"
+            "sender_person_id::text,source,message_id,reply_to_message_id,status,outcome,tool_rounds,"
+            f"response_text,started_at,finished_at FROM agent_runs {where} "
+            f"ORDER BY started_at DESC LIMIT ${len(args) - 1} OFFSET ${len(args)}",
+            *args,
+        )
+        return [dict(row) for row in rows]
+
     # 转换可选 UUID
     @staticmethod
     def _uuid_or_none(value: str) -> str | None:

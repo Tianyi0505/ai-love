@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-panel
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ops-panel
+  template:
+    metadata:
+      labels:
+        app: ops-panel
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: core
+      containers:
+        - name: ops-panel
+          image: ailove/ops-panel:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: PANEL_PORT
+              value: "8090"
+            - name: PANEL_NACOS_URL
+              value: http://127.0.0.1:8848/nacos
+            - name: PANEL_K3S_URL
+              value: http://127.0.0.1:8001
+          ports:
+            - name: http
+              containerPort: 8090
+              hostPort: 8090
+          resources:
+            requests: {cpu: 10m, memory: 48Mi}
+            limits: {cpu: 300m, memory: 128Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/ailove/data
+            type: Directory

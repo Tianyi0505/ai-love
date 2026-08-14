@@ -22,6 +22,7 @@ from shared.contracts.entity import EntityContext
 from shared.contracts.social import Chat, ChatType, SocialMessage, SocialSender
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand
 from shared.contracts.tools import ToolExecutionContext
+from shared.infrastructure.run_repo import AgentRunRepository
 
 
 class _Prompts:
@@ -47,6 +48,23 @@ class _RecordingDB:
 
     async def execute(self, query, *args):
         self.rows.append((query, args))
+        return "OK"
+
+
+class _FetchDB:
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def fetch(self, query, *args):
+        self.calls.append((query, args))
+        return []
+
+    async def fetchrow(self, query, *args):
+        self.calls.append((query, args))
+        return None
+
+    async def execute(self, query, *args):
+        self.calls.append((query, args))
         return "OK"
 
 
@@ -168,6 +186,32 @@ class EntityContextTests(unittest.TestCase):
 
     def test_from_dict_tolerates_missing(self) -> None:
         self.assertEqual(EntityContext().to_dict(), EntityContext.from_dict(None).to_dict())
+
+
+class AgentRunSearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_search_runs_applies_filters(self) -> None:
+        db = _FetchDB()
+        repo = AgentRunRepository(db)
+        await repo.search_runs(
+            ai_id="luoyu",
+            conversation_id="11111111-1111-1111-1111-111111111111",
+            source="social",
+            limit=20,
+        )
+        self.assertEqual(1, len(db.calls))
+        query, args = db.calls[0]
+        self.assertIn("ai_id=$1", query)
+        self.assertIn("conversation_id=$2::uuid", query)
+        self.assertIn("source=$3", query)
+        self.assertIn("LIMIT $4 OFFSET $5", query)
+        self.assertEqual(["luoyu", "11111111-1111-1111-1111-111111111111", "social", 20, 0], list(args))
+
+    async def test_search_runs_rejects_invalid_conversation_id(self) -> None:
+        db = _FetchDB()
+        repo = AgentRunRepository(db)
+        runs = await repo.search_runs(conversation_id="not-a-uuid")
+        self.assertEqual([], runs)
+        self.assertEqual([], db.calls)
 
 
 class AgentLoopStepTests(unittest.IsolatedAsyncioTestCase):
