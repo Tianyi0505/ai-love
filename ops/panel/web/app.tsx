@@ -60,6 +60,56 @@ interface ReplayResponse {
   error?: string;
 }
 
+interface ConversationRecord {
+  conversation_id: string;
+  platform: string;
+  chat_type: string;
+  platform_chat_id: string;
+  message_count: number;
+  last_at: string;
+  first_at: string;
+  summary: string;
+}
+
+interface MessageRecord {
+  message_id: string;
+  conversation_id: string;
+  ai_id: string;
+  role: string;
+  platform: string;
+  chat_type: string;
+  platform_chat_id: string;
+  person_id: string;
+  display_name: string;
+  content: Record<string, unknown> | string;
+  occurred_at: string;
+}
+
+interface PersonRecord {
+  person_id: string;
+  display_name: string;
+  message_count: number;
+  last_at: string;
+}
+
+interface ConversationsResponse {
+  conversations: ConversationRecord[];
+  db: boolean;
+  error?: string;
+}
+
+interface MessagesResponse {
+  messages: MessageRecord[];
+  db: boolean;
+  error?: string;
+}
+
+interface PersonsResponse {
+  persons: PersonRecord[];
+  db: boolean;
+  error?: string;
+}
+
 class UnauthorizedError extends Error {}
 
 async function request<T>(path: string, options: RequestInit = {}, keepToken = false): Promise<T> {
@@ -155,7 +205,7 @@ interface MainViewProps {
 }
 
 function MainView({ username, db, onLogout }: MainViewProps) {
-  const [tab, setTab] = React.useState<"runs" | "settings">("runs");
+  const [tab, setTab] = React.useState<"history" | "runs" | "settings">("history");
   const [links, setLinks] = React.useState<LinksResponse>({ nacos_url: "", k3s_url: "" });
 
   React.useEffect(() => {
@@ -179,6 +229,9 @@ function MainView({ username, db, onLogout }: MainViewProps) {
         </button>
       </div>
       <div className="tabs">
+        <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
+          历史消息
+        </button>
         <button className={tab === "runs" ? "active" : ""} onClick={() => setTab("runs")}>
           运行追溯
         </button>
@@ -188,10 +241,166 @@ function MainView({ username, db, onLogout }: MainViewProps) {
       </div>
       <div className="page">
         {db ? null : (
-          <div className="banner">未连接数据库，运行追溯数据暂不可用（凭据修改也不会持久化）</div>
+          <div className="banner">未连接数据库，历史数据暂不可用（凭据修改也不会持久化）</div>
         )}
-        {tab === "runs" ? <RunsView /> : <SettingsView onLogout={onLogout} />}
+        {tab === "history" ? (
+          <HistoryView />
+        ) : tab === "runs" ? (
+          <RunsView />
+        ) : (
+          <SettingsView onLogout={onLogout} />
+        )}
       </div>
+    </div>
+  );
+}
+
+function messageText(content: MessageRecord["content"]): string {
+  let parsed: unknown = content;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return parsed as string;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return "";
+  const item = parsed as Record<string, unknown>;
+  const text = typeof item.text === "string" ? item.text : "";
+  if (text) return text;
+  const type = typeof item.type === "string" ? item.type : "";
+  if (type === "image") return "[图片]";
+  if (type === "voice") return "[语音]";
+  if (type === "sticker") return "[表情]";
+  return JSON.stringify(item).slice(0, 120);
+}
+
+function HistoryView() {
+  const [conversations, setConversations] = React.useState<ConversationRecord[]>([]);
+  const [persons, setPersons] = React.useState<PersonRecord[]>([]);
+  const [convId, setConvId] = React.useState("");
+  const [personId, setPersonId] = React.useState("");
+  const [role, setRole] = React.useState("");
+  const [keyword, setKeyword] = React.useState("");
+  const [since, setSince] = React.useState("");
+  const [until, setUntil] = React.useState("");
+  const [limit, setLimit] = React.useState("50");
+  const [messages, setMessages] = React.useState<MessageRecord[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [offset, setOffset] = React.useState(0);
+
+  React.useEffect(() => {
+    request<ConversationsResponse>("/api/conversations")
+      .then((data) => setConversations(data.conversations))
+      .catch(() => undefined);
+    request<PersonsResponse>("/api/persons")
+      .then((data) => setPersons(data.persons))
+      .catch(() => undefined);
+  }, []);
+
+  function load(nextOffset: number, append: boolean) {
+    setLoading(true);
+    setError("");
+    const query =
+      "limit=" + encodeURIComponent(limit) + "&offset=" + encodeURIComponent(String(nextOffset)) +
+      "&conversation_id=" + encodeURIComponent(convId) + "&person_id=" + encodeURIComponent(personId) +
+      "&role=" + encodeURIComponent(role) + "&keyword=" + encodeURIComponent(keyword) +
+      "&since=" + encodeURIComponent(since) + "&until=" + encodeURIComponent(until);
+    request<MessagesResponse>("/api/messages?" + query)
+      .then((data) => {
+        setMessages(append ? messages.concat(data.messages) : data.messages);
+        setOffset(nextOffset);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }
+
+  React.useEffect(() => {
+    load(0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div>
+      <div className="filters">
+        <select value={convId} onChange={(e) => setConvId(e.target.value)}>
+          <option value="">全部会话</option>
+          {conversations.map((c) => (
+            <option key={c.conversation_id} value={c.conversation_id} title={c.summary}>
+              {c.chat_type} · {c.platform_chat_id}（{c.message_count} 条）
+            </option>
+          ))}
+        </select>
+        <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
+          <option value="">全部人物</option>
+          {persons.map((p) => (
+            <option key={p.person_id} value={p.person_id}>
+              {p.display_name}（{p.message_count} 条）
+            </option>
+          ))}
+        </select>
+        <select value={role} onChange={(e) => setRole(e.target.value)}>
+          <option value="">全部角色</option>
+          <option value="user">用户</option>
+          <option value="assistant">AI</option>
+        </select>
+        <input placeholder="关键词" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+        <input type="datetime-local" title="开始时间" value={since} onChange={(e) => setSince(e.target.value)} />
+        <input type="datetime-local" title="结束时间" value={until} onChange={(e) => setUntil(e.target.value)} />
+        <select value={limit} onChange={(e) => setLimit(e.target.value)}>
+          <option value="50">50 条</option>
+          <option value="100">100 条</option>
+          <option value="200">200 条</option>
+        </select>
+        <button onClick={() => load(0, false)}>查询</button>
+        <button
+          className="ghost"
+          disabled={messages.length === 0}
+          onClick={() => load(offset + parseInt(limit, 10), true)}
+        >
+          加载更多
+        </button>
+      </div>
+      {error ? <div className="error">{error}</div> : null}
+      {loading && messages.length === 0 ? <div className="empty">加载中…</div> : null}
+      {!loading && messages.length === 0 ? <div className="empty">没有匹配的消息</div> : null}
+      {messages.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>会话</th>
+              <th>角色</th>
+              <th>发送者</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            {messages.map((msg) => (
+              <tr key={msg.message_id}>
+                <td className="mono">{formatTime(msg.occurred_at)}</td>
+                <td className="mono" title={msg.conversation_id}>
+                  {msg.chat_type} · {msg.platform_chat_id}
+                </td>
+                <td>
+                  <span className={"badge " + (msg.role === "assistant" ? "green" : "gray")}>
+                    {msg.role === "assistant" ? "AI" : "用户"}
+                  </span>
+                </td>
+                <td>{msg.display_name || msg.person_id || "-"}</td>
+                <td className="wrap">
+                  {messageText(msg.content)}
+                  <details>
+                    <summary>详情</summary>
+                    <pre>{JSON.stringify(msg.content, null, 2)}</pre>
+                  </details>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
     </div>
   );
 }

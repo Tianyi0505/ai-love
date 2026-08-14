@@ -77,7 +77,7 @@ function LoginView({ onLogin }) {
             error ? React.createElement("div", { className: "error" }, error) : null)));
 }
 function MainView({ username, db, onLogout }) {
-    const [tab, setTab] = React.useState("runs");
+    const [tab, setTab] = React.useState("history");
     const [links, setLinks] = React.useState({ nacos_url: "", k3s_url: "" });
     React.useEffect(() => {
         request("/api/links").then(setLinks).catch(() => undefined);
@@ -91,11 +91,134 @@ function MainView({ username, db, onLogout }) {
             React.createElement("div", { className: "user" }, username),
             React.createElement("button", { className: "ghost", onClick: onLogout }, "\u9000\u51FA")),
         React.createElement("div", { className: "tabs" },
+            React.createElement("button", { className: tab === "history" ? "active" : "", onClick: () => setTab("history") }, "\u5386\u53F2\u6D88\u606F"),
             React.createElement("button", { className: tab === "runs" ? "active" : "", onClick: () => setTab("runs") }, "\u8FD0\u884C\u8FFD\u6EAF"),
             React.createElement("button", { className: tab === "settings" ? "active" : "", onClick: () => setTab("settings") }, "\u8BBE\u7F6E")),
         React.createElement("div", { className: "page" },
-            db ? null : (React.createElement("div", { className: "banner" }, "\u672A\u8FDE\u63A5\u6570\u636E\u5E93\uFF0C\u8FD0\u884C\u8FFD\u6EAF\u6570\u636E\u6682\u4E0D\u53EF\u7528\uFF08\u51ED\u636E\u4FEE\u6539\u4E5F\u4E0D\u4F1A\u6301\u4E45\u5316\uFF09")),
-            tab === "runs" ? React.createElement(RunsView, null) : React.createElement(SettingsView, { onLogout: onLogout }))));
+            db ? null : (React.createElement("div", { className: "banner" }, "\u672A\u8FDE\u63A5\u6570\u636E\u5E93\uFF0C\u5386\u53F2\u6570\u636E\u6682\u4E0D\u53EF\u7528\uFF08\u51ED\u636E\u4FEE\u6539\u4E5F\u4E0D\u4F1A\u6301\u4E45\u5316\uFF09")),
+            tab === "history" ? (React.createElement(HistoryView, null)) : tab === "runs" ? (React.createElement(RunsView, null)) : (React.createElement(SettingsView, { onLogout: onLogout })))));
+}
+function messageText(content) {
+    let parsed = content;
+    if (typeof parsed === "string") {
+        try {
+            parsed = JSON.parse(parsed);
+        }
+        catch (_a) {
+            return parsed;
+        }
+    }
+    if (!parsed || typeof parsed !== "object")
+        return "";
+    const item = parsed;
+    const text = typeof item.text === "string" ? item.text : "";
+    if (text)
+        return text;
+    const type = typeof item.type === "string" ? item.type : "";
+    if (type === "image")
+        return "[图片]";
+    if (type === "voice")
+        return "[语音]";
+    if (type === "sticker")
+        return "[表情]";
+    return JSON.stringify(item).slice(0, 120);
+}
+function HistoryView() {
+    const [conversations, setConversations] = React.useState([]);
+    const [persons, setPersons] = React.useState([]);
+    const [convId, setConvId] = React.useState("");
+    const [personId, setPersonId] = React.useState("");
+    const [role, setRole] = React.useState("");
+    const [keyword, setKeyword] = React.useState("");
+    const [since, setSince] = React.useState("");
+    const [until, setUntil] = React.useState("");
+    const [limit, setLimit] = React.useState("50");
+    const [messages, setMessages] = React.useState([]);
+    const [loading, setLoading] = React.useState(false);
+    const [error, setError] = React.useState("");
+    const [offset, setOffset] = React.useState(0);
+    React.useEffect(() => {
+        request("/api/conversations")
+            .then((data) => setConversations(data.conversations))
+            .catch(() => undefined);
+        request("/api/persons")
+            .then((data) => setPersons(data.persons))
+            .catch(() => undefined);
+    }, []);
+    function load(nextOffset, append) {
+        setLoading(true);
+        setError("");
+        const query = "limit=" + encodeURIComponent(limit) + "&offset=" + encodeURIComponent(String(nextOffset)) +
+            "&conversation_id=" + encodeURIComponent(convId) + "&person_id=" + encodeURIComponent(personId) +
+            "&role=" + encodeURIComponent(role) + "&keyword=" + encodeURIComponent(keyword) +
+            "&since=" + encodeURIComponent(since) + "&until=" + encodeURIComponent(until);
+        request("/api/messages?" + query)
+            .then((data) => {
+            setMessages(append ? messages.concat(data.messages) : data.messages);
+            setOffset(nextOffset);
+        })
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }
+    React.useEffect(() => {
+        load(0, false);
+    }, []);
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "filters" },
+            React.createElement("select", { value: convId, onChange: (e) => setConvId(e.target.value) },
+                React.createElement("option", { value: "" }, "\u5168\u90E8\u4F1A\u8BDD"),
+                conversations.map((c) => (React.createElement("option", { key: c.conversation_id, value: c.conversation_id, title: c.summary },
+                    c.chat_type,
+                    " \u00B7 ",
+                    c.platform_chat_id,
+                    "\uFF08",
+                    c.message_count,
+                    " \u6761\uFF09")))),
+            React.createElement("select", { value: personId, onChange: (e) => setPersonId(e.target.value) },
+                React.createElement("option", { value: "" }, "\u5168\u90E8\u4EBA\u7269"),
+                persons.map((p) => (React.createElement("option", { key: p.person_id, value: p.person_id },
+                    p.display_name,
+                    "\uFF08",
+                    p.message_count,
+                    " \u6761\uFF09")))),
+            React.createElement("select", { value: role, onChange: (e) => setRole(e.target.value) },
+                React.createElement("option", { value: "" }, "\u5168\u90E8\u89D2\u8272"),
+                React.createElement("option", { value: "user" }, "\u7528\u6237"),
+                React.createElement("option", { value: "assistant" }, "AI")),
+            React.createElement("input", { placeholder: "\u5173\u952E\u8BCD", value: keyword, onChange: (e) => setKeyword(e.target.value) }),
+            React.createElement("input", { type: "datetime-local", title: "\u5F00\u59CB\u65F6\u95F4", value: since, onChange: (e) => setSince(e.target.value) }),
+            React.createElement("input", { type: "datetime-local", title: "\u7ED3\u675F\u65F6\u95F4", value: until, onChange: (e) => setUntil(e.target.value) }),
+            React.createElement("select", { value: limit, onChange: (e) => setLimit(e.target.value) },
+                React.createElement("option", { value: "50" }, "50 \u6761"),
+                React.createElement("option", { value: "100" }, "100 \u6761"),
+                React.createElement("option", { value: "200" }, "200 \u6761")),
+            React.createElement("button", { onClick: () => load(0, false) }, "\u67E5\u8BE2"),
+            React.createElement("button", { className: "ghost", disabled: messages.length === 0, onClick: () => load(offset + parseInt(limit, 10), true) }, "\u52A0\u8F7D\u66F4\u591A")),
+        error ? React.createElement("div", { className: "error" }, error) : null,
+        loading && messages.length === 0 ? React.createElement("div", { className: "empty" }, "\u52A0\u8F7D\u4E2D\u2026") : null,
+        !loading && messages.length === 0 ? React.createElement("div", { className: "empty" }, "\u6CA1\u6709\u5339\u914D\u7684\u6D88\u606F") : null,
+        messages.length > 0 ? (React.createElement("table", null,
+            React.createElement("thead", null,
+                React.createElement("tr", null,
+                    React.createElement("th", null, "\u65F6\u95F4"),
+                    React.createElement("th", null, "\u4F1A\u8BDD"),
+                    React.createElement("th", null, "\u89D2\u8272"),
+                    React.createElement("th", null, "\u53D1\u9001\u8005"),
+                    React.createElement("th", null, "\u5185\u5BB9"))),
+            React.createElement("tbody", null, messages.map((msg) => (React.createElement("tr", { key: msg.message_id },
+                React.createElement("td", { className: "mono" }, formatTime(msg.occurred_at)),
+                React.createElement("td", { className: "mono", title: msg.conversation_id },
+                    msg.chat_type,
+                    " \u00B7 ",
+                    msg.platform_chat_id),
+                React.createElement("td", null,
+                    React.createElement("span", { className: "badge " + (msg.role === "assistant" ? "green" : "gray") }, msg.role === "assistant" ? "AI" : "用户")),
+                React.createElement("td", null, msg.display_name || msg.person_id || "-"),
+                React.createElement("td", { className: "wrap" },
+                    messageText(msg.content),
+                    React.createElement("details", null,
+                        React.createElement("summary", null, "\u8BE6\u60C5"),
+                        React.createElement("pre", null, JSON.stringify(msg.content, null, 2)))))))))) : null));
 }
 function RunsView() {
     const [aiId, setAiId] = React.useState("");

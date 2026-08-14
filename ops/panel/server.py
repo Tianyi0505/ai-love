@@ -10,6 +10,7 @@ import os
 import secrets
 import threading
 import time
+import uuid
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -190,6 +191,37 @@ class PanelHandler(BaseHTTPRequestHandler):
                 result = {"run": None, "steps": [], "db": False, "error": "回放执行记录失败"}
             self._send_json(200, result)
             return
+        if path == "/api/conversations":
+            if not self._authorized():
+                return
+            try:
+                result = self._submit(self._list_conversations())
+            except Exception:
+                logger.exception("[panel] 查询会话失败")
+                result = {"conversations": [], "db": False, "error": "查询会话失败"}
+            self._send_json(200, result)
+            return
+        if path == "/api/messages":
+            if not self._authorized():
+                return
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                result = self._submit(self._list_messages(query))
+            except Exception:
+                logger.exception("[panel] 查询消息失败")
+                result = {"messages": [], "db": False, "error": "查询消息失败"}
+            self._send_json(200, result)
+            return
+        if path == "/api/persons":
+            if not self._authorized():
+                return
+            try:
+                result = self._submit(self._list_persons())
+            except Exception:
+                logger.exception("[panel] 查询人物失败")
+                result = {"persons": [], "db": False, "error": "查询人物失败"}
+            self._send_json(200, result)
+            return
         self._send_json(404, {"error": "接口不存在"})
 
     # 处理写入接口
@@ -266,6 +298,139 @@ class PanelHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             logger.exception("[panel] 回放执行记录失败")
             return {"run": None, "steps": [], "db": False, "error": str(exc)}
+
+    # 列出会话
+    async def _list_conversations(self) -> dict:
+        if self.state._db is None:
+            return {"conversations": [], "db": False}
+        rows = await self.state._db.fetch(
+            "SELECT c.conversation_id::text, c.platform, c.chat_type, c.platform_chat_id, "
+            "COUNT(m.message_id) AS message_count, MAX(m.occurred_at) AS last_at, "
+            "MIN(m.occurred_at) AS first_at, COALESCE(cs.summary, '') AS summary "
+            "FROM conversations c "
+            "LEFT JOIN messages m ON m.conversation_id = c.conversation_id "
+            "LEFT JOIN conversation_summaries cs ON cs.conversation_id = c.conversation_id "
+            "GROUP BY c.conversation_id, c.platform, c.chat_type, c.platform_chat_id, cs.summary "
+            "ORDER BY last_at DESC NULLS LAST LIMIT 200"
+        )
+        return {
+            "conversations": [
+                {
+                    "conversation_id": row["conversation_id"],
+                    "platform": row["platform"],
+                    "chat_type": row["chat_type"],
+                    "platform_chat_id": row["platform_chat_id"],
+                    "message_count": int(row["message_count"] or 0),
+                    "last_at": str(row["last_at"]) if row["last_at"] else "",
+                    "first_at": str(row["first_at"]) if row["first_at"] else "",
+                    "summary": row["summary"] or "",
+                }
+                for row in rows
+            ],
+            "db": True,
+        }
+
+    # 查询历史消息
+    async def _list_messages(self, query: dict) -> dict:
+        if self.state._db is None:
+            return {"messages": [], "db": False}
+        conditions: list[str] = []
+        args: list = []
+        conversation_id = str((query.get("conversation_id") or [""])[0]).strip()
+        if conversation_id:
+            try:
+                uuid.UUID(conversation_id)
+            except (ValueError, TypeError, AttributeError):
+                return {"messages": [], "db": False, "error": "conversation_id 无效"}
+            args.append(conversation_id)
+            conditions.append(f"m.conversation_id=${len(args)}::uuid")
+        person_id = str((query.get("person_id") or [""])[0]).strip()
+        if person_id:
+            try:
+                uuid.UUID(person_id)
+            except (ValueError, TypeError, AttributeError):
+                return {"messages": [], "db": False, "error": "person_id 无效"}
+            args.append(person_id)
+            conditions.append(f"pi.person_id=${len(args)}::uuid")
+        role = str((query.get("role") or [""])[0]).strip()
+        if role in ("user", "assistant"):
+            args.append(role)
+            conditions.append(f"m.role=${len(args)}")
+        keyword = str((query.get("keyword") or [""])[0]).strip()
+        if keyword:
+            args.append(f"%{keyword}%")
+            conditions.append(f"COALESCE(m.content->>'text','') ILIKE ${len(args)}")
+        since = str((query.get("since") or [""])[0]).strip()
+        if since:
+            args.append(since)
+            conditions.append(f"m.occurred_at >= ${len(args)}::timestamptz")
+        until = str((query.get("until") or [""])[0]).strip()
+        if until:
+            args.append(until)
+            conditions.append(f"m.occurred_at <= ${len(args)}::timestamptz")
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        args.append(int(max(1, min(200, int((query.get("limit") or ["50"])[0])))))
+        args.append(int(max(0, int((query.get("offset") or ["0"])[0]))))
+        rows = await self.state._db.fetch(
+            "SELECT m.message_id::text, m.conversation_id::text, m.ai_id, m.role, "
+            "c.platform, c.chat_type, c.platform_chat_id, "
+            "pi.person_id::text AS person_id, "
+            "COALESCE(NULLIF(p.display_name,''), pi.platform_user_id, '') AS display_name, "
+            "m.content, m.occurred_at "
+            "FROM messages m "
+            "JOIN conversations c ON c.conversation_id = m.conversation_id "
+            "LEFT JOIN platform_identities pi ON pi.identity_id = m.platform_identity_id "
+            "LEFT JOIN persons p ON p.person_id = pi.person_id "
+            f"{where} "
+            f"ORDER BY m.occurred_at DESC LIMIT ${len(args) - 1} OFFSET ${len(args)}",
+            *args,
+        )
+        return {
+            "messages": [
+                {
+                    "message_id": row["message_id"],
+                    "conversation_id": row["conversation_id"],
+                    "ai_id": row["ai_id"],
+                    "role": row["role"],
+                    "platform": row["platform"],
+                    "chat_type": row["chat_type"],
+                    "platform_chat_id": row["platform_chat_id"],
+                    "person_id": row["person_id"],
+                    "display_name": row["display_name"],
+                    "content": row["content"],
+                    "occurred_at": str(row["occurred_at"]),
+                }
+                for row in rows
+            ],
+            "db": True,
+        }
+
+    # 列出人物
+    async def _list_persons(self) -> dict:
+        if self.state._db is None:
+            return {"persons": [], "db": False}
+        rows = await self.state._db.fetch(
+            "SELECT pi.person_id::text, "
+            "COALESCE(NULLIF(p.display_name,''), pi.platform_user_id, '') AS display_name, "
+            "COUNT(m.message_id) AS message_count, MAX(m.occurred_at) AS last_at "
+            "FROM platform_identities pi "
+            "JOIN persons p ON p.person_id = pi.person_id "
+            "LEFT JOIN messages m ON m.platform_identity_id = pi.identity_id "
+            "GROUP BY pi.person_id, p.display_name, pi.platform_user_id "
+            "ORDER BY last_at DESC NULLS LAST LIMIT 300"
+        )
+        return {
+            "persons": [
+                {
+                    "person_id": row["person_id"],
+                    "display_name": row["display_name"],
+                    "message_count": int(row["message_count"] or 0),
+                    "last_at": str(row["last_at"]) if row["last_at"] else "",
+                }
+                for row in rows
+            ],
+            "db": True,
+        }
 
     # 同步执行异步任务
     def _submit(self, coro):
