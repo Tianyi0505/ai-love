@@ -212,7 +212,7 @@ function HistoryView() {
                     " \u00B7 ",
                     msg.platform_chat_id),
                 React.createElement("td", null,
-                    React.createElement("span", { className: "badge " + (msg.role === "assistant" ? "green" : "gray") }, msg.role === "assistant" ? "AI" : "用户")),
+                    React.createElement("span", { className: "badge " + (msg.role === "assistant" ? "green" : "gray") }, msg.role === "assistant" ? msg.ai_id || "AI" : "用户")),
                 React.createElement("td", null, msg.display_name || msg.person_id || "-"),
                 React.createElement("td", { className: "wrap" },
                     messageText(msg.content),

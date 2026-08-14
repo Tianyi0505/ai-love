@@ -385,7 +385,7 @@ function HistoryView() {
                 </td>
                 <td>
                   <span className={"badge " + (msg.role === "assistant" ? "green" : "gray")}>
-                    {msg.role === "assistant" ? "AI" : "用户"}
+                    {msg.role === "assistant" ? msg.ai_id || "AI" : "用户"}
                   </span>
                 </td>
                 <td>{msg.display_name || msg.person_id || "-"}</td>
