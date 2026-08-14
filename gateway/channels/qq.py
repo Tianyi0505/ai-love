@@ -37,6 +37,8 @@ class QQChannel(Channel):
         self._reconnect_delay_sec = float(cfg["reconnect_delay_sec"])
         self._ws = None
         self._stop = False
+        self._queues: dict[str, asyncio.Queue] = {}
+        self._workers: dict[str, asyncio.Task] = {}
 
     # 启动服务
     async def start(self) -> None:
@@ -52,14 +54,47 @@ class QQChannel(Channel):
                         if self._on_message is None:
                             logger.warning("[qq] 收到消息但未设置消息处理器，已丢弃: message_id=%s", msg.message_id)
                             continue
-                        await self._on_message(msg)
+                        self._dispatch(msg)
             except Exception as e:
                 print(f"[qq] WS 断开: {e}，重连中...")
                 await asyncio.sleep(self._reconnect_delay_sec)
+        await self._stop_workers()
 
     # 停止服务
     async def stop(self) -> None:
         self._stop = True
+
+    # 按会话分发消息：不同会话并行，同一会话内串行
+    def _dispatch(self, msg: SocialMessage) -> None:
+        key = f"{msg.account_id}:{msg.chat.chat_type.value}:{msg.chat.chat_id}"
+        queue = self._queues.get(key)
+        if queue is None:
+            queue = asyncio.Queue()
+            self._queues[key] = queue
+            self._workers[key] = asyncio.create_task(self._run_session(key, queue))
+        queue.put_nowait(msg)
+
+    # 单会话消息顺序处理循环
+    async def _run_session(self, key: str, queue: asyncio.Queue) -> None:
+        while True:
+            msg = await queue.get()
+            try:
+                await asyncio.wait_for(self._on_message(msg), timeout=self._message_timeout_sec)
+            except asyncio.TimeoutError:
+                logger.error("[qq] 会话消息处理超时，已跳过: key=%s message_id=%s", key, msg.message_id)
+            except Exception:
+                logger.exception("[qq] 会话消息处理异常，已跳过: key=%s message_id=%s", key, msg.message_id)
+            finally:
+                queue.task_done()
+
+    # 终止所有会话 worker
+    async def _stop_workers(self) -> None:
+        for task in self._workers.values():
+            task.cancel()
+        if self._workers:
+            await asyncio.gather(*self._workers.values(), return_exceptions=True)
+        self._workers.clear()
+        self._queues.clear()
 
     # 转换为消息
     def _to_message(self, evt: dict) -> SocialMessage | None:

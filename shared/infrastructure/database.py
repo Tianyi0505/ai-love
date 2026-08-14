@@ -27,6 +27,7 @@ class Database:
             self._url,
             min_size=self._pool_min_size,
             max_size=self._pool_max_size,
+            command_timeout=30.0,
         )
 
     # 关闭资源
