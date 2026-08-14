@@ -7,6 +7,10 @@
 *.p12
 napcat-qrcode.png
 
+# 忽略前端依赖与构建产物
+node_modules/
+package-lock.json
+
 # 忽略 Python 构建文件
 __pycache__/
 *.py[cod]

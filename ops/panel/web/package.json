@@ -1,0 +1,12 @@
+{
+  "name": "ailove-ops-panel-web",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.6.3"
+  }
+}

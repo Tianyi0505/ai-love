@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["ES2018", "DOM", "DOM.Iterable"],
+    "module": "none",
+    "moduleResolution": "node",
+    "jsx": "react",
+    "strict": true,
+    "noEmitOnError": true,
+    "outFile": "app.js",
+    "removeComments": true,
+    "useDefineForClassFields": true
+  },
+  "include": ["app.tsx"]
+}

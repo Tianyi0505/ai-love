@@ -1,0 +1,15 @@
+.venv
+.git
+.gitignore
+.dockerignore
+node_modules
+**/node_modules
+__pycache__
+**/*.pyc
+.idea
+.vscode
+*.log
+*.tgz
+tests
+CLAUDE.md
+README.md
