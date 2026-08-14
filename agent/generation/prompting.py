@@ -21,6 +21,7 @@ class PromptContext:
     recent_messages: tuple[str, ...] = ()
     tool_summary: str = ""
     entity_context: str = ""
+    relevant_people: str = ""
     output_protocol: str = ""
     extra: dict[str, str] = field(default_factory=dict)
 
@@ -52,6 +53,8 @@ class PromptAssembler:
             scene_template=self.template(context.scene),
             tool_summary=context.tool_summary,
             entity_context=context.entity_context,
+            person_rules=self.optional_template("person-rules"),
+            relevant_people=context.relevant_people,
             output_protocol=context.output_protocol or self.template("response-plan"),
         ).strip()
 
@@ -73,6 +76,13 @@ class PromptAssembler:
         if not value:
             raise RuntimeError(f"{self._definition.definition_key}.prompts.{key} 不能为空")
         return value
+
+    # 读取可选模板
+    def optional_template(self, key: str) -> str:
+        try:
+            return self.template(key)
+        except RuntimeError:
+            return ""
 
     # 渲染提示词模板
     def render(self, key: str, **values) -> str:

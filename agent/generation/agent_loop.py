@@ -46,9 +46,18 @@ class AgentLoop:
         if not allow_tools:
             tool_schemas = []
         if tool_schemas:
+            context_lines: list[str] = []
+            external_lines: list[str] = []
+            for name, info in getattr(self, "_tool_infos", {}).items():
+                line = f"- {name}: {info.get('description', '')}"
+                if info.get("provider") == "grounding":
+                    context_lines.append(line)
+                else:
+                    external_lines.append(line)
             prompt = self._prompts.render(
                 "tool-usage",
-                tools="\n".join(f"- {s.name}: {s.description}" for s in tool_schemas)
+                context_tools="\n".join(context_lines),
+                external_tools="\n".join(external_lines),
             )
             if messages and messages[0].role == "system":
                 messages = [ChatMessage(role="system", content=f"{messages[0].content}\n\n{prompt}")] + messages[1:]

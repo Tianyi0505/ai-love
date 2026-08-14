@@ -13,7 +13,7 @@ from agent.clients.extensions import register_tools
 from agent.clients.memory import MemoryClient
 from agent.clients.sticker import StickerClient
 from agent.clients.tts import TTSClient
-from agent.context.conversation import ConversationContext
+from agent.context.conversation import ConversationContext, format_entries
 from agent.application.proactive import GroupChatManager, ProactiveChat
 from agent.context.speaking_state import SessionManager
 from agent.application.live import handle_live
@@ -441,8 +441,9 @@ class AIRuntime:
         if not recent:
             logger.info("[ai-agent:%s] 群聊跳过: 会话窗口空", self.ai_id)
             return False
-        current_role, current_message = recent[-1]
-        history = recent[:-1]
+        ai_name = self.persona.name if getattr(self, "persona", None) is not None else ""
+        current_message = format_entries([recent[-1]], ai_name)
+        history_text = format_entries(recent[:-1], ai_name)
         relationship = await self._group_relationship(chat_id)
         score = self._group_participation_score(relationship)
         logger.info("[ai-agent:%s] 群聊判断: score=%.3f 门槛=%.2f", self.ai_id, score, float(self._proactive_config["group_min_score"]))
@@ -457,9 +458,9 @@ class AIRuntime:
                 "group-join-addressed-input"
                 if explicitly_addressed
                 else "group-join-input",
-                current_message=f"{current_role}: {current_message}",
+                current_message=current_message,
             ),
-            recent_messages=tuple(f"{role}: {content}" for role, content in history),
+            recent_messages=(history_text,) if history_text else (),
             relationship_summary=self.prompt_assembler.render(
                 "group-join-relationship",
                 familiarity=f"{float(relationship.get('familiarity', 0.0)):.2f}",
@@ -503,13 +504,13 @@ class AIRuntime:
         chat_id = chat_key.split(":", 1)[1]
         history_limit = int(self.gcfg.get("social", "compensation_history_messages"))
         recent = list(window)[-history_limit:]
-        _, current_message = recent[-1]
+        _, current_message, _meta = recent[-1]
+        ai_name = self.persona.name if getattr(self, "persona", None) is not None else ""
+        history_text = format_entries(recent[:-1], ai_name)
         context = PromptContext(
             scene="social-private",
             user_input=current_message,
-            recent_messages=tuple(
-                f"{role}: {content}" for role, content in recent[:-1]
-            ),
+            recent_messages=(history_text,) if history_text else (),
         )
         run_id = new_run_id()
         execution = AgentExecutionContext(

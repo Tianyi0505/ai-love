@@ -47,6 +47,13 @@ async def _process_turn(service, msg, execution, run_repo) -> dict:
         return {"outcome": "failed", "tool_rounds": 0, "response_text": ""}
 
 
+# 提取引用消息元信息
+def _quote_meta(msg) -> dict | None:
+    if msg.quote_ref is None:
+        return None
+    return {"name": msg.quote_ref.sender.name or msg.quote_ref.sender.user_id}
+
+
 # 执行回复决策与生成
 async def _process(service, msg, execution, run_repo) -> dict:
     outcome = "no_response"
@@ -81,11 +88,20 @@ async def _process(service, msg, execution, run_repo) -> dict:
     is_group = msg.chat.chat_type.value == "group"
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id
+    person_id = execution.sender_person_id
     tool_context = execution.tool_context()
     attributed_query = query
+    quote_meta = _quote_meta(msg)
     if is_group:
         if query:
-            service.conversation.add_user("group", msg.chat.chat_id, attributed_query)
+            service.conversation.add_user(
+                "group",
+                msg.chat.chat_id,
+                attributed_query,
+                speaker_id=person_id,
+                speaker_name=sender_name,
+                quote=quote_meta,
+            )
         service._observe_group_message(msg.chat.chat_id)
         service._mark_group_replied(msg.chat.chat_id)
     else:
@@ -138,7 +154,14 @@ async def _process(service, msg, execution, run_repo) -> dict:
         return {"outcome": "policy_no_response", "tool_rounds": 0, "response_text": ""}
 
     if not is_group:
-        service.conversation.add_user(msg.chat.chat_type.value, msg.chat.chat_id, attributed_query)
+        service.conversation.add_user(
+            msg.chat.chat_type.value,
+            msg.chat.chat_id,
+            attributed_query,
+            speaker_id=person_id,
+            speaker_name=sender_name,
+            quote=quote_meta,
+        )
     service._current_chat_key = f"{msg.chat.chat_type.value}:{msg.chat.chat_id}"
 
     entity_context = EntityContext.from_dict(msg.meta.get("entity_context"))

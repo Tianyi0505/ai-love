@@ -138,7 +138,7 @@ class MemoryPipeline:
             return
         definition, _ = await self._models.resources(data["ai_id"])
         conversation = "\n".join(
-            f"[{item.speaker if item.role == 'user' else definition.name}] {item.text}"
+            f"[{item.person_id + ' | ' if item.person_id else ''}{item.speaker if item.role == 'user' else definition.name}] {item.text}"
             for item in messages
         )
         prompt = Template(definition.prompts["memory-extraction"]).substitute(

@@ -64,7 +64,9 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         }
         runtime.group_manager = GroupChatManager()
         runtime.conversation = SimpleNamespace(
-            window=lambda _chat_type, _chat_id: [("user", "联系人: 你还记得群主吗")]
+            window=lambda _chat_type, _chat_id: [
+                ("user", "联系人: 你还记得群主吗", {"speaker_name": "联系人"})
+            ]
         )
         runtime._group_relationship = AsyncMock(return_value={})
         runtime.prompt_assembler = PromptAssembler(definition)
@@ -77,7 +79,8 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         messages = runtime.agent_loop.run.await_args.args[0]
         self.assertIn("当前真实消息明确 @ 了你", messages[1].content)
-        self.assertIn("user: 联系人: 你还记得群主吗", messages[1].content)
+        self.assertIn("[联系人]", messages[1].content)
+        self.assertIn("联系人: 你还记得群主吗", messages[1].content)
 
 
 if __name__ == "__main__":

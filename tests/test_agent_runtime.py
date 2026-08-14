@@ -18,7 +18,7 @@ except ModuleNotFoundError:
 from agent.application.turn_coordinator import TurnCoordinator
 from agent.generation.agent_loop import AgentLoop
 from ai.llm.types import ChatMessage, ChatStreamChunk, ToolCall
-from shared.contracts.entity import EntityContext
+from shared.contracts.entity import EntityCandidate, EntityContext, EntityReference
 from shared.contracts.social import Chat, ChatType, SocialMessage, SocialSender
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand
 from shared.contracts.tools import ToolExecutionContext
@@ -178,11 +178,20 @@ class ResponseCommandTests(unittest.TestCase):
 class EntityContextTests(unittest.TestCase):
     def test_round_trip(self) -> None:
         context = EntityContext(
-            mentions=({"status": "resolved", "person_id": "p1"},),
-            recent_participants=({"person_id": "p2", "display_name": "老王"},),
+            current_sender={"person_id": "p1", "display_name": "饼干罐橘子"},
+            references=(EntityReference(
+                text="群主",
+                status="candidate",
+                candidates=(EntityCandidate(person_id="p2", display_name="李四", confidence=0.9),),
+            ),),
+            recent_participants=(
+                {"person_id": "p2", "display_name": "李四", "group_card": "老李", "roles": ["owner"], "last_message_id": "m1", "last_seen_at": "now"},
+            ),
         )
         restored = EntityContext.from_dict(json.loads(json.dumps(context.to_dict())))
         self.assertEqual(context.to_dict(), restored.to_dict())
+        self.assertEqual("candidate", restored.references[0].status)
+        self.assertEqual("p2", restored.references[0].candidates[0].person_id)
 
     def test_from_dict_tolerates_missing(self) -> None:
         self.assertEqual(EntityContext().to_dict(), EntityContext.from_dict(None).to_dict())

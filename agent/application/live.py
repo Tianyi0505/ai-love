@@ -22,7 +22,7 @@ async def handle_live(service, payload: bytes) -> None:
     history_limit = int(service.gcfg.get("social", "live_prompt_history_messages"))
     recent = tuple(
         f"{role}: {content}"
-        for role, content in list(service.conversation.window("live", str(evt.actor.uid)))[-(history_limit + 1):-1]
+        for role, content, _meta in list(service.conversation.window("live", str(evt.actor.uid)))[-(history_limit + 1):-1]
     )
     prompt_context = PromptContext(
         scene="live",

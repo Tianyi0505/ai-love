@@ -97,6 +97,7 @@ class ExtensionHostService(BaseService):
                 "name": item.tool_id,
                 "description": item.description,
                 "parameters": item.input_schema,
+                "provider": item.provider_id,
             }
             for item in self._gateway.list_for_ai(str(request.get("ai_id", "")))
         ]

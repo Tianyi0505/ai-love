@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 
-from shared.contracts.entity import EntityCandidate, EntityContext, EntityMention
+from shared.contracts.entity import EntityCandidate, EntityContext, EntityReference
 from shared.contracts.tools import ToolExecutionContext
 from shared.infrastructure.database import Database
 
@@ -229,27 +229,28 @@ class EntityGroundingRepository:
         recent_participants_limit: int = 6,
         recent_lookback_sec: int = 86400,
     ) -> EntityContext:
-        mentions = [
-            EntityMention(
-                text=message.sender.name or message.sender.user_id,
-                person_id=context.sender_person_id,
-                resolution_type="sender",
-                confidence=1.0,
-            ).to_dict()
-        ]
+        sender = (
+            {
+                "person_id": context.sender_person_id,
+                "display_name": message.sender.name or message.sender.user_id,
+            }
+            if context.sender_person_id
+            else {}
+        )
+        references: list[EntityReference] = []
         seen = {context.sender_person_id}
 
         for target in message.meta.get("at_user_ids", []):
             if message.to_ai and str(target) == message.at_user_id:
                 continue
             result = await self.resolve_people(context, str(target), 2)
-            mentions.append(self._mention_from_result(f"@{target}", "explicit_at", result))
+            references.append(self._mention_from_result(f"@{target}", "explicit_at", result))
             for candidate in result["candidates"][:1]:
                 seen.add(candidate["person_id"])
 
         if message.quote_ref and message.quote_ref.sender.user_id:
             result = await self.resolve_people(context, message.quote_ref.sender.user_id, 2)
-            mentions.append(self._mention_from_result("引用消息发送者", "reply_to", result))
+            references.append(self._mention_from_result("引用消息发送者", "reply_to", result))
 
         text = message.text or ""
         matched_roles: list[str] = []
@@ -259,7 +260,7 @@ class EntityGroundingRepository:
             if any(role_name in existing for existing in matched_roles):
                 continue
             result = await self.resolve_people(context, role_name, 3)
-            mentions.append(self._mention_from_result(role_name, "group_role", result))
+            references.append(self._mention_from_result(role_name, "group_role", result))
             matched_roles.append(role_name)
 
         name_rows = await self._db.fetch(
@@ -283,26 +284,25 @@ class EntityGroundingRepository:
             person_ids = matched_names[name]
             unique_ids = tuple(dict.fromkeys(person_ids))
             if len(unique_ids) == 1 and unique_ids[0] not in seen:
-                mentions.append(
-                    EntityMention(
+                references.append(
+                    EntityReference(
                         text=name,
+                        status="resolved",
                         person_id=unique_ids[0],
-                        resolution_type="unique_group_card",
-                        confidence=0.98,
-                    ).to_dict()
+                        evidence=({"type": "group_card_match", "name": name},),
+                    )
                 )
                 seen.add(unique_ids[0])
             elif len(unique_ids) > 1:
-                mentions.append(
-                    EntityMention(
+                references.append(
+                    EntityReference(
                         text=name,
-                        resolution_type="group_card",
-                        confidence=0.0,
+                        status="candidate",
                         candidates=tuple(
                             EntityCandidate(person_id=person_id, confidence=0.7)
                             for person_id in unique_ids
                         ),
-                    ).to_dict()
+                    )
                 )
         participants = await self._recent_participants(
             context,
@@ -316,11 +316,15 @@ class EntityGroundingRepository:
                 {
                     "person_id": context.sender_person_id,
                     "display_name": message.sender.name or "",
+                    "group_card": "",
+                    "roles": [],
+                    "last_message_id": "",
                     "last_seen_at": "now",
                 },
             ) + participants
         return EntityContext(
-            mentions=tuple(mentions),
+            current_sender=sender,
+            references=tuple(references),
             recent_participants=participants,
         )
 
@@ -336,7 +340,8 @@ class EntityGroundingRepository:
         rows = await self._db.fetch(
             "SELECT pi.person_id::text AS person_id,"
             "COALESCE(NULLIF(gm.group_card,''),NULLIF(gm.nickname,''),NULLIF(p.display_name,''),'') AS display_name,"
-            "MAX(m.occurred_at) AS last_seen_at "
+            "NULLIF(gm.group_card,'') AS group_card, gm.role AS role, "
+            "MAX(m.message_id)::text AS last_message_id, MAX(m.occurred_at) AS last_seen_at "
             "FROM messages m "
             "JOIN platform_identities pi ON pi.identity_id=m.platform_identity_id "
             "JOIN persons p ON p.person_id=pi.person_id "
@@ -344,7 +349,7 @@ class EntityGroundingRepository:
             "AND gm.account_id=$3 AND gm.chat_id=$4 AND gm.is_active "
             "WHERE m.conversation_id=$1::uuid AND m.ai_id=$5 AND m.role='user' "
             "AND m.occurred_at>=now()-($6::text || ' seconds')::interval "
-            "GROUP BY pi.person_id,p.display_name,gm.group_card,gm.nickname "
+            "GROUP BY pi.person_id,p.display_name,gm.group_card,gm.nickname,gm.role "
             "ORDER BY last_seen_at DESC LIMIT $7",
             context.conversation_id,
             context.platform,
@@ -358,6 +363,9 @@ class EntityGroundingRepository:
             {
                 "person_id": row["person_id"],
                 "display_name": row["display_name"] or "",
+                "group_card": row["group_card"] or "",
+                "roles": [row["role"]] if row["role"] else [],
+                "last_message_id": row["last_message_id"] or "",
                 "last_seen_at": str(row["last_seen_at"]),
             }
             for row in rows
@@ -438,7 +446,7 @@ class EntityGroundingRepository:
         item["evidence"].append(evidence)
 
     @staticmethod
-    def _mention_from_result(text: str, resolution_type: str, result: dict) -> dict:
+    def _mention_from_result(text: str, resolution_type: str, result: dict) -> EntityReference:
         raw = list(result.get("candidates") or [])
         candidates = tuple(
             EntityCandidate(
@@ -450,11 +458,14 @@ class EntityGroundingRepository:
             for item in raw
             if item.get("person_id")
         )
-        resolved = candidates[0] if len(candidates) == 1 else None
-        return EntityMention(
-            text=text,
-            person_id=resolved.person_id if resolved else "",
-            resolution_type=resolution_type,
-            confidence=resolved.confidence if resolved else 0.0,
-            candidates=candidates,
-        ).to_dict()
+        if len(candidates) == 1 and candidates[0].confidence >= 0.9:
+            return EntityReference(
+                text=text,
+                status="resolved",
+                person_id=candidates[0].person_id,
+                display_name=candidates[0].display_name,
+                evidence=({"type": resolution_type},),
+            )
+        if candidates:
+            return EntityReference(text=text, status="candidate", candidates=candidates)
+        return EntityReference(text=text, status="unresolved")

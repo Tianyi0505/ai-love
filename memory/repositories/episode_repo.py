@@ -13,6 +13,7 @@ class EpisodeMessage:
     message_id: str
     role: str
     speaker: str
+    person_id: str
     text: str
     occurred_at: float
 
@@ -58,7 +59,8 @@ class EpisodeMemoryRepository:
         last_ended_at = row["last_ended_at"] if row else None
         rows = await self._db.fetch(
             "SELECT m.message_id::text, m.role, m.content, extract(epoch from m.occurred_at) AS occurred_at, "
-            "coalesce(p.display_name, pi.platform_user_id, '') AS speaker "
+            "coalesce(p.display_name, pi.platform_user_id, '') AS speaker, "
+            "pi.person_id::text AS person_id "
             "FROM messages m "
             "LEFT JOIN platform_identities pi ON pi.identity_id=m.platform_identity_id "
             "LEFT JOIN persons p ON p.person_id=pi.person_id "
@@ -84,6 +86,7 @@ class EpisodeMemoryRepository:
                     message_id=item["message_id"],
                     role=item["role"],
                     speaker=item["speaker"] or "AI",
+                    person_id=item["person_id"] or "",
                     text=text,
                     occurred_at=float(item["occurred_at"]),
                 )
