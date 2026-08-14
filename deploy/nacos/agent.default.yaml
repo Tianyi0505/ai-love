@@ -87,6 +87,18 @@ extensions:
     enabled: true
     permission: allow
     config: {}
+  - tool_id: resolve_people
+    enabled: true
+    permission: allow
+    config: {}
+  - tool_id: search_group_history
+    enabled: true
+    permission: allow
+    config: {}
+  - tool_id: get_person_context
+    enabled: true
+    permission: allow
+    config: {}
 
 model_config:
   fast:
@@ -133,6 +145,9 @@ prompts:
     ## 工具上下文
     ${tool_summary}
 
+    ## 当前消息实体上下文
+    ${entity_context}
+
     ## 输出协议
     ${output_protocol}
   user: |-
@@ -163,6 +178,7 @@ prompts:
     - 问题涉及实时、最新、近期变化或当前状态；
     - 缺少可验证的外部资料会导致答案明显不可靠。
     普通聊天、主观交流、创作表达，以及当前消息和已有资料足以完成的任务，不调用工具。只调用必要的工具和次数。
+    遇到人物称呼、角色称呼或上下文指代时，先使用系统提供的实体上下文。仍不能唯一确定时，按需调用 resolve_people；需要核对谁说过什么时调用 search_group_history；已获得 person_id 且确实需要人物背景时再调用 get_person_context。不要猜测身份，也不要把一次解析当成永久别名。
   tool-result: |-
     工具：${tool_name}
     ${result}

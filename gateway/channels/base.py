@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from shared.contracts.social import Chat, SocialMessage
@@ -25,6 +26,7 @@ class ChannelCapabilities:
 class Channel(ABC):
 
     name: str = ""
+    _on_message: Callable[[SocialMessage], Awaitable[None]] | None = None
 
     # 初始化当前实例
     def __init__(self, cfg: dict) -> None:
@@ -39,7 +41,9 @@ class Channel(ABC):
     async def stop(self) -> None: ...
 
     # 设置消息处理器
-    def set_message_handler(self, handler) -> None:
+    def set_message_handler(self, handler: Callable[[SocialMessage], Awaitable[None]] | None) -> None:
+        if handler is not None and not callable(handler):
+            raise TypeError(f"消息处理器必须是可调用对象: {type(handler).__name__}")
         self._on_message = handler
 
     # 发送消息
@@ -58,6 +62,10 @@ class Channel(ABC):
     # 补全消息内容
     async def hydrate_message(self, message: SocialMessage) -> SocialMessage:
         return message
+
+    # 列出当前群成员快照
+    async def list_group_members(self, chat_id: str) -> list[dict]:
+        return []
 
     # 返回渠道能力
     @property

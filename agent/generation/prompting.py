@@ -20,6 +20,7 @@ class PromptContext:
     growth_summary: str = ""
     recent_messages: tuple[str, ...] = ()
     tool_summary: str = ""
+    entity_context: str = ""
     output_protocol: str = ""
     extra: dict[str, str] = field(default_factory=dict)
 
@@ -50,6 +51,7 @@ class PromptAssembler:
             memories="\n".join(f"- {item}" for item in context.memories),
             scene_template=self.template(context.scene),
             tool_summary=context.tool_summary,
+            entity_context=context.entity_context,
             output_protocol=context.output_protocol or self.template("response-plan"),
         ).strip()
 

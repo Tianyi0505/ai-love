@@ -1,5 +1,6 @@
 instance_addr: 127.0.0.1:0
 binding_poll_interval_sec: 2
+grounding_timeout_sec: 10
 mcp_url: __MCP_URL__
 messages:
   unknown_skill: 未知本地 Skill

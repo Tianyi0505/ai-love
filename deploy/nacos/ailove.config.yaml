@@ -1,6 +1,7 @@
 qq:
   whitelist: __AILOVE_QQ_WHITELIST__
   reconnect_delay_sec: 5
+  group_member_refresh_sec: 60
   voice_reply: true
   space_interval_sec: 3600
   qzone_comments_context_limit: 3
@@ -68,6 +69,16 @@ search:
   top_k: 5
   reciprocal_rank_k: 60
   each_source_limit: 3
+
+grounding:
+  candidate_limit: 5
+  mention_evidence_half_life_sec: 2592000
+  history_default_limit: 8
+  history_max_limit: 20
+  history_lookback_sec: 86400
+  person_context_fact_limit: 8
+  recent_participants_limit: 6
+  recent_participants_lookback_sec: 86400
 
 llm:
   timeout_ms: 60000

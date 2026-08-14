@@ -19,7 +19,7 @@ class StateEntry:
 
 # 管理记忆任务状态
 class MemoryStateStore:
-    """用 JetStream KV 保存活动水位和待合并批次。"""
+    """保存活动水位和待合并批次"""
 
     # 初始化当前实例
     def __init__(self, activity_kv, pending_kv, quiet_window_sec: float, lease_sec: float) -> None:

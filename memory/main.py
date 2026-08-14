@@ -6,8 +6,10 @@ import json
 import logging
 import os
 import time
+import uuid
 
 from shared.contracts.memory import MemoryActivity
+from shared.contracts.tools import ToolExecutionContext
 from shared.contracts.relationship import RelationshipCeilings, RelationshipPolicy
 from shared.infrastructure.agent_store import NacosAgentDefinitionStore
 from shared.infrastructure.config import ServiceConfig
@@ -36,6 +38,7 @@ class MemoryService(BaseService):
         self._gcfg = GlobalConfig(provider=self.cfg.nacos)
         await self._gcfg.load()
         self._memory_config = self._gcfg.section("memory")
+        self._grounding_config = self._gcfg.section("grounding")
 
         self._sticker_svc = StickerService(self._gcfg)
         self._db = None
@@ -76,6 +79,7 @@ class MemoryService(BaseService):
         await self.bus.reply("memory.procedural.request", self._on_procedural)
         await self.bus.reply("memory.batch.request", self._on_batch)
         await self.bus.reply("memory.context.request", self._on_context)
+        await self.bus.reply("memory.person-context.request", self._on_person_context)
         await self.bus.reply("relationship.gift.request", self._on_relationship_gift)
         await self.bus.reply("relationship.chat.request", self._on_relationship_chat)
         await self.bus.reply("relationship.summary.request", self._on_relationship_summary)
@@ -214,6 +218,27 @@ class MemoryService(BaseService):
             str(req.get("conversation_id") or ""),
         )
         return json.dumps(result, ensure_ascii=False).encode("utf-8")
+
+    # 返回当前场景允许使用的人物事实投影
+    async def _on_person_context(self, payload: bytes) -> bytes:
+        req = json.loads(payload.decode("utf-8"))
+        context = ToolExecutionContext.from_dict(req.get("context"))
+        arguments = req.get("arguments") if isinstance(req.get("arguments"), dict) else {}
+        person_id = str(arguments.get("person_id") or "")
+        try:
+            uuid.UUID(person_id)
+        except (ValueError, TypeError, AttributeError):
+            return json.dumps({"ok": False, "error": "person_id 无效"}, ensure_ascii=False).encode()
+        if self._db is None or context.ai_id == "":
+            return json.dumps({"ok": False, "error": "人物上下文不可用"}, ensure_ascii=False).encode()
+        result = await self._episode_repo.person_context(
+            context,
+            person_id,
+            int(self._grounding_config["person_context_fact_limit"]),
+        )
+        if result is None:
+            return json.dumps({"ok": False, "error": "当前场景无权读取该人物背景"}, ensure_ascii=False).encode()
+        return json.dumps({"ok": True, **result}, ensure_ascii=False).encode("utf-8")
 
     # 处理记忆活动
     async def _on_memory_activity(self, payload: bytes) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from shared.contracts.memory import MemoryActivity
+from shared.contracts.tools import ToolExecutionContext
 
 
 # 封装记忆客户端调用
@@ -67,6 +68,24 @@ class MemoryClient:
                 "person_markdown": "",
                 "conversation_summary": "",
             }
+
+    # 获取经过场景隐私策略过滤的人物事实
+    async def person_context(
+        self,
+        person_id: str,
+        context: ToolExecutionContext,
+    ) -> dict:
+        try:
+            return await self._bus.request_json(
+                "memory.person-context.request",
+                {
+                    "context": context.to_dict(),
+                    "arguments": {"person_id": person_id},
+                },
+                timeout=float(self._timeouts["memory_context_sec"]),
+            )
+        except Exception:
+            return {"ok": False, "facts": [], "conversation_summary": ""}
 
     # 记录记忆活动
     async def activity(

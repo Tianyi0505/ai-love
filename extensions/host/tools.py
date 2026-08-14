@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
+from shared.contracts.tools import ToolExecutionContext
+
 
 # 定义权限级别枚举
 class PermissionLevel(str, Enum):
@@ -41,8 +43,7 @@ class ToolInvocation:
     tool_id: str
     ai_id: str
     arguments: dict[str, Any]
-    account_id: str = ""
-    conversation_id: str = ""
+    context: ToolExecutionContext = field(default_factory=ToolExecutionContext)
     reason: str = ""
 
 

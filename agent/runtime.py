@@ -18,6 +18,9 @@ from agent.application.proactive import GroupChatManager, ProactiveChat
 from agent.context.speaking_state import SessionManager
 from agent.application.live import handle_live
 from agent.application.social import handle_social
+from agent.application.turn_coordinator import TurnCoordinator
+from shared.contracts.turn import AgentExecutionContext, ResponseCommand, new_run_id
+from shared.infrastructure.run_repo import AgentRunRepository
 from ai.llm.providers import anthropic_gw, deepseek, ollama
 from ai.llm.factory import create_llm
 from ai.llm.types import ChatMessage
@@ -93,6 +96,13 @@ class AIRuntime:
         self.stickers = StickerClient(self.bus, self.ai_id, self._timeouts)
         self.tts = TTSClient(self.bus, self.ai_id, self._timeouts)
 
+        self.coordinator = TurnCoordinator()
+        self.run_repo = (
+            AgentRunRepository(getattr(self._host, "_db", None))
+            if getattr(self._host, "_db", None) is not None
+            else None
+        )
+
         self.memory = MemoryClient(
             self.bus,
             self.ai_id,
@@ -150,20 +160,30 @@ class AIRuntime:
 
     # 处理社交
     async def handle_social(self, payload: bytes) -> None:
+        message = SocialMessage.from_dict(json.loads(payload))
+        key = (
+            f"{self.ai_id}\x1f"
+            f"{str(message.meta.get('conversation_id') or '') or message.chat.chat_id}"
+        )
         self._in_flight += 1
-        try:
-            await handle_social(self, payload)
-        finally:
+
+        # 同一会话串行演进，不同会话并发
+        async def guarded() -> None:
             try:
-                message = SocialMessage.from_dict(json.loads(payload))
-                await self.memory.activity(
-                    person_id=str(message.meta.get("person_id") or ""),
-                    conversation_id=str(message.meta.get("conversation_id") or ""),
-                    message_id=str(message.message_id or ""),
-                )
-            except Exception as exc:
-                logger.warning("[ai-agent:%s] 发布记忆活动失败: %s", self.ai_id, exc)
-            self._in_flight -= 1
+                async with self.coordinator.lock_for(key):
+                    await handle_social(self, payload)
+                    try:
+                        await self.memory.activity(
+                            person_id=str(message.meta.get("person_id") or ""),
+                            conversation_id=str(message.meta.get("conversation_id") or ""),
+                            message_id=str(message.message_id or ""),
+                        )
+                    except Exception as exc:
+                        logger.warning("[ai-agent:%s] 发布记忆活动失败: %s", self.ai_id, exc)
+            finally:
+                self._in_flight -= 1
+
+        self.spawn(guarded())
 
     # 处理直播
     async def handle_live(self, payload: bytes) -> None:
@@ -322,6 +342,17 @@ class AIRuntime:
             return plan
         return ResponsePlan.from_model_output(fallback)
 
+    # 统一发送回复指令
+    async def send_response(self, command: ResponseCommand) -> dict:
+        try:
+            return await self.bus.request_json(
+                "social.send.request",
+                command.send_payload(),
+                timeout=float(self.gcfg.get("social", "send_timeout_sec")),
+            )
+        except Exception as exc:
+            return {"ok": False, "fallback_note": str(exc) or "发送确认超时"}
+
     # 发送主动交互
     async def _send_proactive(self, p: dict) -> None:
         user_id = p.get("user_id", "")
@@ -345,14 +376,45 @@ class AIRuntime:
             self_document=str(memory_context.get("self_markdown") or ""),
             person_document=str(memory_context.get("person_markdown") or ""),
         )
-        text = (await self._generate_plan(context)).text
-        if not text:
-            return
         account_id = str(p.get("account_id") or self.primary_social_account_id)
-        await self.bus.publish_json(
-            "social.send.request",
-            {"ai_id": self.ai_id, "account_id": account_id, "channel": "qq", "chat": {"chat_id": user_id, "chat_type": "private", "chat_name": name}, "type": "text", "text": text},
+        run_id = new_run_id()
+        execution = AgentExecutionContext(
+            run_id=run_id,
+            ai_id=self.ai_id,
+            account_id=account_id,
+            platform="qq",
+            chat_type="private",
+            chat_id=user_id,
+            sender_person_id=str(p.get("person_id") or ""),
+            sender_platform_user_id=user_id,
+            source="proactive",
         )
+        async with self.coordinator.lock_for(execution.conversation_key):
+            if self.run_repo is not None:
+                await self.run_repo.start_run(execution)
+            text = (await self._generate_plan(context)).text
+            if not text:
+                if self.run_repo is not None:
+                    await self.run_repo.finish_run(run_id, "empty_plan")
+                return
+            command = ResponseCommand(
+                run_id=run_id,
+                ai_id=self.ai_id,
+                account_id=account_id,
+                conversation_id=execution.conversation_id,
+                platform="qq",
+                chat={"chat_id": user_id, "chat_type": "private", "chat_name": name},
+                text=text,
+            )
+            result = await self.send_response(command)
+            if self.run_repo is not None:
+                await self.run_repo.finish_run(
+                    run_id,
+                    "sent" if result.get("ok") else "send_failed",
+                    response_text=text,
+                )
+            if not result.get("ok"):
+                return
         self.sessions.mark_spoke(session_key)
         logger.info("[ai-agent:%s] 主动私聊 %s: %s", self.ai_id, name, text[:30])
 
@@ -414,7 +476,7 @@ class AIRuntime:
                 ChatMessage(role="system", content=self.prompt_assembler.build_system_prompt(context)),
                 ChatMessage(role="user", content=self.prompt_assembler.build_user_prompt(context)),
             ]
-            raw = await self.agent_loop.run(messages)
+            raw = await self.agent_loop.run(messages, allow_tools=False)
             start, end = raw.find("{"), raw.rfind("}")
             decision = json.loads(raw[start : end + 1]) if start >= 0 and end > start else {}
             return decision.get("participate") is True
@@ -449,13 +511,39 @@ class AIRuntime:
                 f"{role}: {content}" for role, content in recent[:-1]
             ),
         )
-        reply = (await self._generate_plan(context, self._fallbacks["response"])).text
-        await self.bus.publish_json(
-            "social.send.request",
-            {"ai_id": self.ai_id, "account_id": self.primary_social_account_id, "channel": "qq", "chat": {"chat_id": chat_id, "chat_type": "private"}, "type": "text", "text": reply},
+        run_id = new_run_id()
+        execution = AgentExecutionContext(
+            run_id=run_id,
+            ai_id=self.ai_id,
+            account_id=self.primary_social_account_id,
+            platform="qq",
+            chat_type="private",
+            chat_id=chat_id,
+            source="compensate",
         )
-        self.conversation.add_ai("private", chat_id, reply)
-        logger.info("[ai-agent:%s] 补偿回复 %s: %s", self.ai_id, chat_id, reply[:30])
+        async with self.coordinator.lock_for(execution.conversation_key):
+            if self.run_repo is not None:
+                await self.run_repo.start_run(execution)
+            reply = (await self._generate_plan(context, self._fallbacks["response"])).text
+            command = ResponseCommand(
+                run_id=run_id,
+                ai_id=self.ai_id,
+                account_id=self.primary_social_account_id,
+                conversation_id=execution.conversation_id,
+                platform="qq",
+                chat={"chat_id": chat_id, "chat_type": "private"},
+                text=reply,
+            )
+            result = await self.send_response(command)
+            if self.run_repo is not None:
+                await self.run_repo.finish_run(
+                    run_id,
+                    "sent" if result.get("ok") else "send_failed",
+                    response_text=reply,
+                )
+            if result.get("ok"):
+                self.conversation.add_ai("private", chat_id, reply)
+                logger.info("[ai-agent:%s] 补偿回复 %s: %s", self.ai_id, chat_id, reply[:30])
 
     # 处理评论请求
     async def _on_comment_request(self, payload: bytes) -> bytes:

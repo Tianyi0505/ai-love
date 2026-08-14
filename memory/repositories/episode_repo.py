@@ -4,6 +4,8 @@ import json
 import uuid
 from dataclasses import dataclass
 
+from shared.contracts.tools import ToolExecutionContext
+
 
 # 表示会话片段消息数据
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ class ExtractionRecord:
 
 # 管理会话片段记忆存储库持久化
 class EpisodeMemoryRepository:
-    """持久化会话片段、原子记忆和长期 Markdown。"""
+    """持久化会话片段、原子记忆和长期 Markdown"""
 
     # 初始化当前实例
     def __init__(self, db, history_episode_limit: int) -> None:
@@ -207,6 +209,76 @@ class EpisodeMemoryRepository:
             "self_markdown": self_row["markdown_content"] if self_row else "",
             "person_markdown": person_row["markdown_content"] if person_row else "",
             "conversation_summary": summary_row["summary"] if summary_row else "",
+        }
+
+    # 按当前会话投影人物事实
+    async def person_context(
+        self,
+        context: ToolExecutionContext,
+        person_id: str,
+        fact_limit: int,
+    ) -> dict | None:
+        conversation = await self._db.fetchrow(
+            "SELECT EXISTS(SELECT 1 FROM conversations c WHERE c.conversation_id=$1::uuid "
+            "AND c.platform=$2 AND c.account_id=$3 AND c.platform_chat_id=$4 AND c.chat_type=$5 "
+            "AND EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=c.conversation_id "
+            "AND m.ai_id=$6)) AS exists",
+            context.conversation_id,
+            context.platform,
+            context.account_id,
+            context.chat_id,
+            context.chat_type,
+            context.ai_id,
+        )
+        if conversation is None or not conversation["exists"]:
+            return None
+        if context.chat_type == "group":
+            allowed = await self._db.fetchrow(
+                "SELECT EXISTS(SELECT 1 FROM group_members gm WHERE gm.platform=$1 "
+                "AND gm.account_id=$2 AND gm.chat_id=$3 AND gm.person_id=$4::uuid "
+                "AND gm.is_active) AS exists",
+                context.platform,
+                context.account_id,
+                context.chat_id,
+                person_id,
+            )
+            if allowed is None or not allowed["exists"]:
+                return None
+        elif context.chat_type == "private":
+            if person_id != context.sender_person_id:
+                return None
+        else:
+            return None
+
+        rows = await self._db.fetch(
+            "SELECT ma.content,ma.memory_type,ma.importance,ma.confidence,ma.created_at "
+            "FROM memory_atoms ma JOIN conversation_episodes ce ON ce.episode_id=ma.episode_id "
+            "WHERE ma.ai_id=$1 AND ma.owner_type='person' AND ma.owner_id=$2 "
+            "AND ce.conversation_id=$3::uuid "
+            "ORDER BY ma.importance DESC,ma.confidence DESC,ma.created_at DESC LIMIT $4",
+            context.ai_id,
+            person_id,
+            context.conversation_id,
+            fact_limit,
+        )
+        summary = await self._db.fetchrow(
+            "SELECT summary FROM conversation_summaries WHERE ai_id=$1 AND conversation_id=$2::uuid",
+            context.ai_id,
+            context.conversation_id,
+        )
+        return {
+            "person_id": person_id,
+            "scene": context.chat_type,
+            "facts": [
+                {
+                    "content": row["content"],
+                    "type": row["memory_type"],
+                    "importance": float(row["importance"]),
+                    "confidence": float(row["confidence"]),
+                }
+                for row in rows
+            ],
+            "conversation_summary": summary["summary"] if summary else "",
         }
 
     # 生成记忆聚合输入

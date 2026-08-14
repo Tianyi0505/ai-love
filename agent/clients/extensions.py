@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import logging
 
+from shared.contracts.tools import ToolExecutionContext
+
 logger = logging.getLogger("ailove.agent.clients.extensions")
 
 
@@ -25,7 +27,11 @@ async def register_tools(agent_loop, bus, ai_id: str, timeouts: dict) -> None:
             continue
 
         # 执行操作
-        async def execute(arguments, tool_id=name):
+        async def execute(
+            arguments,
+            context: ToolExecutionContext,
+            tool_id=name,
+        ):
             if isinstance(arguments, str):
                 try:
                     arguments = json.loads(arguments)
@@ -35,7 +41,12 @@ async def register_tools(agent_loop, bus, ai_id: str, timeouts: dict) -> None:
                 arguments = {}
             result = await bus.request_json(
                 "tool.execute.request",
-                {"ai_id": ai_id, "tool_id": tool_id, "arguments": arguments},
+                {
+                    "ai_id": ai_id,
+                    "tool_id": tool_id,
+                    "arguments": arguments,
+                    "execution_context": context.to_dict(),
+                },
                 timeout=float(timeouts["tool_execute_sec"]),
             )
             return result.get("content", "")

@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 
 import httpx
 
@@ -26,6 +27,7 @@ from shared.infrastructure.agent_store import NacosAgentDefinitionStore
 from shared.infrastructure.config import ServiceConfig
 from shared.infrastructure.database import Database
 from shared.infrastructure.global_config import GlobalConfig
+from shared.infrastructure.entity_grounding import EntityGroundingRepository
 from shared.infrastructure.repositories import (
     AccountOwnershipRepository,
     ConversationRepository,
@@ -33,6 +35,8 @@ from shared.infrastructure.repositories import (
     RelationshipRepository,
 )
 from shared.infrastructure.service import BaseService
+from shared.contracts.tools import ToolExecutionContext
+from shared.contracts.turn import new_run_id
 logger = logging.getLogger("ailove.gateway")
 
 SUBJ_EVENT_AI = "ai.events.{ai_id}"
@@ -64,12 +68,18 @@ class GatewayService(BaseService):
             self._identities = IdentityRepository(self._db)
             self._relationships = RelationshipRepository(self._db)
             self._conversations = ConversationRepository(self._db)
+            self._grounding = EntityGroundingRepository(
+                self._db,
+                float(self._gcfg.get("grounding", "mention_evidence_half_life_sec")),
+            )
         else:
             ownership = StaticOwnershipResolver(static_owners)
             self._identities = None
             self._relationships = None
             self._conversations = None
+            self._grounding = None
         self._social_router = SocialRouter(ownership)
+        self._group_member_sync_at: dict[tuple[str, str], float] = {}
 
         self._qq_whitelist = self._user_id_set(self._gcfg.get("qq", "whitelist"))
 
@@ -93,6 +103,8 @@ class GatewayService(BaseService):
 
         await self.bus.reply(SUBJ_SOCIAL_SEND, self._on_social_send)
         await self.bus.reply(SUBJ_SOCIAL_HISTORY, self._on_history_request)
+        await self.bus.reply("identity.resolve-people.request", self._on_resolve_people)
+        await self.bus.reply("history.search-group.request", self._on_search_group_history)
         qq_account_id = next(
             (account_id for account_id, cfg in self._account_configs.items() if cfg["adapter"] == "qq"),
             "",
@@ -235,6 +247,7 @@ class GatewayService(BaseService):
 
     # 处理渠道消息
     async def _on_channel_message(self, msg: SocialMessage) -> None:
+        msg.meta["run_id"] = new_run_id()
         if msg.platform == "qq":
             msg.meta["priority_contact"] = str(msg.sender.user_id) in self._qq_whitelist
         if msg.chat.chat_type == ChatType.GROUP and msg.chat.chat_id.startswith("live:"):
@@ -259,9 +272,140 @@ class GatewayService(BaseService):
             return
         msg.meta["ai_id"] = turn.ai_id
         msg.meta["conversation_id"] = turn.conversation_id
+        if msg.chat.chat_type == ChatType.GROUP and self._grounding is not None:
+            try:
+                await self._sync_group_members(msg)
+                context = self._message_tool_context(msg, turn.ai_id)
+                msg.meta["entity_context"] = (
+                    await self._grounding.fast_ground(
+                        context,
+                        msg,
+                        recent_participants_limit=int(
+                            self._gcfg.get("grounding", "recent_participants_limit")
+                        ),
+                        recent_lookback_sec=int(
+                            self._gcfg.get("grounding", "recent_participants_lookback_sec")
+                        ),
+                    )
+                ).to_dict()
+                await self._record_explicit_at_evidence(msg, context)
+            except Exception:
+                logger.exception("[gateway] 群聊实体上下文构建失败，继续投递原消息")
         if self._conversations is not None:
             await self._conversations.record_inbound(msg, turn.ai_id)
         await self.bus.publish_json(SUBJ_SOCIAL_CHAT.format(ai_id=turn.ai_id), msg.to_dict())
+
+    # 按配置周期刷新群成员角色和群名片
+    async def _sync_group_members(self, msg: SocialMessage) -> None:
+        key = (msg.account_id, msg.chat.chat_id)
+        now = time.monotonic()
+        refresh_sec = float(self._gcfg.get("qq", "group_member_refresh_sec"))
+        if now - self._group_member_sync_at.get(key, 0.0) < refresh_sec:
+            return
+        channel = self._channels.get(msg.account_id)
+        if channel is None:
+            return
+        members = await channel.list_group_members(msg.chat.chat_id)
+        if not members:
+            return
+        identities = await self._identities.resolve_or_create_many(
+            msg.platform,
+            msg.account_id,
+            members,
+        )
+        snapshot = []
+        for member in members:
+            user_id = str(member["platform_user_id"])
+            identity = identities.get(user_id)
+            if identity is None:
+                continue
+            snapshot.append({**member, "person_id": identity[1]})
+        await self._grounding.sync_group_members(
+            msg.platform,
+            msg.account_id,
+            msg.chat.chat_id,
+            snapshot,
+        )
+        self._group_member_sync_at[key] = now
+
+    # 记录平台 @ 携带的称呼证据
+    async def _record_explicit_at_evidence(
+        self,
+        msg: SocialMessage,
+        context: ToolExecutionContext,
+    ) -> None:
+        for mention in msg.meta.get("at_mentions", []):
+            name = str(mention.get("name") or "").strip()
+            user_id = str(mention.get("user_id") or "")
+            if (
+                not name
+                or name in {"群主", "管理员", "群管理员"}
+                or (msg.to_ai and user_id == msg.at_user_id)
+            ):
+                continue
+            result = await self._grounding.resolve_people(context, user_id, 1)
+            candidates = result.get("candidates") or []
+            if not candidates:
+                continue
+            await self._grounding.record_mention_evidence(
+                mention_text=name,
+                person_id=str(candidates[0]["person_id"]),
+                scope_type="group",
+                scope_id=context.chat_id,
+                conversation_id=context.conversation_id,
+                source_message_id=msg.message_id,
+                evidence_type="explicit_at",
+                confidence=1.0,
+            )
+
+    @staticmethod
+    def _message_tool_context(msg: SocialMessage, ai_id: str) -> ToolExecutionContext:
+        return ToolExecutionContext(
+            ai_id=ai_id,
+            account_id=msg.account_id,
+            conversation_id=str(msg.meta.get("conversation_id") or ""),
+            platform=msg.platform,
+            chat_type=msg.chat.chat_type.value,
+            chat_id=msg.chat.chat_id,
+            sender_person_id=str(msg.meta.get("person_id") or ""),
+        )
+
+    # 校验系统注入的当前群作用域与真实会话、账号归属一致
+    async def _valid_group_tool_context(self, context: ToolExecutionContext) -> bool:
+        if self._grounding is None or not context.is_group:
+            return False
+        owner = await self._social_router.owner_for(context.account_id)
+        return owner == context.ai_id and await self._grounding.context_matches(context)
+
+    # 解析当前群里的称呼候选
+    async def _on_resolve_people(self, payload: bytes) -> bytes:
+        request = json.loads(payload.decode("utf-8"))
+        context = ToolExecutionContext.from_dict(request.get("context"))
+        arguments = request.get("arguments") if isinstance(request.get("arguments"), dict) else {}
+        if not await self._valid_group_tool_context(context):
+            return json.dumps({"ok": False, "error": "当前工具不具备有效群聊作用域"}, ensure_ascii=False).encode()
+        mention = str(arguments.get("mention") or "").strip()
+        limit = int(self._gcfg.get("grounding", "candidate_limit"))
+        result = await self._grounding.resolve_people(context, mention, limit)
+        return json.dumps({"ok": True, **result}, ensure_ascii=False).encode()
+
+    # 仅检索当前群会话历史，并随结果返回发送者实体
+    async def _on_search_group_history(self, payload: bytes) -> bytes:
+        request = json.loads(payload.decode("utf-8"))
+        context = ToolExecutionContext.from_dict(request.get("context"))
+        arguments = request.get("arguments") if isinstance(request.get("arguments"), dict) else {}
+        if not await self._valid_group_tool_context(context):
+            return json.dumps({"ok": False, "error": "当前工具不具备有效群聊作用域"}, ensure_ascii=False).encode()
+        default_limit = int(self._gcfg.get("grounding", "history_default_limit"))
+        max_limit = int(self._gcfg.get("grounding", "history_max_limit"))
+        limit = min(max_limit, max(1, int(arguments.get("limit") or default_limit)))
+        messages = await self._grounding.search_group_history(
+            context,
+            str(arguments.get("query") or "").strip(),
+            limit,
+            int(self._gcfg.get("grounding", "history_lookback_sec")),
+        )
+        return json.dumps({"ok": True, "messages": messages}, ensure_ascii=False).encode()
 
     # 转换为互动事件
     async def _as_interaction(self, msg: SocialMessage) -> None:

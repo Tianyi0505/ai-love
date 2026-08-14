@@ -9,8 +9,9 @@ from extensions.host.tools import PermissionLevel, ToolGateway, ToolGrant, ToolI
 from shared.infrastructure.agent_store import NacosAgentDefinitionStore
 from shared.infrastructure.config import ServiceConfig
 from shared.infrastructure.service import BaseService
-from extensions.host.providers import BuiltinToolProvider
+from extensions.host.providers import BuiltinToolProvider, GroundingToolProvider
 from extensions.host.mcp_provider import MCPToolProvider
+from shared.contracts.tools import ToolExecutionContext
 
 logger = logging.getLogger("ailove.extension-host")
 
@@ -47,6 +48,12 @@ class ExtensionHostService(BaseService):
             return
         gateway = ToolGateway()
         gateway.register_provider(BuiltinToolProvider(self._service_config))
+        gateway.register_provider(
+            GroundingToolProvider(
+                self.bus,
+                float(self._service_config["grounding_timeout_sec"]),
+            )
+        )
         for provider in self._mcp_providers:
             gateway.register_provider(provider)
         for definition in definitions:
@@ -98,13 +105,25 @@ class ExtensionHostService(BaseService):
     # 处理工具执行请求
     async def _on_execute(self, payload: bytes) -> bytes:
         request = json.loads(payload)
+        ai_id = str(request.get("ai_id", ""))
+        context = ToolExecutionContext.from_dict(request.get("execution_context"))
+        # 忽略上下文中的 ai_id
+        context = ToolExecutionContext(
+            run_id=context.run_id,
+            ai_id=ai_id,
+            account_id=context.account_id,
+            conversation_id=context.conversation_id,
+            platform=context.platform,
+            chat_type=context.chat_type,
+            chat_id=context.chat_id,
+            sender_person_id=context.sender_person_id,
+        )
         result = await self._gateway.invoke(
             ToolInvocation(
                 tool_id=str(request.get("tool_id", "")),
-                ai_id=str(request.get("ai_id", "")),
-                account_id=str(request.get("account_id", "")),
-                conversation_id=str(request.get("conversation_id", "")),
+                ai_id=ai_id,
                 arguments=dict(request.get("arguments", {})),
+                context=context,
                 reason=str(request.get("reason", "")),
             )
         )

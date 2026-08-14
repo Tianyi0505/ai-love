@@ -9,6 +9,7 @@ import httpx
 import websockets
 
 from gateway.channels.base import Channel, ChannelCapabilities, channel_registry
+from gateway.channels.content import ContentContext, content_registry
 from gateway.enums import Channel as ChannelEnum, EventPostType, SegmentType, SendAction
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 from shared.infrastructure.runtime_config import required_value
@@ -46,8 +47,12 @@ class QQChannel(Channel):
                     async for raw in ws:
                         evt = json.loads(raw)
                         msg = self._to_message(evt)
-                        if msg and self._on_message:
-                            await self._on_message(msg)
+                        if msg is None:
+                            continue
+                        if self._on_message is None:
+                            logger.warning("[qq] 收到消息但未设置消息处理器，已丢弃: message_id=%s", msg.message_id)
+                            continue
+                        await self._on_message(msg)
             except Exception as e:
                 print(f"[qq] WS 断开: {e}，重连中...")
                 await asyncio.sleep(self._reconnect_delay_sec)
@@ -72,6 +77,14 @@ class QQChannel(Channel):
         ).strip()
         at_targets = [
             str(seg.get("data", {}).get("qq", "") or "")
+            for seg in segments
+            if seg.get("type") == SegmentType.AT.value and seg.get("data", {}).get("qq")
+        ]
+        at_mentions = [
+            {
+                "user_id": str(seg.get("data", {}).get("qq", "") or ""),
+                "name": str(seg.get("data", {}).get("name", "") or ""),
+            }
             for seg in segments
             if seg.get("type") == SegmentType.AT.value and seg.get("data", {}).get("qq")
         ]
@@ -108,33 +121,26 @@ class QQChannel(Channel):
             chat = ChatType.GROUP
             chat_id = str(evt.get("group_id", ""))
             chat_name = evt.get("group_name", "")
-        meta: dict = {}
-        if reply_id:
-            content_type = ContentType.QUOTE
-            media = ""
-            meta["reply_message_id"] = reply_id
-        elif forwards:
-            content_type = ContentType.FORWARD
-            media = str(forwards[0].get("id", ""))
-            inline = forwards[0].get("content")
-            if isinstance(inline, list):
-                meta["forward_inline"] = inline
-        elif voices:
-            content_type = ContentType.VOICE
-            media = str(voices[0].get("url", ""))
-        elif images:
-            content_type = ContentType.IMAGE
-            media = str(images[0].get("url", ""))
-        elif files:
-            content_type = ContentType.FILE
-            media = str(files[0].get("url") or files[0].get("file") or "")
-            text = text or str(files[0].get("name") or "文件")
-        elif at_targets:
-            content_type = ContentType.AT
-            media = ""
-        else:
-            content_type = ContentType.TEXT
-            media = ""
+        meta: dict = {
+            "at_user_ids": at_targets,
+            "at_mentions": at_mentions,
+            "sender_role": str(evt.get("sender", {}).get("role") or ""),
+        }
+        ctx = content_registry.resolve(
+            ContentContext(
+                text=text,
+                reply_id=reply_id,
+                forwards=forwards,
+                voices=voices,
+                images=images,
+                files=files,
+                at_targets=at_targets,
+                meta=meta,
+            )
+        )
+        text = ctx.text
+        content_type = ctx.content_type
+        media = ctx.media
         at_user_id = self._self_uin if self._self_uin in at_targets else (at_targets[0] if at_targets else "")
         msg = SocialMessage(
             chat=Chat(chat_id=chat_id, chat_type=chat, chat_name=chat_name),
@@ -163,28 +169,40 @@ class QQChannel(Channel):
 
     # 补全引用和转发消息
     async def _hydrate(self, message: SocialMessage, ancestors: frozenset[tuple[str, str]]) -> SocialMessage:
-        reply_id = str(message.meta.pop("reply_message_id", "") or "")
-        if message.type == ContentType.QUOTE and reply_id:
-            key = ("quote", reply_id)
-            if key not in ancestors:
-                reference = await self._get_message(reply_id)
-                if reference is not None:
-                    message.quote_ref = await self._hydrate(reference, ancestors | {key})
-                    if self._self_uin and reference.sender.user_id == str(self._self_uin):
-                        message.to_ai = True
-        if message.type == ContentType.FORWARD:
-            key = ("forward", message.media_url or message.message_id or str(id(message)))
-            if key in ancestors:
-                return message
-            inline = message.meta.pop("forward_inline", None)
-            nodes = inline if isinstance(inline, list) and inline else await self._get_forward_nodes(message.media_url)
-            children: list[SocialMessage] = []
-            for node in nodes:
-                children.extend(self._node_messages(node))
-            message.sub_messages = await asyncio.gather(
-                *(self._hydrate(child, ancestors | {key}) for child in children)
-            )
+        if message.type == ContentType.QUOTE:
+            await self._hydrate_quote(message, ancestors)
+        elif message.type == ContentType.FORWARD:
+            await self._hydrate_forward(message, ancestors)
         return message
+
+    # 补全引用消息
+    async def _hydrate_quote(self, message: SocialMessage, ancestors: frozenset[tuple[str, str]]) -> None:
+        reply_id = str(message.meta.pop("reply_message_id", "") or "")
+        if not reply_id:
+            return
+        key = ("quote", reply_id)
+        if key in ancestors:
+            return
+        reference = await self._get_message(reply_id)
+        if reference is None:
+            return
+        message.quote_ref = await self._hydrate(reference, ancestors | {key})
+        if self._self_uin and reference.sender.user_id == str(self._self_uin):
+            message.to_ai = True
+
+    # 补全合并转发消息
+    async def _hydrate_forward(self, message: SocialMessage, ancestors: frozenset[tuple[str, str]]) -> None:
+        key = ("forward", message.media_url or message.message_id or str(id(message)))
+        if key in ancestors:
+            return
+        inline = message.meta.pop("forward_inline", None)
+        nodes = inline if isinstance(inline, list) and inline else await self._get_forward_nodes(message.media_url)
+        children: list[SocialMessage] = []
+        for node in nodes:
+            children.extend(self._node_messages(node))
+        message.sub_messages = await asyncio.gather(
+            *(self._hydrate(child, ancestors | {key}) for child in children)
+        )
 
     # 获取消息
     async def _get_message(self, message_id: str) -> SocialMessage | None:
@@ -234,6 +252,9 @@ class QQChannel(Channel):
             return {"ok": False, "message_id": "", "fallback_note": "缺少 chat_id 或内容"}
         action = SendAction.PRIVATE_MSG.value if chat_type == ChatType.PRIVATE.value else SendAction.GROUP_MSG.value
         message_segments: list[dict] = []
+        reply_to = str(req.get("reply_to_message_id") or "")
+        if reply_to.lstrip("-").isdigit():
+            message_segments.append({"type": SegmentType.REPLY.value, "data": {"id": int(reply_to)}})
         if text:
             message_segments.append({"type": SegmentType.TEXT.value, "data": {"text": text}})
         if sticker:
@@ -264,6 +285,38 @@ class QQChannel(Channel):
     async def list_history(self, chat: Chat, since: int, limit: int) -> list[SocialMessage]:
         # 缓存本地聊天历史
         return []
+
+    # 获取 NapCat 的当前群成员快照
+    async def list_group_members(self, chat_id: str) -> list[dict]:
+        if not chat_id:
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=self._message_timeout_sec) as client:
+                response = await client.post(
+                    f"{self._http_url}/get_group_member_list",
+                    json={"group_id": int(chat_id), "no_cache": False},
+                )
+                response.raise_for_status()
+            result = []
+            for member in response.json().get("data") or []:
+                user_id = str(member.get("user_id") or "")
+                if not user_id:
+                    continue
+                role = str(member.get("role") or "member")
+                if role not in {"owner", "admin", "member"}:
+                    role = "member"
+                result.append(
+                    {
+                        "platform_user_id": user_id,
+                        "nickname": str(member.get("nickname") or ""),
+                        "group_card": str(member.get("card") or ""),
+                        "role": role,
+                    }
+                )
+            return result
+        except Exception as exc:
+            logger.warning("[qq] 获取群成员失败: group=%s error=%s", chat_id, exc)
+            return []
 
     # 返回渠道能力
     @property

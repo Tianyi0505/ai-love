@@ -1,14 +1,14 @@
-
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 
 from ai.llm.types import ChatMessage
-from agent.generation.prompting import PromptContext
+from agent.context.builder import build_social_context
 from agent.generation.response import ResponsePlan
+from shared.contracts.entity import EntityContext
 from shared.contracts.social import ContentType, SocialMessage
+from shared.contracts.turn import AgentExecutionContext, ResponseCommand
 
 logger = logging.getLogger("ailove.ai-agent.events.social")
 
@@ -17,6 +17,63 @@ logger = logging.getLogger("ailove.ai-agent.events.social")
 async def handle_social(service, payload: bytes) -> None:
     msg = SocialMessage.from_dict(json.loads(payload))
     logger.info("[ai-agent:%s] 收到社交: %s: %s", service.ai_id, msg.sender.user_id, msg.text[:30])
+    execution = AgentExecutionContext.from_social_message(msg, service.ai_id)
+    run_repo = service.run_repo
+    if run_repo is not None:
+        try:
+            await run_repo.start_run(execution)
+        except Exception:
+            logger.exception("[ai-agent:%s] 开启执行记录失败: %s", service.ai_id, execution.run_id)
+            run_repo = None
+    result = await _process_turn(service, msg, execution, run_repo)
+    if run_repo is not None:
+        try:
+            await run_repo.finish_run(
+                execution.run_id,
+                result["outcome"],
+                tool_rounds=result["tool_rounds"],
+                response_text=result["response_text"],
+            )
+        except Exception:
+            logger.exception("[ai-agent:%s] 结束执行记录失败: %s", service.ai_id, execution.run_id)
+
+
+# 处理单个社交轮次
+async def _process_turn(service, msg, execution, run_repo) -> dict:
+    try:
+        return await _process(service, msg, execution, run_repo)
+    except Exception:
+        logger.exception("[ai-agent:%s] 轮次处理失败: %s", service.ai_id, execution.run_id)
+        return {"outcome": "failed", "tool_rounds": 0, "response_text": ""}
+
+
+# 执行回复决策与生成
+async def _process(service, msg, execution, run_repo) -> dict:
+    outcome = "no_response"
+    tool_rounds = 0
+    response_text = ""
+    step_index = 0
+
+    # 记录执行步骤
+    async def record_step(step_type, content=None, status="ok", duration_ms=0, error=""):
+        nonlocal step_index
+        if run_repo is None:
+            return
+        index = step_index
+        step_index += 1
+        try:
+            await run_repo.record_step(
+                execution.run_id,
+                index,
+                step_type,
+                status=status,
+                content=content or {},
+                duration_ms=duration_ms,
+                error=error,
+            )
+        except Exception:
+            logger.exception("[ai-agent:%s] 记录执行步骤失败", service.ai_id)
+
     understood = await service.understanding.understand(msg)
     query = understood or msg.text
     if msg.type == ContentType.IMAGE and msg.all_media_urls():
@@ -24,7 +81,7 @@ async def handle_social(service, payload: bytes) -> None:
     is_group = msg.chat.chat_type.value == "group"
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id
-    person_id = str(msg.meta.get("person_id", ""))
+    tool_context = execution.tool_context()
     attributed_query = query
     if is_group:
         if query:
@@ -62,7 +119,7 @@ async def handle_social(service, payload: bytes) -> None:
         )
         if not group_turn_started:
             logger.info("[ai-agent:%s] 不回复（群聊回合占用或冷却）", service.ai_id)
-            return
+            return {"outcome": "group_turn_busy", "tool_rounds": 0, "response_text": ""}
 
     if explicitly_addressed:
         should_respond = await service._join_group_checker(
@@ -78,55 +135,51 @@ async def handle_social(service, payload: bytes) -> None:
         if group_turn_started:
             service._finish_group_turn(msg.chat.chat_id)
         logger.info("[ai-agent:%s] 不回复（策略）", service.ai_id)
-        return
+        return {"outcome": "policy_no_response", "tool_rounds": 0, "response_text": ""}
+
     if not is_group:
         service.conversation.add_user(msg.chat.chat_type.value, msg.chat.chat_id, attributed_query)
     service._current_chat_key = f"{msg.chat.chat_type.value}:{msg.chat.chat_id}"
 
-    sender_identity = service.prompt_assembler.render(
-        "social-sender-identity",
-        sender_name=json.dumps(str(sender_name), ensure_ascii=False),
+    entity_context = EntityContext.from_dict(msg.meta.get("entity_context"))
+    prompt_context = await build_social_context(
+        service,
+        msg,
+        query,
+        execution,
+        sender_name=sender_name,
+        entity_context=entity_context.to_dict(),
     )
-    relationship_summary = service.prompt_assembler.template("unknown-relationship")
-    if msg.meta.get("person_id"):
-        try:
-            relation = await service.bus.request_json(
-                "relationship.summary.request",
-                {"ai_id": service.ai_id, "person_id": msg.meta["person_id"]},
-                timeout=float(service._timeouts["relationship_summary_sec"]),
-            )
-            relationship_summary = str(relation.get("summary", relationship_summary))
-        except Exception:
-            pass
-    memories, memory_context = await asyncio.gather(
-        service.memory.search(query, person_id=person_id),
-        service.memory.context(
-            person_id=person_id,
-            conversation_id=str(msg.meta.get("conversation_id") or ""),
-        ),
-    )
-    history_limit = int(service.gcfg.get("social", "prompt_history_messages"))
-    recent = tuple(
-        f"{role}: {content}"
-        for role, content in list(service.conversation.window(msg.chat.chat_type.value, msg.chat.chat_id))[-(history_limit + 1):-1]
-    )
-    prompt_context = PromptContext(
-        scene="social-private" if msg.chat.chat_type.value == "private" else "social-group",
-        user_input=query,
-        relationship_summary=f"{sender_identity}{relationship_summary}",
-        memories=tuple(memories),
-        self_document=str(memory_context.get("self_markdown") or ""),
-        person_document=str(memory_context.get("person_markdown") or ""),
-        conversation_summary=str(memory_context.get("conversation_summary") or ""),
-        recent_messages=recent,
-    )
+    await record_step("context", {
+        "scene": prompt_context.scene,
+        "input_chars": len(query),
+        "mentions": len(entity_context.mentions),
+        "recent_participants": len(entity_context.recent_participants),
+        "recent_messages": len(prompt_context.recent_messages),
+        "memories": len(prompt_context.memories),
+        "has_self_document": bool(prompt_context.self_document),
+        "has_person_document": bool(prompt_context.person_document),
+        "has_conversation_summary": bool(prompt_context.conversation_summary),
+    })
+
     history_msgs = [
         ChatMessage(role="system", content=service.prompt_assembler.build_system_prompt(prompt_context)),
         ChatMessage(role="user", content=service.prompt_assembler.build_user_prompt(prompt_context)),
     ]
 
+    # 上报循环内工具与最终生成步骤
+    async def on_step(_index: int, kind: str, data: dict) -> None:
+        nonlocal tool_rounds
+        if kind == "tool":
+            tool_rounds += 1
+        await record_step(kind, data)
+
     try:
-        full_reply = await service.agent_loop.run(history_msgs)
+        full_reply = await service.agent_loop.run(
+            history_msgs,
+            tool_context=tool_context,
+            on_step=on_step,
+        )
     except Exception as e:
         logger.warning("[ai-agent:%s] LLM 失败: %s", service.ai_id, e)
         full_reply = ""
@@ -150,45 +203,38 @@ async def handle_social(service, payload: bytes) -> None:
         if not sticker_query:
             sticker_query = f"{query}\nAI回复：{reply}\n情绪：{plan.emotion.name}"
         sticker_to_send = await service.stickers.search(sticker_query)
-    send_payload = {
-        "ai_id": service.ai_id,
-        "account_id": msg.account_id,
-        "conversation_id": msg.meta.get("conversation_id", ""),
-        "channel": msg.platform or "qq",
-        "chat": msg.chat.to_dict(),
-        "type": "text",
-        "text": reply,
-    }
-    if sticker_to_send:
-        send_payload["sticker"] = sticker_to_send
+
     wants_voice = any(speech.delivery == "voice" for speech in plan.speech)
+    voice = None
     if service.gcfg.get("qq", "voice_reply") and wants_voice:
         voice = await service.tts.synthesize(reply)
         if voice:
-            send_payload["voice"] = voice
             voice_sent = True
-    send_timeout = float(service.gcfg.get("social", "send_timeout_sec"))
-    try:
-        send_result = await service.bus.request_json(
-            "social.send.request",
-            send_payload,
-            timeout=send_timeout,
-        )
-    except Exception as exc:
-        send_result = {"ok": False, "fallback_note": str(exc) or "发送确认超时"}
 
+    command = ResponseCommand(
+        run_id=execution.run_id,
+        ai_id=service.ai_id,
+        account_id=msg.account_id,
+        conversation_id=execution.conversation_id,
+        platform=msg.platform or "qq",
+        chat=msg.chat.to_dict(),
+        reply_to_message_id=execution.reply_to_message_id,
+        text=reply,
+        sticker=sticker_to_send,
+        voice=voice,
+    )
+    send_result = await service.send_response(command)
     sticker_sent = bool(sticker_to_send and send_result.get("ok"))
-    if sticker_to_send and not send_result.get("ok"):
-        fallback_payload = dict(send_payload)
-        fallback_payload.pop("sticker", None)
-        try:
-            send_result = await service.bus.request_json(
-                "social.send.request",
-                fallback_payload,
-                timeout=send_timeout,
-            )
-        except Exception as exc:
-            send_result = {"ok": False, "fallback_note": str(exc) or "发送确认超时"}
+    if sticker_to_send and not sticker_sent:
+        send_result = await service.send_response(command.without_sticker())
+
+    await record_step("send", {
+        "ok": bool(send_result.get("ok")),
+        "text_chars": len(reply),
+        "voice": voice_sent,
+        "sticker": sticker_sent,
+        "fallback_note": send_result.get("fallback_note", ""),
+    })
 
     if not send_result.get("ok"):
         if group_turn_started:
@@ -198,7 +244,7 @@ async def handle_social(service, payload: bytes) -> None:
             service.ai_id,
             send_result.get("fallback_note", "unknown"),
         )
-        return
+        return {"outcome": "send_failed", "tool_rounds": tool_rounds, "response_text": reply}
 
     if sticker_sent:
         service.spawn(
@@ -217,3 +263,4 @@ async def handle_social(service, payload: bytes) -> None:
     service.conversation.add_ai(msg.chat.chat_type.value, msg.chat.chat_id, remembered)
     mode = ("语音" if voice_sent else "") + ("+表情" if sticker_sent else "") + ("+文字" if reply and not voice_sent else "")
     logger.info("[ai-agent:%s] 回复 %s [%s]: %s", service.ai_id, msg.sender.name, mode or "文字", reply[:40])
+    return {"outcome": "sent", "tool_rounds": tool_rounds, "response_text": reply}

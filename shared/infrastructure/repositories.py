@@ -143,6 +143,57 @@ class IdentityRepository:
                 )
         return identity_id, person_id
 
+    # 批量解析群成员，避免逐成员往返数据库
+    async def resolve_or_create_many(
+        self,
+        platform: str,
+        account_id: str,
+        people: list[dict],
+    ) -> dict[str, tuple[str, str]]:
+        user_ids = [str(item.get("platform_user_id") or "") for item in people]
+        user_ids = [item for item in user_ids if item]
+        if not user_ids:
+            return {}
+        async with self._db.pool.acquire() as conn:
+            async with conn.transaction():
+                rows = await conn.fetch(
+                    "SELECT identity_id::text,person_id::text,platform_user_id "
+                    "FROM platform_identities WHERE platform=$1 AND account_id=$2 "
+                    "AND platform_user_id=ANY($3::text[])",
+                    platform,
+                    account_id,
+                    user_ids,
+                )
+                result = {
+                    str(row["platform_user_id"]): (row["identity_id"], row["person_id"])
+                    for row in rows
+                }
+                for person in people:
+                    user_id = str(person.get("platform_user_id") or "")
+                    if not user_id or user_id in result:
+                        continue
+                    identity_id = str(uuid.uuid4())
+                    person_id = str(uuid.uuid4())
+                    display_name = str(
+                        person.get("group_card") or person.get("nickname") or user_id
+                    )
+                    await conn.execute(
+                        "INSERT INTO persons(person_id,display_name) VALUES($1::uuid,$2)",
+                        person_id,
+                        display_name,
+                    )
+                    await conn.execute(
+                        "INSERT INTO platform_identities(identity_id,person_id,platform,account_id,"
+                        "platform_user_id,verified_by) VALUES($1::uuid,$2::uuid,$3,$4,$5,'platform-observed')",
+                        identity_id,
+                        person_id,
+                        platform,
+                        account_id,
+                        user_id,
+                    )
+                    result[user_id] = (identity_id, person_id)
+        return result
+
 
 # 管理会话存储库持久化
 class ConversationRepository:

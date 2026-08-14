@@ -39,7 +39,7 @@ def parse_json_object(text: str) -> dict:
 
 # 复用记忆任务所需模型
 class MemoryModelPool:
-    """按 AI 定义复用记忆任务所需的 LLM。"""
+    """按 AI 定义复用记忆任务 LLM"""
 
     # 初始化当前实例
     def __init__(self, definitions, llm_config: dict) -> None:
@@ -71,7 +71,7 @@ class MemoryModelPool:
 
 # 提取并聚合长期记忆
 class MemoryPipeline:
-    """按静默片段提取并批量更新长期记忆文档。"""
+    """提取静默片段并批量更新长期记忆文档"""
 
     # 初始化当前实例
     def __init__(self, *, repo, state, models, bus, config: dict, spawn) -> None:
