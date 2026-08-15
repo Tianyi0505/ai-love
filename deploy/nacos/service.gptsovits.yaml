@@ -1,0 +1,25 @@
+instance_addr: 127.0.0.1:0
+http:
+  bind: 127.0.0.1
+  port: 9881
+engine:
+  providers:
+    - provider: gptsovits
+      base_url: __GPT_SOVITS_URL__
+      request_timeout_sec: 30
+      text_lang: zh
+      prompt_lang: zh
+      output_format: pcm_s16le_16k
+    - provider: mimo
+      base_url: __MIMO_BASE_URL__
+      model: __MIMO_MODEL__
+      request_timeout_sec: 60
+      api_audio_format: pcm16
+      output_format: pcm_s16le_16k
+voices:
+  __AILOVE_AI_ID__:
+    ref_audio_path: __AILOVE_VOICE_REF_AUDIO_PATH__
+output:
+  audio_dir: /app/data/voice
+  file_extension: wav
+  pcm_bytes_per_sec: 32000

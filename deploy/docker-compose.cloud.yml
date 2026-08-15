@@ -120,8 +120,9 @@ services:
       - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?}
-      - VISION_BASE_URL=${VISION_BASE_URL:?}
-      - VISION_MODEL=${VISION_MODEL:?}
+      - BAILIAN_API_KEY=${BAILIAN_API_KEY:?}
+      - BAILIAN_BASE_URL=${BAILIAN_BASE_URL:?}
+      - BAILIAN_VISION_MODEL=${BAILIAN_VISION_MODEL:?}
     depends_on:
       nacos: { condition: service_started }
       nats: { condition: service_started }
@@ -129,10 +130,10 @@ services:
     restart: unless-stopped
     networks: [ailove]
 
-  tts:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: tts }
-    image: ailove/tts
-    container_name: ailove-tts
+  gptsovits:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: gptsovits }
+    image: ailove/gptsovits
+    container_name: ailove-gptsovits
     volumes:
       - /opt/ailove/audio:/app/data/voice
     environment:

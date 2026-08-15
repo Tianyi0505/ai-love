@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-import httpx
+from openai import AsyncOpenAI
 
 from ai.vision.provider import VisionProvider
 from ai.vision.registry import provider_registry
@@ -11,9 +11,9 @@ from ai.vision.types import ImageDescription
 from shared.infrastructure.runtime_config import required_value
 
 
-# 提供Anthropic协议图像理解能力
-@provider_registry.register("anthropic")
-class AnthropicVisionProvider(VisionProvider):
+# 提供OpenAI兼容协议图像理解能力（供应商与模型全部由配置声明）
+@provider_registry.register("openai_compatible")
+class OpenAICompatibleVisionProvider(VisionProvider):
 
     # 初始化当前实例
     def __init__(
@@ -28,9 +28,8 @@ class AnthropicVisionProvider(VisionProvider):
         fallbacks: dict,
         model: str,
         base_url: str,
-        api_key_env: str = "ANTHROPIC_AUTH_TOKEN",
+        api_key_env: str = "",
         api_key: str | None = None,
-        anthropic_version: str = "2023-06-01",
         **_,
     ) -> None:
         super().__init__(fetch_timeout_sec, fetch_headers)
@@ -43,10 +42,14 @@ class AnthropicVisionProvider(VisionProvider):
         self._prompt = prompt
         self._request_timeout_sec = request_timeout_sec
         self._max_tokens = max_tokens
-        self._anthropic_version = anthropic_version
         self._media_type = media_type
         self._limits = limits
         self._fallbacks = fallbacks
+        self._client = AsyncOpenAI(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            timeout=float(self._request_timeout_sec),
+        )
 
     # 执行图像理解请求
     async def _do_describe(self, image_b64: str) -> ImageDescription:
@@ -56,36 +59,24 @@ class AnthropicVisionProvider(VisionProvider):
                 tags=[],
                 match_quality=float(self._fallbacks["match_quality"]),
             )
-        payload = {
-            "model": self._model,
-            "max_tokens": self._max_tokens,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": self._media_type, "data": image_b64}},
-                        {
-                            "type": "text",
-                            "text": self._prompt,
-                        },
-                    ],
-                }
-            ],
-        }
         try:
-            async with httpx.AsyncClient(timeout=self._request_timeout_sec) as client:
-                resp = await client.post(
-                    self._base_url,
-                    headers={"x-api-key": self._api_key, "anthropic-version": self._anthropic_version},
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            text = ""
-            for block in data.get("content", []):
-                if block.get("type") == "text":
-                    text = block.get("text", "")
-                    break
+            resp = await self._client.chat.completions.create(
+                model=self._model,
+                max_tokens=int(self._max_tokens),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:{self._media_type};base64,{image_b64}"},
+                            },
+                            {"type": "text", "text": self._prompt},
+                        ],
+                    }
+                ],
+            )
+            text = resp.choices[0].message.content or ""
             return self._parse_response(text, self._limits, self._fallbacks)
         except Exception:
             return ImageDescription(

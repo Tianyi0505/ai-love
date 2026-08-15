@@ -23,6 +23,6 @@ echo "[4/5] 恢复写入服务（新镜像）"
 kubectl scale deploy -n $NS gateway director ai-agent memory ops-panel --replicas=1
 
 echo "[5/5] 滚动重启边缘与核心服务"
-kubectl rollout restart deploy -n $NS tts avatar stream mcp extension-host
+kubectl rollout restart deploy -n $NS gptsovits avatar stream mcp extension-host
 
 echo "DONE: 检查 gateway/ai-agent 日志确认恢复"

@@ -126,6 +126,12 @@ class MemoryPipeline:
     # 从会话片段提取记忆
     async def _extract(self, claim: StateEntry) -> None:
         data = claim.data
+        try:
+            int(data["person_id"])
+            int(data["conversation_id"])
+        except (KeyError, ValueError, TypeError):
+            await self._state.finish_activity(claim)
+            return
         await self._bus.publish_json("memory.extract", dict(data))
         messages = await self._repo.load_episode_messages(
             data["ai_id"],

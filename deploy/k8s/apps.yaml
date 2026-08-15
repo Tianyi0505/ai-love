@@ -168,24 +168,25 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tts
+  name: gptsovits
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: tts
+      app: gptsovits
   template:
     metadata:
       labels:
-        app: tts
+        app: gptsovits
     spec:
+      hostNetwork: true
       nodeSelector:
         ailove.role: core
       containers:
-        - name: tts
-          image: ailove/tts:latest
+        - name: gptsovits
+          image: ailove/gptsovits:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:

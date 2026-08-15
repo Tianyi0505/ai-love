@@ -479,7 +479,7 @@ class PanelHandler(BaseHTTPRequestHandler):
         rel = path.lstrip("/") or "index.html"
         full = os.path.normpath(os.path.join(WEB_DIR, rel))
         if not full.startswith(os.path.normpath(WEB_DIR)) or not os.path.isfile(full):
-            self.send_error(404, "文件不存在")
+            self.send_error(404)
             return
         content_type = mimetypes.guess_type(full)[0] or "application/octet-stream"
         with open(full, "rb") as handle:

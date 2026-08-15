@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ailove-natstest
+  namespace: ailove
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      restartPolicy: Never
+      containers:
+        - name: natstest
+          image: ailove/gateway:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "98"
+          command:
+            - sh
+            - -c
+            - |
+              # 端到端诊断：chat_id 用不存在的群，回复发送必然失败，绝不打扰真实群成员
+              python -c "
+              import asyncio, json, os, time
+              import nats
+              async def main():
+                  nc = await nats.connect(os.environ['AILOVE_BUS_URL'], token=os.environ.get('AILOVE_BUS_TOKEN') or None)
+                  payload = {
+                      'platform': 'qq', 'account_id': 'qq-main',
+                      'chat': {'chat_id': '9999999999', 'chat_type': 'group', 'chat_name': 'diag'},
+                      'sender': {'user_id': '2195232218', 'name': '测试'},
+                      'type': 'text', 'text': '端到端测试消息', 'message_id': '999999999999999994',
+                      'timestamp': int(time.time()), 'at_user_id': '', 'to_ai': True,
+                      'meta': {'ai_id': 'ai_luoyu', 'conversation_id': '999999999999999992',
+                               'person_id': '999999999999999993', 'platform_identity_id': '999999999999999995',
+                               'run_id': '999999999999999991'},
+                  }
+                  await nc.publish('social.chat.ai_luoyu', json.dumps(payload, ensure_ascii=False).encode())
+                  await nc.flush()
+                  print('PUBLISHED')
+                  await nc.close()
+              asyncio.run(main())
+              "

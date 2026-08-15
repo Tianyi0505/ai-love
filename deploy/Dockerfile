@@ -21,13 +21,14 @@ COPY agent/ ./agent/
 COPY ai/__init__.py ./ai/__init__.py
 COPY ai/asr/ ./ai/asr/
 COPY ai/llm/ ./ai/llm/
+COPY ai/tts/ ./ai/tts/
 COPY ai/vision/ ./ai/vision/
 CMD ["python", "-m", "agent.main"]
 
-FROM base AS tts
-COPY ai/tts/ ./ai/tts/
+FROM base AS gptsovits
+COPY ai/gptsovits/ ./ai/gptsovits/
 COPY ai/__init__.py ./ai/__init__.py
-CMD ["python", "-m", "ai.tts.main"]
+CMD ["python", "-m", "ai.gptsovits.main"]
 
 FROM base AS avatar
 COPY live/avatar/ ./live/avatar/

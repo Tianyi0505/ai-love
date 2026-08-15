@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gptsovits
+  namespace: ailove
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gptsovits
+  template:
+    metadata:
+      labels:
+        app: gptsovits
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        ailove.role: core
+      containers:
+        - name: gptsovits
+          image: ailove/gptsovits:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "4"
+            - name: AILOVE_NACOS_ADDRS
+              value: nacos:8848
+            - name: AILOVE_NACOS_GROUP
+              value: DEFAULT_GROUP
+            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
+              value: "5000"
+            - name: AILOVE_CONFIG_RETRY_COUNT
+              value: "5"
+            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+              value: "2"
+            - name: AILOVE_BUS_URL
+              value: nats://nats:4222
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - name: audio
+              mountPath: /app/data/voice
+      volumes:
+        - name: audio
+          hostPath:
+            path: /opt/ailove/audio
+            type: Directory

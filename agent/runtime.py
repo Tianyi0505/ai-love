@@ -12,13 +12,13 @@ from agent.generation.agent_loop import AgentLoop
 from agent.clients.extensions import register_tools
 from agent.clients.memory import MemoryClient
 from agent.clients.sticker import StickerClient
-from agent.clients.tts import TTSClient
 from agent.context.conversation import ConversationContext, format_entries
 from agent.application.proactive import GroupChatManager, ProactiveChat
 from agent.context.speaking_state import SessionManager
 from agent.application.live import handle_live
 from agent.application.social import handle_social
 from agent.application.turn_coordinator import TurnCoordinator
+from ai.tts.factory import create_tts
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand, new_run_id
 from shared.infrastructure.run_repo import AgentRunRepository
 from ai.llm.providers import anthropic_gw, deepseek, ollama
@@ -69,14 +69,8 @@ class AIRuntime:
         )
 
         image_config = self.gcfg.section("image")
-        image_options = {
-            key: value for key, value in image_config.items() if key != "provider"
-        }
         self.prompt_assembler = PromptAssembler(self.definition)
-        self.vision = create_vision(
-            image_config["provider"],
-            **image_options,
-        )
+        self.vision = create_vision(image_config)
         self.understanding = MessageUnderstanding(
             self.prompt_assembler,
             self._fallbacks,
@@ -94,7 +88,11 @@ class AIRuntime:
         await register_tools(self.agent_loop, self.bus, self.ai_id, self._timeouts)
 
         self.stickers = StickerClient(self.bus, self.ai_id, self._timeouts)
-        self.tts = TTSClient(self.bus, self.ai_id, self._timeouts)
+        self.tts = create_tts(
+            self.gcfg.section("tts"),
+            ai_id=self.ai_id,
+            timeout_sec=float(self._timeouts["tts_request_sec"]),
+        )
 
         self.coordinator = TurnCoordinator()
         self.run_repo = (

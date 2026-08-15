@@ -230,7 +230,11 @@ async def _process(service, msg, execution, run_repo) -> dict:
     wants_voice = any(speech.delivery == "voice" for speech in plan.speech)
     voice = None
     if service.gcfg.get("qq", "voice_reply") and wants_voice:
-        voice = await service.tts.synthesize(reply)
+        try:
+            voice = await service.tts.synthesize(reply)
+        except Exception:
+            logger.warning("[ai-agent:%s] 语音合成失败，改为文字回复", service.ai_id)
+            voice = None
         if voice:
             voice_sent = True
 
