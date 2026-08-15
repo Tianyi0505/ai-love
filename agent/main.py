@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 
 from shared.contracts.live import InteractionEvent
 from shared.contracts.social import SocialMessage
@@ -29,21 +28,11 @@ class AIAgentService(BaseService):
 
     # 启动服务
     async def on_start(self) -> None:
-        section = await self.cfg.section()
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
-        self._fallback_accounts = {
-            str(ai_id): tuple(str(account_id) for account_id in account_ids)
-            for ai_id, account_ids in section["account_ids_by_ai"].items()
-            if isinstance(account_ids, list)
-        }
-        self._db = None
-        self._profiles = None
-        self._accounts = None
-        if os.environ.get("AILOVE_DATABASE_URL"):
-            self._db = Database()
-            await self._db.connect()
-            self._profiles = AIProfileRepository(self._db)
-            self._accounts = AccountOwnershipRepository(self._db)
+        self._db = Database()
+        await self._db.connect()
+        self._profiles = AIProfileRepository(self._db)
+        self._accounts = AccountOwnershipRepository(self._db)
 
         # 创建智能体运行时
         async def runtime_factory(definition):
@@ -62,8 +51,7 @@ class AIAgentService(BaseService):
     # 停止服务
     async def on_stop(self) -> None:
         await self._supervisor.stop()
-        if self._db is not None:
-            await self._db.close()
+        await self._db.close()
 
     # 监听智能体配置变化
     async def _watch_agent_configs(self) -> None:
@@ -83,16 +71,12 @@ class AIAgentService(BaseService):
 
     # 加载已启用的智能体定义
     async def _active_definitions(self):
-        if self._profiles is None:
-            return await self._definitions.list_active()
         records = await self._profiles.list_active()
         return [await self._definitions.load(record.ai_id) for record in records]
 
     # 获取智能体绑定的账号标识
     async def _account_ids_for(self, ai_id: str) -> tuple[str, ...]:
-        if self._accounts is not None:
-            return tuple(await self._accounts.accounts_for_ai(ai_id))
-        return self._fallback_accounts.get(ai_id, ())
+        return tuple(await self._accounts.accounts_for_ai(ai_id))
 
     # 持续执行目录循环
     async def _catalog_loop(self) -> None:

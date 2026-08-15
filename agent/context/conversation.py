@@ -1,11 +1,12 @@
- 
+
 from __future__ import annotations
 
 import json
-import sqlite3
 import time
 from collections import deque
 from pathlib import Path
+
+from sqlalchemy import Column, Float, Integer, MetaData, String, Table, create_engine, insert, select
 
 from agent.context.search import Doc, HybridSearch
 
@@ -28,6 +29,19 @@ def format_entries(entries, ai_name: str = "") -> str:
     return "\n\n".join(blocks)
 
 
+_metadata = MetaData()
+_messages_table = Table(
+    "messages",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("chat_key", String),
+    Column("role", String),
+    Column("content", String),
+    Column("meta", String, server_default=""),
+    Column("created_at", Float),
+)
+
+
 # 维护会话上下文
 class ConversationContext:
 
@@ -36,39 +50,31 @@ class ConversationContext:
         self._window_size = window_size
         self._search_config = search_config
         Path(data_dir).mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(Path(data_dir) / "conversation.db")
-        self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                chat_key TEXT,
-                role TEXT,
-                content TEXT,
-                meta TEXT DEFAULT '',
-                created_at REAL
-            )
-        """)
-        try:
-            self._conn.execute("ALTER TABLE messages ADD COLUMN meta TEXT DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass
-        self._conn.commit()
+        self._engine = create_engine(f"sqlite:///{Path(data_dir) / 'conversation.db'}")
+        _messages_table.create(self._engine, checkfirst=True)
         self._windows: dict[str, deque] = {}
         self._bm25: dict[str, HybridSearch] = {}
         self._load()
 
     # 加载数据
     def _load(self) -> None:
-        rows = self._conn.execute(
-            "SELECT chat_key, role, content, meta FROM messages ORDER BY id"
-        ).fetchall()
-        for chat_key, role, content, meta in rows:
-            window = self._windows.setdefault(chat_key, deque(maxlen=self._window_size))
-            window.append((role, content, self._parse_meta(meta)))
-        for chat_key, window in self._windows.items():
-            hs = HybridSearch(self._search_config)
-            for role, content, _meta in window:
-                hs.add(Doc(id=f"{chat_key}:{len(hs._docs)}", text=content))
-            self._bm25[chat_key] = hs
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                select(
+                    _messages_table.c.chat_key,
+                    _messages_table.c.role,
+                    _messages_table.c.content,
+                    _messages_table.c.meta,
+                ).order_by(_messages_table.c.id)
+            )
+            for chat_key, role, content, meta in rows:
+                window = self._windows.setdefault(chat_key, deque(maxlen=self._window_size))
+                window.append((role, content, self._parse_meta(meta)))
+            for chat_key, window in self._windows.items():
+                hs = HybridSearch(self._search_config)
+                for role, content, _meta in window:
+                    hs.add(Doc(id=f"{chat_key}:{len(hs._docs)}", text=content))
+                self._bm25[chat_key] = hs
 
     # 生成状态存储键
     def _key(self, chat_type: str, chat_id: str) -> str:
@@ -87,11 +93,16 @@ class ConversationContext:
 
     # 持久化会话上下文
     def _persist(self, chat_key: str, role: str, text: str, meta: dict) -> None:
-        self._conn.execute(
-            "INSERT INTO messages (chat_key, role, content, meta, created_at) VALUES (?,?,?,?,?)",
-            (chat_key, role, text, json.dumps(meta, ensure_ascii=False), time.time()),
-        )
-        self._conn.commit()
+        with self._engine.begin() as conn:
+            conn.execute(
+                insert(_messages_table).values(
+                    chat_key=chat_key,
+                    role=role,
+                    content=text,
+                    meta=json.dumps(meta, ensure_ascii=False),
+                    created_at=time.time(),
+                )
+            )
 
     # 添加用户
     def add_user(
@@ -121,11 +132,14 @@ class ConversationContext:
     # 获取首条消息
     def first_msg(self, chat_type: str, chat_id: str) -> str:
         key = self._key(chat_type, chat_id)
-        rows = self._conn.execute(
-            "SELECT content FROM messages WHERE chat_key=? AND role='user' ORDER BY id LIMIT 1",
-            (key,),
-        ).fetchone()
-        return rows[0] if rows else ""
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                select(_messages_table.c.content)
+                .where(_messages_table.c.chat_key == key, _messages_table.c.role == "user")
+                .order_by(_messages_table.c.id)
+                .limit(1)
+            ).first()
+        return row[0] if row else ""
 
     # 执行BM25文本检索
     def bm25_search(self, chat_type: str, chat_id: str, query: str) -> list[str]:

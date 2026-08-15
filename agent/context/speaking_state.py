@@ -1,9 +1,11 @@
 
 from __future__ import annotations
 
-import sqlite3
 import time
 from pathlib import Path
+
+from sqlalchemy import Column, Float, Integer, MetaData, String, Table, create_engine, select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 
 # 维护单个聊天会话状态
@@ -16,21 +18,24 @@ class ChatSession:
         self.last_active = 0.0
 
 
+_metadata = MetaData()
+_spoke_table = Table(
+    "spoke",
+    _metadata,
+    Column("chat_key", String, primary_key=True),
+    Column("last_spoke", Float),
+    Column("replied", Integer, server_default="0"),
+)
+
+
 # 管理聊天会话与发言状态
 class SessionManager:
 
     # 初始化当前实例
     def __init__(self, data_dir: str) -> None:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(Path(data_dir) / "session.db")
-        self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS spoke (
-                chat_key TEXT PRIMARY KEY,
-                last_spoke REAL,
-                replied INTEGER DEFAULT 0
-            )
-        """)
-        self._conn.commit()
+        self._engine = create_engine(f"sqlite:///{Path(data_dir) / 'session.db'}")
+        _spoke_table.create(self._engine, checkfirst=True)
         self._sessions: dict[str, ChatSession] = {}
 
     # 获取会话
@@ -41,18 +46,22 @@ class SessionManager:
 
     # 判断是否可以发言
     def can_speak(self, chat_key: str) -> bool:
-        row = self._conn.execute(
-            "SELECT replied FROM spoke WHERE chat_key=?", (chat_key,)
-        ).fetchone()
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                select(_spoke_table.c.replied).where(_spoke_table.c.chat_key == chat_key)
+            ).first()
         if row is None:
             return True
         return bool(row[0])
 
     # 判断是否可以发起会话
     def can_initiate(self, chat_key: str, cooldown_sec: int) -> bool:
-        row = self._conn.execute(
-            "SELECT last_spoke, replied FROM spoke WHERE chat_key=?", (chat_key,)
-        ).fetchone()
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                select(_spoke_table.c.last_spoke, _spoke_table.c.replied).where(
+                    _spoke_table.c.chat_key == chat_key
+                )
+            ).first()
         if row is None:
             return True
         last_spoke, replied = row
@@ -60,22 +69,29 @@ class SessionManager:
 
     # 标记已发言状态
     def mark_spoke(self, chat_key: str) -> None:
-        self._conn.execute(
-            "INSERT INTO spoke (chat_key, last_spoke, replied) VALUES (?,?,0) "
-            "ON CONFLICT(chat_key) DO UPDATE SET last_spoke=?, replied=0",
-            (chat_key, time.time(), time.time()),
-        )
-        self._conn.commit()
-        self.session(chat_key).last_active = time.time()
+        now = time.time()
+        with self._engine.begin() as conn:
+            conn.execute(
+                sqlite_insert(_spoke_table)
+                .values(chat_key=chat_key, last_spoke=now, replied=0)
+                .on_conflict_do_update(
+                    index_elements=[_spoke_table.c.chat_key],
+                    set_={"last_spoke": now, "replied": 0},
+                )
+            )
+        self.session(chat_key).last_active = now
 
     # 标记已回复状态
     def mark_replied(self, chat_key: str) -> None:
-        self._conn.execute(
-            "INSERT INTO spoke (chat_key, last_spoke, replied) VALUES (?,0,1) "
-            "ON CONFLICT(chat_key) DO UPDATE SET replied=1",
-            (chat_key,),
-        )
-        self._conn.commit()
+        with self._engine.begin() as conn:
+            conn.execute(
+                sqlite_insert(_spoke_table)
+                .values(chat_key=chat_key, last_spoke=0, replied=1)
+                .on_conflict_do_update(
+                    index_elements=[_spoke_table.c.chat_key],
+                    set_={"replied": 1},
+                )
+            )
 
     # 列出全部会话
     def all_sessions(self) -> list[str]:
