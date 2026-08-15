@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from shared.contracts.events import TurnRequest, make_conversation_id
+from shared.contracts.events import TurnRequest
 from shared.contracts.social import SocialMessage
 
 
@@ -40,11 +40,7 @@ class SocialRouter:
         ai_id = await self._ownership.owner_for_social_account(message.account_id)
         if not ai_id:
             raise LookupError(f"社交账号尚未绑定 AI: {message.account_id}")
-        conversation_id = message.meta.get("conversation_id") or make_conversation_id(
-            message.platform,
-            message.account_id,
-            message.chat.chat_id,
-        )
+        conversation_id = message.meta.get("conversation_id") or ""
         return TurnRequest(
             ai_id=ai_id,
             account_id=message.account_id,

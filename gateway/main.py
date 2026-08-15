@@ -12,7 +12,7 @@ import httpx
 from gateway.channels import bilibili, qq, wechat
 from gateway.channels.base import Channel, create_channel
 from gateway.qzone import QZoneService
-from gateway.social_router import SocialRouter, StaticOwnershipResolver
+from gateway.social_router import SocialRouter
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.live import InteractionEvent, InteractionType, Viewer
 from shared.contracts.social import (
@@ -56,28 +56,16 @@ class GatewayService(BaseService):
         await self._gcfg.load()
         self._timeouts = self._gcfg.section("timeouts")
         account_specs = self._account_specs(section)
-        static_owners = {
-            spec["account_id"]: spec["owner_ai_id"]
-            for spec in account_specs
-        }
-        self._db = None
-        if os.environ.get("AILOVE_DATABASE_URL"):
-            self._db = Database()
-            await self._db.connect()
-            ownership = AccountOwnershipRepository(self._db)
-            self._identities = IdentityRepository(self._db)
-            self._relationships = RelationshipRepository(self._db)
-            self._conversations = ConversationRepository(self._db)
-            self._grounding = EntityGroundingRepository(
-                self._db,
-                float(self._gcfg.get("grounding", "mention_evidence_half_life_sec")),
-            )
-        else:
-            ownership = StaticOwnershipResolver(static_owners)
-            self._identities = None
-            self._relationships = None
-            self._conversations = None
-            self._grounding = None
+        self._db = Database()
+        await self._db.connect()
+        ownership = AccountOwnershipRepository(self._db)
+        self._identities = IdentityRepository(self._db)
+        self._relationships = RelationshipRepository(self._db)
+        self._conversations = ConversationRepository(self._db)
+        self._grounding = EntityGroundingRepository(
+            self._db,
+            float(self._gcfg.get("grounding", "mention_evidence_half_life_sec")),
+        )
         self._social_router = SocialRouter(ownership)
         self._group_member_sync_at: dict[tuple[str, str], float] = {}
 
@@ -154,7 +142,7 @@ class GatewayService(BaseService):
 
     # 同步QQ白名单
     async def _sync_qq_whitelist(self) -> None:
-        if self._identities is None or self._relationships is None or not self._qq_whitelist:
+        if not self._qq_whitelist:
             return
         for account_id, cfg in self._account_configs.items():
             if cfg.get("adapter") != "qq":
@@ -242,8 +230,7 @@ class GatewayService(BaseService):
     async def on_stop(self) -> None:
         for channel in self._channels.values():
             await channel.stop()
-        if self._db is not None:
-            await self._db.close()
+        await self._db.close()
 
     # 处理渠道消息
     async def _on_channel_message(self, msg: SocialMessage) -> None:
@@ -256,23 +243,27 @@ class GatewayService(BaseService):
         channel = self._channels.get(msg.account_id)
         if channel is not None:
             msg = await channel.hydrate_message(msg)
-        if self._identities is not None:
-            identity_id, person_id = await self._identities.resolve_or_create(
-                msg.platform,
-                msg.account_id,
-                msg.sender.user_id,
-                msg.sender.name,
-            )
-            msg.meta["platform_identity_id"] = identity_id
-            msg.meta["person_id"] = person_id
+        identity_id, person_id = await self._identities.resolve_or_create(
+            msg.platform,
+            msg.account_id,
+            msg.sender.user_id,
+            msg.sender.name,
+        )
+        msg.meta["platform_identity_id"] = identity_id
+        msg.meta["person_id"] = person_id
+        msg.meta["conversation_id"] = await self._conversations.get_or_create(
+            msg.platform,
+            msg.account_id,
+            msg.chat.chat_id,
+            msg.chat.chat_type.value,
+        )
         try:
             turn = await self._social_router.route(msg)
         except LookupError as exc:
             logger.warning("[gateway] 社交消息未路由: %s", exc)
             return
         msg.meta["ai_id"] = turn.ai_id
-        msg.meta["conversation_id"] = turn.conversation_id
-        if msg.chat.chat_type == ChatType.GROUP and self._grounding is not None:
+        if msg.chat.chat_type == ChatType.GROUP:
             try:
                 await self._sync_group_members(msg)
                 context = self._message_tool_context(msg, turn.ai_id)
@@ -291,8 +282,7 @@ class GatewayService(BaseService):
                 await self._record_explicit_at_evidence(msg, context)
             except Exception:
                 logger.exception("[gateway] 群聊实体上下文构建失败，继续投递原消息")
-        if self._conversations is not None:
-            await self._conversations.record_inbound(msg, turn.ai_id)
+        await self._conversations.record_inbound(msg, turn.ai_id)
         await self.bus.publish_json(SUBJ_SOCIAL_CHAT.format(ai_id=turn.ai_id), msg.to_dict())
 
     # 按配置周期刷新群成员角色和群名片
@@ -372,7 +362,7 @@ class GatewayService(BaseService):
 
     # 校验系统注入的当前群作用域与真实会话、账号归属一致
     async def _valid_group_tool_context(self, context: ToolExecutionContext) -> bool:
-        if self._grounding is None or not context.is_group:
+        if not context.is_group:
             return False
         owner = await self._social_router.owner_for(context.account_id)
         return owner == context.ai_id and await self._grounding.context_matches(context)
@@ -433,7 +423,7 @@ class GatewayService(BaseService):
         if channel is None:
             return json.dumps({"ok": False, "fallback_note": f"账号未启用或缺少 account_id: {account_id}"}).encode()
         result = await channel.send(req)
-        if result.get("ok") and self._conversations is not None:
+        if result.get("ok"):
             ai_id = str(req.get("ai_id") or await self._social_router.owner_for(account_id) or "")
             if ai_id:
                 try:
