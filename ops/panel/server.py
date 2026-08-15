@@ -10,14 +10,18 @@ import os
 import secrets
 import threading
 import time
-import uuid
+from datetime import datetime, timezone
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-import asyncpg
+from sqlalchemy import cast, desc, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from shared.infrastructure import models as m
+from shared.infrastructure.database import Database
 from shared.infrastructure.run_repo import AgentRunRepository
+from shared.infrastructure.snowflake import is_snowflake_id
 
 logger = logging.getLogger("ailove.ops-panel")
 
@@ -51,22 +55,6 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-# 包装连接池接口
-class _PoolDB:
-    # 初始化当前实例
-    def __init__(self, pool) -> None:
-        self._pool = pool
-
-    async def fetch(self, query, *args):
-        return await self._pool.fetch(query, *args)
-
-    async def fetchrow(self, query, *args):
-        return await self._pool.fetchrow(query, *args)
-
-    async def execute(self, query, *args):
-        return await self._pool.execute(query, *args)
-
-
 # 保存面板状态
 class PanelState:
     # 初始化当前实例
@@ -76,7 +64,7 @@ class PanelState:
         self.sessions: dict[str, float] = {}
         self.repo: AgentRunRepository | None = None
         self.db_ready = False
-        self._db: _PoolDB | None = None
+        self._db: Database | None = None
 
     # 创建会话令牌
     def create_session(self) -> str:
@@ -94,41 +82,33 @@ class PanelState:
 
     # 持久化凭据
     async def persist_credentials(self) -> None:
-        if self._db is None:
-            return
-        await self._db.execute(
-            "INSERT INTO panel_settings(key,value) VALUES('username',$1),('password_hash',$2) "
-            "ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
-            self.username,
-            self.password_hash,
-        )
+        async with self._db.session() as session:
+            for key, value in (("username", self.username), ("password_hash", self.password_hash)):
+                stmt = (
+                    pg_insert(m.PanelSetting)
+                    .values(key=key, value=value)
+                    .on_conflict_do_update(index_elements=[m.PanelSetting.key], set_={"value": value})
+                )
+                await session.execute(stmt)
+            await session.commit()
 
 
 # 初始化数据库与凭据
 async def init_database(state: PanelState) -> None:
-    url = os.environ.get("AILOVE_DATABASE_URL", "").strip()
-    if not url:
-        logger.warning("[panel] 未配置数据库，退回内存模式")
-        return
-    pool = await asyncpg.create_pool(url, min_size=1, max_size=5)
-    db = _PoolDB(pool)
-    await db.execute(
-        "CREATE TABLE IF NOT EXISTS panel_settings(key text PRIMARY KEY, value text NOT NULL)"
-    )
-    row = await db.fetchrow("SELECT value FROM panel_settings WHERE key='username'")
-    if row:
-        state.username = str(row["value"])
-    row = await db.fetchrow("SELECT value FROM panel_settings WHERE key='password_hash'")
-    if row:
-        state.password_hash = str(row["value"])
-    else:
-        await db.execute(
-            "INSERT INTO panel_settings(key,value) VALUES('username',$1),('password_hash',$2) "
-            "ON CONFLICT(key) DO NOTHING",
-            state.username,
-            state.password_hash,
-        )
+    db = Database()
+    await db.connect()
+    async with db.engine.begin() as conn:
+        await conn.run_sync(lambda sync: m.PanelSetting.__table__.create(sync, checkfirst=True))
+    async with db.session() as session:
+        rows = await session.execute(select(m.PanelSetting.key, m.PanelSetting.value))
+        found: dict[str, str] = {row.key: row.value for row in rows}
+    if found.get("username"):
+        state.username = found["username"]
+    if found.get("password_hash"):
+        state.password_hash = found["password_hash"]
     state._db = db
+    if "password_hash" not in found:
+        await state.persist_credentials()
     state.repo = AgentRunRepository(db)
     state.db_ready = True
     logger.info("[panel] 数据库就绪，追溯查询可用")
@@ -290,8 +270,6 @@ class PanelHandler(BaseHTTPRequestHandler):
 
     # 回放单轮执行
     async def _replay_run(self, run_id: str) -> dict:
-        if self.state.repo is None:
-            return {"run": None, "steps": [], "db": False}
         try:
             result = await self.state.repo.replay(run_id)
             return {"run": result["run"], "steps": result["steps"], "db": True}
@@ -301,136 +279,163 @@ class PanelHandler(BaseHTTPRequestHandler):
 
     # 列出会话
     async def _list_conversations(self) -> dict:
-        if self.state._db is None:
-            return {"conversations": [], "db": False}
-        rows = await self.state._db.fetch(
-            "SELECT c.conversation_id::text, c.platform, c.chat_type, c.platform_chat_id, "
-            "COUNT(m.message_id) AS message_count, MAX(m.occurred_at) AS last_at, "
-            "MIN(m.occurred_at) AS first_at, COALESCE(cs.summary, '') AS summary "
-            "FROM conversations c "
-            "LEFT JOIN messages m ON m.conversation_id = c.conversation_id "
-            "LEFT JOIN conversation_summaries cs ON cs.conversation_id = c.conversation_id "
-            "GROUP BY c.conversation_id, c.platform, c.chat_type, c.platform_chat_id, cs.summary "
-            "ORDER BY last_at DESC NULLS LAST LIMIT 200"
-        )
-        return {
-            "conversations": [
+        async with self.state._db.session() as session:
+            rows = await session.execute(
+                select(
+                    m.Conversation.conversation_id,
+                    m.Conversation.platform,
+                    m.Conversation.chat_type,
+                    m.Conversation.platform_chat_id,
+                    func.count(m.Message.message_id).label("message_count"),
+                    func.max(m.Message.occurred_at).label("last_at"),
+                    func.min(m.Message.occurred_at).label("first_at"),
+                    func.coalesce(m.ConversationSummary.summary, "").label("summary"),
+                )
+                .select_from(m.Conversation)
+                .outerjoin(m.Message, m.Message.conversation_id == m.Conversation.conversation_id)
+                .outerjoin(
+                    m.ConversationSummary,
+                    m.ConversationSummary.conversation_id == m.Conversation.conversation_id,
+                )
+                .group_by(
+                    m.Conversation.conversation_id,
+                    m.Conversation.platform,
+                    m.Conversation.chat_type,
+                    m.Conversation.platform_chat_id,
+                    m.ConversationSummary.summary,
+                )
+                .order_by(desc("last_at").nulls_last())
+                .limit(200)
+            )
+            conversations = [
                 {
-                    "conversation_id": row["conversation_id"],
-                    "platform": row["platform"],
-                    "chat_type": row["chat_type"],
-                    "platform_chat_id": row["platform_chat_id"],
-                    "message_count": int(row["message_count"] or 0),
-                    "last_at": str(row["last_at"]) if row["last_at"] else "",
-                    "first_at": str(row["first_at"]) if row["first_at"] else "",
-                    "summary": row["summary"] or "",
+                    "conversation_id": str(row.conversation_id),
+                    "platform": row.platform,
+                    "chat_type": row.chat_type,
+                    "platform_chat_id": row.platform_chat_id,
+                    "message_count": int(row.message_count or 0),
+                    "last_at": str(row.last_at) if row.last_at else "",
+                    "first_at": str(row.first_at) if row.first_at else "",
+                    "summary": row.summary or "",
                 }
                 for row in rows
-            ],
-            "db": True,
-        }
+            ]
+        return {"conversations": conversations, "db": True}
 
     # 查询历史消息
     async def _list_messages(self, query: dict) -> dict:
-        if self.state._db is None:
-            return {"messages": [], "db": False}
-        conditions: list[str] = []
-        args: list = []
+        conditions = []
         conversation_id = str((query.get("conversation_id") or [""])[0]).strip()
         if conversation_id:
-            try:
-                uuid.UUID(conversation_id)
-            except (ValueError, TypeError, AttributeError):
+            if not is_snowflake_id(conversation_id):
                 return {"messages": [], "db": False, "error": "conversation_id 无效"}
-            args.append(conversation_id)
-            conditions.append(f"m.conversation_id=${len(args)}::uuid")
+            conditions.append(m.Message.conversation_id == int(conversation_id))
         person_id = str((query.get("person_id") or [""])[0]).strip()
         if person_id:
-            try:
-                uuid.UUID(person_id)
-            except (ValueError, TypeError, AttributeError):
+            if not is_snowflake_id(person_id):
                 return {"messages": [], "db": False, "error": "person_id 无效"}
-            args.append(person_id)
-            conditions.append(f"pi.person_id=${len(args)}::uuid")
+            conditions.append(m.PlatformIdentity.person_id == int(person_id))
         role = str((query.get("role") or [""])[0]).strip()
         if role in ("user", "assistant"):
-            args.append(role)
-            conditions.append(f"m.role=${len(args)}")
+            conditions.append(m.Message.role == role)
         keyword = str((query.get("keyword") or [""])[0]).strip()
         if keyword:
-            args.append(f"%{keyword}%")
-            conditions.append(f"COALESCE(m.content->>'text','') ILIKE ${len(args)}")
+            conditions.append(func.coalesce(m.Message.content["text"].astext, "").ilike(f"%{keyword}%"))
         since = str((query.get("since") or [""])[0]).strip()
         if since:
-            args.append(since)
-            conditions.append(f"m.occurred_at >= ${len(args)}::timestamptz")
+            conditions.append(m.Message.occurred_at >= cast(since, m.Message.occurred_at.type))
         until = str((query.get("until") or [""])[0]).strip()
         if until:
-            args.append(until)
-            conditions.append(f"m.occurred_at <= ${len(args)}::timestamptz")
-        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        args.append(int(max(1, min(200, int((query.get("limit") or ["50"])[0])))))
-        args.append(int(max(0, int((query.get("offset") or ["0"])[0]))))
-        rows = await self.state._db.fetch(
-            "SELECT m.message_id::text, m.conversation_id::text, m.ai_id, m.role, "
-            "c.platform, c.chat_type, c.platform_chat_id, "
-            "pi.person_id::text AS person_id, "
-            "COALESCE(NULLIF(p.display_name,''), pi.platform_user_id, '') AS display_name, "
-            "m.content, m.occurred_at "
-            "FROM messages m "
-            "JOIN conversations c ON c.conversation_id = m.conversation_id "
-            "LEFT JOIN platform_identities pi ON pi.identity_id = m.platform_identity_id "
-            "LEFT JOIN persons p ON p.person_id = pi.person_id "
-            f"{where} "
-            f"ORDER BY m.occurred_at DESC LIMIT ${len(args) - 1} OFFSET ${len(args)}",
-            *args,
-        )
-        return {
-            "messages": [
+            conditions.append(m.Message.occurred_at <= cast(until, m.Message.occurred_at.type))
+        limit = int(max(1, min(200, int((query.get("limit") or ["50"])[0]))))
+        offset = int(max(0, int((query.get("offset") or ["0"])[0])))
+        async with self.state._db.session() as session:
+            rows = await session.execute(
+                select(
+                    m.Message.message_id,
+                    m.Message.conversation_id,
+                    m.Message.ai_id,
+                    m.Message.role,
+                    m.Conversation.platform,
+                    m.Conversation.chat_type,
+                    m.Conversation.platform_chat_id,
+                    m.PlatformIdentity.person_id.label("person_id"),
+                    func.coalesce(
+                        func.nullif(m.Person.display_name, ""),
+                        m.PlatformIdentity.platform_user_id,
+                        "",
+                    ).label("display_name"),
+                    m.Message.content,
+                    m.Message.occurred_at,
+                )
+                .select_from(m.Message)
+                .join(m.Conversation, m.Conversation.conversation_id == m.Message.conversation_id)
+                .outerjoin(
+                    m.PlatformIdentity,
+                    m.PlatformIdentity.identity_id == m.Message.platform_identity_id,
+                )
+                .outerjoin(m.Person, m.Person.person_id == m.PlatformIdentity.person_id)
+                .where(*conditions)
+                .order_by(m.Message.occurred_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            messages = [
                 {
-                    "message_id": row["message_id"],
-                    "conversation_id": row["conversation_id"],
-                    "ai_id": row["ai_id"],
-                    "role": row["role"],
-                    "platform": row["platform"],
-                    "chat_type": row["chat_type"],
-                    "platform_chat_id": row["platform_chat_id"],
-                    "person_id": row["person_id"],
-                    "display_name": row["display_name"],
-                    "content": row["content"],
-                    "occurred_at": str(row["occurred_at"]),
+                    "message_id": str(row.message_id),
+                    "conversation_id": str(row.conversation_id),
+                    "ai_id": row.ai_id,
+                    "role": row.role,
+                    "platform": row.platform,
+                    "chat_type": row.chat_type,
+                    "platform_chat_id": row.platform_chat_id,
+                    "person_id": str(row.person_id) if row.person_id else "",
+                    "display_name": row.display_name,
+                    "content": row.content,
+                    "occurred_at": str(row.occurred_at),
                 }
                 for row in rows
-            ],
-            "db": True,
-        }
+            ]
+        return {"messages": messages, "db": True}
 
     # 列出人物
     async def _list_persons(self) -> dict:
-        if self.state._db is None:
-            return {"persons": [], "db": False}
-        rows = await self.state._db.fetch(
-            "SELECT pi.person_id::text, "
-            "COALESCE(NULLIF(p.display_name,''), pi.platform_user_id, '') AS display_name, "
-            "COUNT(m.message_id) AS message_count, MAX(m.occurred_at) AS last_at "
-            "FROM platform_identities pi "
-            "JOIN persons p ON p.person_id = pi.person_id "
-            "LEFT JOIN messages m ON m.platform_identity_id = pi.identity_id "
-            "GROUP BY pi.person_id, p.display_name, pi.platform_user_id "
-            "ORDER BY last_at DESC NULLS LAST LIMIT 300"
-        )
-        return {
-            "persons": [
+        async with self.state._db.session() as session:
+            rows = await session.execute(
+                select(
+                    m.PlatformIdentity.person_id,
+                    func.coalesce(
+                        func.nullif(m.Person.display_name, ""),
+                        m.PlatformIdentity.platform_user_id,
+                        "",
+                    ).label("display_name"),
+                    func.count(m.Message.message_id).label("message_count"),
+                    func.max(m.Message.occurred_at).label("last_at"),
+                )
+                .select_from(m.PlatformIdentity)
+                .join(m.Person, m.Person.person_id == m.PlatformIdentity.person_id)
+                .outerjoin(
+                    m.Message,
+                    m.Message.platform_identity_id == m.PlatformIdentity.identity_id,
+                )
+                .group_by(
+                    m.PlatformIdentity.person_id,
+                    m.Person.display_name,
+                    m.PlatformIdentity.platform_user_id,
+                )
+                .order_by(desc("last_at").nulls_last())
+                .limit(300)
+            )
+            persons = [
                 {
-                    "person_id": row["person_id"],
-                    "display_name": row["display_name"],
-                    "message_count": int(row["message_count"] or 0),
-                    "last_at": str(row["last_at"]) if row["last_at"] else "",
+                    "person_id": str(row.person_id),
+                    "display_name": row.display_name,
+                    "message_count": int(row.message_count or 0),
+                    "last_at": str(row.last_at) if row.last_at else "",
                 }
                 for row in rows
-            ],
-            "db": True,
-        }
+            ]
+        return {"persons": persons, "db": True}
 
     # 同步执行异步任务
     def _submit(self, coro):
@@ -497,7 +502,9 @@ def main() -> None:
     try:
         future.result(timeout=15)
     except Exception as exc:
-        logger.warning("[panel] 初始化数据库失败，退回内存模式: %s", exc)
+        logger.exception("[panel] 初始化数据库失败，拒绝启动: %s", exc)
+        loop.call_soon_threadsafe(loop.stop)
+        raise
     handler = partial(PanelHandler, state=state, loop=loop)
     server = ThreadingHTTPServer(("0.0.0.0", port), handler)
     logger.info("[panel] 运维面板已启动: http://0.0.0.0:%s", port)
