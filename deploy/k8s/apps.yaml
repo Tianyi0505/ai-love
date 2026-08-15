@@ -19,7 +19,7 @@ spec:
         ailove.role: app
       containers:
         - name: gateway
-          image: ailove/gateway:latest
+          image: ailove/gateway:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -76,7 +76,7 @@ spec:
         ailove.role: app
       containers:
         - name: director
-          image: ailove/director:latest
+          image: ailove/director:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -129,7 +129,7 @@ spec:
         ailove.role: app
       containers:
         - name: ai-agent
-          image: ailove/ai-agent:latest
+          image: ailove/ai-agent:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -182,11 +182,12 @@ spec:
         app: gptsovits
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
         ailove.role: core
       containers:
         - name: gptsovits
-          image: ailove/gptsovits:latest
+          image: ailove/gptsovits:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -239,7 +240,7 @@ spec:
         ailove.role: edge
       containers:
         - name: avatar
-          image: ailove/avatar:latest
+          image: ailove/avatar:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -296,7 +297,7 @@ spec:
         ailove.role: edge
       containers:
         - name: stream
-          image: ailove/stream:latest
+          image: ailove/stream:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -361,7 +362,7 @@ spec:
         ailove.role: edge
       containers:
         - name: mcp
-          image: ailove/mcp:latest
+          image: ailove/mcp:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -394,7 +395,7 @@ spec:
         ailove.role: edge
       containers:
         - name: extension-host
-          image: ailove/extension-host:latest
+          image: ailove/extension-host:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -438,7 +439,7 @@ spec:
         ailove.role: core
       containers:
         - name: memory
-          image: ailove/memory:latest
+          image: ailove/memory:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:

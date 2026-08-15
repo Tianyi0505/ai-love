@@ -13,7 +13,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: dbmigrate
-          image: ailove/gateway:latest
+          image: ailove/gateway:fc057ba
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
