@@ -3,9 +3,47 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
 import time
 from pathlib import Path
+
+from sqlalchemy import (
+    Column,
+    Float,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    delete,
+    func,
+    inspect,
+    or_,
+    select,
+    update,
+)
+
+_metadata = MetaData()
+_stickers_table = Table(
+    "stickers",
+    _metadata,
+    Column("id", String, primary_key=True),
+    Column("image_url", String),
+    Column("description", String),
+    Column("tags", String),
+    Column("value", Float),
+    Column("importance", Float),
+    Column("boost_count", Integer, server_default="0"),
+    Column("last_boost_at", Float),
+    Column("created_at", Float),
+    Column("match_quality", Float),
+    Column("usage_strength", Float),
+    Column("last_used_at", Float),
+)
+
+_REQUIRED_COLUMNS = {
+    "id", "image_url", "description", "tags", "value", "importance",
+    "boost_count", "last_boost_at", "created_at", "match_quality", "usage_strength", "last_used_at",
+}
 
 
 # 对检索文本分词
@@ -26,147 +64,174 @@ class StickerRepo:
         self._config = config
         db_dir = Path(data_dir)
         db_dir.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(db_dir / f"stickers_{ai_id}.db")
-        self._conn.row_factory = sqlite3.Row
+        self._engine = create_engine(f"sqlite:///{db_dir / f'stickers_{ai_id}.db'}")
         self._init_db()
 
     # 初始化表情数据库
     def _init_db(self) -> None:
-        self._conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS stickers (
-                id TEXT PRIMARY KEY,
-                image_url TEXT,
-                description TEXT,
-                tags TEXT,
-                value REAL,
-                importance REAL,
-                boost_count INTEGER DEFAULT 0,
-                last_boost_at REAL,
-                created_at REAL,
-                match_quality REAL DEFAULT {float(self._config['initial_match_quality'])},
-                usage_strength REAL DEFAULT {float(self._config['initial_usage_strength'])},
-                last_used_at REAL
-            )
-        """)
-        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(stickers)")}
-        added_match_quality = "match_quality" not in columns
-        if added_match_quality:
-            self._conn.execute(
-                f"ALTER TABLE stickers ADD COLUMN match_quality REAL DEFAULT {float(self._config['initial_match_quality'])}"
-            )
-        if "usage_strength" not in columns:
-            self._conn.execute(
-                f"ALTER TABLE stickers ADD COLUMN usage_strength REAL DEFAULT {float(self._config['initial_usage_strength'])}"
-            )
-        if "last_used_at" not in columns:
-            self._conn.execute("ALTER TABLE stickers ADD COLUMN last_used_at REAL")
-        if added_match_quality:
-            self._conn.execute(
-                "UPDATE stickers SET match_quality=MAX(0.0, MIN(1.0, "
-                f"COALESCE(value, {float(self._config['initial_match_quality']) * float(self._config['legacy_value_divisor'])}) "
-                f"/ {float(self._config['legacy_value_divisor'])}))"
-            )
-        self._conn.commit()
+        inspector = inspect(self._engine)
+        if inspector.has_table("stickers"):
+            existing = {col["name"] for col in inspector.get_columns("stickers")}
+            if not _REQUIRED_COLUMNS.issubset(existing):
+                _stickers_table.drop(self._engine)
+        _stickers_table.create(self._engine, checkfirst=True)
+        with self._engine.begin() as conn:
+            rows = conn.execute(select(_stickers_table)).all()
+            for row in rows:
+                if row.match_quality is None:
+                    conn.execute(
+                        update(_stickers_table)
+                        .where(_stickers_table.c.id == row.id)
+                        .values(
+                            match_quality=max(
+                                0.0,
+                                min(
+                                    1.0,
+                                    float(
+                                        row.value
+                                        or float(self._config["initial_match_quality"])
+                                        * float(self._config["legacy_value_divisor"])
+                                    )
+                                    / float(self._config["legacy_value_divisor"]),
+                                ),
+                            )
+                        )
+                    )
 
     # 将数据行转换为字典
-    def _row_to_dict(self, row: sqlite3.Row) -> dict:
-        d = dict(row)
-        d["tags"] = json.loads(d.get("tags") or "[]")
-        d["freshness"] = self._freshness(row)
-        d["retention_score"] = self._retention_score(row)
-        d.pop("value", None)
-        d.pop("importance", None)
-        return d
+    def _row_to_dict(self, row) -> dict:
+        data = dict(row._mapping)
+        data["tags"] = json.loads(data.get("tags") or "[]")
+        data["freshness"] = self._freshness(data)
+        data["retention_score"] = self._retention_score(data)
+        data.pop("value", None)
+        data.pop("importance", None)
+        return data
 
     # 计算记忆新鲜度
-    def _freshness(self, row: sqlite3.Row) -> float:
-        anchor = row["last_used_at"] or row["created_at"] or time.time()
+    def _freshness(self, row: dict) -> float:
+        anchor = row.get("last_used_at") or row.get("created_at") or time.time()
         elapsed = max(0.0, time.time() - anchor)
         return 0.5 ** (elapsed / float(self._config["half_life_sec"]))
 
     # 计算记忆保留分数
-    def _retention_score(self, row: sqlite3.Row) -> float:
+    def _retention_score(self, row: dict) -> float:
         return (
-            float(row["match_quality"] or 0.0) * float(self._config["retention_weights"]["match_quality"])
-            + float(row["usage_strength"] or 0.0) * float(self._config["retention_weights"]["usage_strength"])
+            float(row.get("match_quality") or 0.0) * float(self._config["retention_weights"]["match_quality"])
+            + float(row.get("usage_strength") or 0.0) * float(self._config["retention_weights"]["usage_strength"])
             + self._freshness(row) * float(self._config["retention_weights"]["freshness"])
         )
 
     # 返回记录数量
     def count(self) -> int:
-        return self._conn.execute("SELECT COUNT(*) FROM stickers").fetchone()[0]
+        with self._engine.connect() as conn:
+            return conn.execute(select(func.count()).select_from(_stickers_table)).scalar_one()
 
     # 判断记录是否存在
     def exists(self, sticker_id: str) -> bool:
-        return self._conn.execute("SELECT 1 FROM stickers WHERE id=?", (sticker_id,)).fetchone() is not None
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                select(_stickers_table.c.id).where(_stickers_table.c.id == sticker_id).limit(1)
+            ).first()
+        return row is not None
 
     # 插入数据
     def insert(self, sticker: dict) -> None:
-        self._conn.execute(
-            "INSERT INTO stickers (id, image_url, description, tags, value, importance, boost_count, "
-            "last_boost_at, created_at, match_quality, usage_strength, last_used_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (sticker["id"], sticker["image_url"], sticker["description"], json.dumps(sticker.get("tags", [])),
-             None, None, 0, None, time.time(), self._unit(sticker.get("match_quality", self._config["initial_match_quality"])), self._config["initial_usage_strength"], None),
-        )
-        self._conn.commit()
+        with self._engine.begin() as conn:
+            conn.execute(
+                _stickers_table.insert().values(
+                    id=sticker["id"],
+                    image_url=sticker["image_url"],
+                    description=sticker["description"],
+                    tags=json.dumps(sticker.get("tags", [])),
+                    value=None,
+                    importance=None,
+                    boost_count=0,
+                    last_boost_at=None,
+                    created_at=time.time(),
+                    match_quality=self._unit(
+                        sticker.get("match_quality", self._config["initial_match_quality"])
+                    ),
+                    usage_strength=self._config["initial_usage_strength"],
+                    last_used_at=None,
+                )
+            )
 
     # 删除最低项
     def delete_lowest(self) -> str:
-        rows = self._conn.execute("SELECT * FROM stickers").fetchall()
-        if not rows:
-            return ""
-        lowest = min(rows, key=self._retention_score)
-        self._conn.execute("DELETE FROM stickers WHERE id=?", (lowest["id"],))
-        self._conn.commit()
-        return lowest["description"]
+        with self._engine.connect() as conn:
+            rows = conn.execute(select(_stickers_table)).all()
+            if not rows:
+                return ""
+            lowest = min(rows, key=lambda row: self._retention_score(dict(row._mapping)))
+            conn.execute(delete(_stickers_table).where(_stickers_table.c.id == lowest.id))
+            conn.commit()
+            return lowest.description
 
     # 删除不可用项
     def delete_unusable(self, min_quality: float) -> int:
-        cursor = self._conn.execute(
-            "DELETE FROM stickers WHERE COALESCE(match_quality, 0) < ? OR TRIM(description) LIKE '```%'",
-            (self._unit(min_quality),),
-        )
-        self._conn.commit()
-        return max(0, cursor.rowcount)
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                delete(_stickers_table).where(
+                    or_(
+                        func.coalesce(_stickers_table.c.match_quality, 0) < self._unit(min_quality),
+                        func.trim(_stickers_table.c.description).like("```%"),
+                    )
+                )
+            )
+            return max(0, result.rowcount)
 
     # 列出全部数据
     def all(self) -> list[dict]:
-        return [self._row_to_dict(r) for r in self._conn.execute("SELECT * FROM stickers").fetchall()]
+        with self._engine.connect() as conn:
+            rows = conn.execute(select(_stickers_table)).all()
+        return [self._row_to_dict(row) for row in rows]
 
     # 增强记忆强度
     def boost(self, sticker_id: str, boost_delta: float) -> None:
-        cur = self._conn.execute("SELECT * FROM stickers WHERE id=?", (sticker_id,))
-        row = cur.fetchone()
-        if row:
-            new_strength = min(1.0, float(row["usage_strength"] or 0.0) + self._unit(boost_delta))
-            now = time.time()
-            self._conn.execute(
-                "UPDATE stickers SET usage_strength=?, last_used_at=?, last_boost_at=?, "
-                "boost_count=boost_count+1 WHERE id=?",
-                (new_strength, now, now, sticker_id),
-            )
-            self._conn.commit()
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                select(_stickers_table).where(_stickers_table.c.id == sticker_id)
+            ).first()
+            if row:
+                new_strength = min(1.0, float(row.usage_strength or 0.0) + self._unit(boost_delta))
+                now = time.time()
+                conn.execute(
+                    update(_stickers_table)
+                    .where(_stickers_table.c.id == sticker_id)
+                    .values(
+                        usage_strength=new_strength,
+                        last_used_at=now,
+                        last_boost_at=now,
+                        boost_count=_stickers_table.c.boost_count + 1,
+                    )
+                )
+                conn.commit()
 
     # 清理过期数据
     def cleanup(self, threshold: float) -> int:
-        rows = self._conn.execute("SELECT * FROM stickers").fetchall()
         normalized_threshold = self._unit(threshold)
-        removed = [r["id"] for r in rows if self._retention_score(r) < normalized_threshold]
-        for rid in removed:
-            self._conn.execute("DELETE FROM stickers WHERE id=?", (rid,))
-        if removed:
-            self._conn.commit()
-        return len(removed)
+        with self._engine.connect() as conn:
+            rows = conn.execute(select(_stickers_table)).all()
+            removed = [
+                row.id for row in rows if self._retention_score(dict(row._mapping)) < normalized_threshold
+            ]
+            if removed:
+                conn.execute(delete(_stickers_table).where(_stickers_table.c.id.in_(removed)))
+                conn.commit()
+            return len(removed)
 
     # 获取数据
     def get(self, sticker_id: str) -> dict | None:
-        row = self._conn.execute("SELECT * FROM stickers WHERE id=?", (sticker_id,)).fetchone()
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                select(_stickers_table).where(_stickers_table.c.id == sticker_id)
+            ).first()
         return self._row_to_dict(row) if row else None
 
     # 关闭资源
     def close(self) -> None:
-        self._conn.close()
+        self._engine.dispose()
 
     # 将数值限制在单位区间
     @staticmethod

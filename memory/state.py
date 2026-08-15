@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-import uuid
 from dataclasses import dataclass
 
 from shared.contracts.memory import MemoryActivity
+from shared.infrastructure.snowflake import new_snowflake_id
 
 
 # 表示状态条目数据
@@ -75,7 +75,7 @@ class MemoryStateStore:
         data.update(
             status="processing",
             lease_until=now + self._lease,
-            claim_id=uuid.uuid4().hex,
+            claim_id=new_snowflake_id(),
         )
         revision = await self._update(self._activity, entry.key, data, entry.revision)
         return StateEntry(entry.key, revision, data) if revision else None
@@ -170,7 +170,7 @@ class MemoryStateStore:
         data.update(
             status="processing",
             lease_until=now + self._lease,
-            claim_id=uuid.uuid4().hex,
+            claim_id=new_snowflake_id(),
         )
         revision = await self._update(self._pending, entry.key, data, entry.revision)
         return StateEntry(entry.key, revision, data) if revision else None

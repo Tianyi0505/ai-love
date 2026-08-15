@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import time
-import uuid
 
 from shared.contracts.memory import MemoryActivity
 from shared.contracts.tools import ToolExecutionContext
@@ -17,12 +16,12 @@ from shared.infrastructure.database import Database
 from shared.infrastructure.global_config import GlobalConfig
 from shared.infrastructure.repositories import RelationshipRepository
 from shared.infrastructure.service import BaseService
+from shared.infrastructure.snowflake import is_snowflake_id
 
 from memory.controllers.sticker_controller import StickerController
 from memory.memory_policy import MemoryPolicy
 from memory.pipeline import MemoryModelPool, MemoryPipeline
 from memory.repositories.episode_repo import EpisodeMemoryRepository
-from memory.repositories.memory_repo import MemoryRepo
 from memory.repositories.postgres_memory_repo import PostgresMemoryRepo
 from memory.services.sticker_service import StickerService
 from memory.state import MemoryStateStore
@@ -41,32 +40,27 @@ class MemoryService(BaseService):
         self._grounding_config = self._gcfg.section("grounding")
 
         self._sticker_svc = StickerService(self._gcfg)
-        self._db = None
         self._memory_activity_sub = None
-        self._relationship_repo = None
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
-        if os.environ.get("AILOVE_DATABASE_URL"):
-            self._db = Database()
-            await self._db.connect()
-            self._memory_repo = PostgresMemoryRepo(
-                self._db,
-                MemoryPolicy(
-                    half_life_sec=float(self._memory_config["half_life_sec"]),
-                    dormant_threshold=float(self._memory_config["dormant_threshold"]),
-                    delete_threshold=float(self._memory_config["delete_threshold"]),
-                    recall_boost=float(self._memory_config["recall_boost"]),
-                    retrieval_weights=dict(self._memory_config["retrieval_weights"]),
-                ),
-                self._memory_config,
-            )
-            self._relationship_repo = RelationshipRepository(self._db)
-            episode_config = self._memory_config["episode"]
-            self._episode_repo = EpisodeMemoryRepository(
-                self._db,
-                history_episode_limit=int(episode_config["history_episode_limit"]),
-            )
-        else:
-            self._memory_repo = MemoryRepo(str(self._memory_config["data_dir"]))
+        self._db = Database()
+        await self._db.connect()
+        self._memory_repo = PostgresMemoryRepo(
+            self._db,
+            MemoryPolicy(
+                half_life_sec=float(self._memory_config["half_life_sec"]),
+                dormant_threshold=float(self._memory_config["dormant_threshold"]),
+                delete_threshold=float(self._memory_config["delete_threshold"]),
+                recall_boost=float(self._memory_config["recall_boost"]),
+                retrieval_weights=dict(self._memory_config["retrieval_weights"]),
+            ),
+            self._memory_config,
+        )
+        self._relationship_repo = RelationshipRepository(self._db)
+        episode_config = self._memory_config["episode"]
+        self._episode_repo = EpisodeMemoryRepository(
+            self._db,
+            history_episode_limit=int(episode_config["history_episode_limit"]),
+        )
 
         self._sticker_ctrl = StickerController(self._sticker_svc)
         self._controllers = {"sticker": self._sticker_ctrl}
@@ -87,40 +81,38 @@ class MemoryService(BaseService):
         await self.bus.reply("relationship.group.request", self._on_group_relationship)
 
         self.spawn(self._cleanup_loop())
-        if self._db is not None:
-            await self.bus.ensure_stream("MEMORY_ACTIVITY_EVENTS", ["memory.activity"])
-            activity_kv = await self.bus.key_value("MEMORY_ACTIVITY")
-            pending_kv = await self.bus.key_value("MEMORY_PENDING")
-            self._memory_state = MemoryStateStore(
-                activity_kv,
-                pending_kv,
-                quiet_window_sec=float(self._memory_config["extraction"]["quiet_window_sec"]),
-                lease_sec=float(self._memory_config["worker_lease_sec"]),
-            )
-            self._memory_pipeline = MemoryPipeline(
-                repo=self._episode_repo,
-                state=self._memory_state,
-                models=MemoryModelPool(self._definitions, self._gcfg.section("llm")),
-                bus=self.bus,
-                config=self._memory_config,
-                spawn=self.spawn,
-            )
-            self._memory_activity_sub = await self.bus.subscribe_durable(
-                "memory.activity",
-                durable="memory-activity-v1",
-                queue="memory-activity-v1",
-                handler=self._on_memory_activity,
-            )
-            self.spawn(self._memory_pipeline.activity_loop())
-            self.spawn(self._memory_pipeline.consolidation_loop())
+        await self.bus.ensure_stream("MEMORY_ACTIVITY_EVENTS", ["memory.activity"])
+        activity_kv = await self.bus.key_value("MEMORY_ACTIVITY")
+        pending_kv = await self.bus.key_value("MEMORY_PENDING")
+        self._memory_state = MemoryStateStore(
+            activity_kv,
+            pending_kv,
+            quiet_window_sec=float(self._memory_config["extraction"]["quiet_window_sec"]),
+            lease_sec=float(self._memory_config["worker_lease_sec"]),
+        )
+        self._memory_pipeline = MemoryPipeline(
+            repo=self._episode_repo,
+            state=self._memory_state,
+            models=MemoryModelPool(self._definitions, self._gcfg.section("llm")),
+            bus=self.bus,
+            config=self._memory_config,
+            spawn=self.spawn,
+        )
+        self._memory_activity_sub = await self.bus.subscribe_durable(
+            "memory.activity",
+            durable="memory-activity-v1",
+            queue="memory-activity-v1",
+            handler=self._on_memory_activity,
+        )
+        self.spawn(self._memory_pipeline.activity_loop())
+        self.spawn(self._memory_pipeline.consolidation_loop())
 
     # 停止服务
     async def on_stop(self) -> None:
         if self._memory_activity_sub is not None:
             self._memory_activity_sub.unsubscribe()
         self._sticker_svc.close()
-        if self._db is not None:
-            await self._db.close()
+        await self._db.close()
 
     # 创建表情请求处理器
     def _make_sticker_handler(self, action: str):
@@ -208,10 +200,6 @@ class MemoryService(BaseService):
     # 处理上下文
     async def _on_context(self, payload: bytes) -> bytes:
         req = json.loads(payload.decode("utf-8"))
-        if self._db is None:
-            return json.dumps(
-                {"self_markdown": "", "person_markdown": "", "conversation_summary": ""}
-            ).encode()
         result = await self._episode_repo.context(
             str(req.get("ai_id") or ""),
             str(req.get("person_id") or ""),
@@ -225,11 +213,9 @@ class MemoryService(BaseService):
         context = ToolExecutionContext.from_dict(req.get("context"))
         arguments = req.get("arguments") if isinstance(req.get("arguments"), dict) else {}
         person_id = str(arguments.get("person_id") or "")
-        try:
-            uuid.UUID(person_id)
-        except (ValueError, TypeError, AttributeError):
+        if not is_snowflake_id(person_id):
             return json.dumps({"ok": False, "error": "person_id 无效"}, ensure_ascii=False).encode()
-        if self._db is None or context.ai_id == "":
+        if context.ai_id == "":
             return json.dumps({"ok": False, "error": "人物上下文不可用"}, ensure_ascii=False).encode()
         result = await self._episode_repo.person_context(
             context,
@@ -274,8 +260,8 @@ class MemoryService(BaseService):
     # 处理关系聊天
     async def _on_relationship_chat(self, payload: bytes) -> bytes:
         req = json.loads(payload)
-        if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
-            return json.dumps({"ok": False, "reason": "关系存储未启用或缺少身份"}).encode()
+        if not req.get("ai_id") or not req.get("person_id"):
+            return json.dumps({"ok": False, "reason": "缺少身份"}).encode()
         ai_id = str(req["ai_id"])
         person_id = str(req["person_id"])
         policy = await self._relationship_policy(ai_id)
@@ -294,8 +280,8 @@ class MemoryService(BaseService):
     # 处理关系礼物
     async def _on_relationship_gift(self, payload: bytes) -> bytes:
         req = json.loads(payload)
-        if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
-            return json.dumps({"ok": False, "reason": "关系存储未启用或缺少身份"}).encode()
+        if not req.get("ai_id") or not req.get("person_id"):
+            return json.dumps({"ok": False, "reason": "缺少身份"}).encode()
         ai_id = str(req["ai_id"])
         person_id = str(req["person_id"])
         policy = await self._relationship_policy(ai_id)
@@ -309,7 +295,7 @@ class MemoryService(BaseService):
     # 处理关系摘要
     async def _on_relationship_summary(self, payload: bytes) -> bytes:
         req = json.loads(payload)
-        if self._relationship_repo is None or not req.get("ai_id") or not req.get("person_id"):
+        if not req.get("ai_id") or not req.get("person_id"):
             return json.dumps(
                 {"summary": self._gcfg.get("fallbacks", "relationship_unknown")},
                 ensure_ascii=False,
@@ -322,8 +308,6 @@ class MemoryService(BaseService):
     # 处理关系列表请求
     async def _on_relationship_list(self, payload: bytes) -> bytes:
         req = json.loads(payload)
-        if self._relationship_repo is None:
-            return json.dumps({"relationships": []}).encode()
         relationships = await self._relationship_repo.list_people(str(req.get("ai_id", "")))
         whitelist = self._gcfg.get("qq", "whitelist")
         if isinstance(whitelist, dict):
@@ -336,8 +320,6 @@ class MemoryService(BaseService):
     # 处理群聊关系
     async def _on_group_relationship(self, payload: bytes) -> bytes:
         req = json.loads(payload)
-        if self._relationship_repo is None:
-            return json.dumps({"relationship": {}}).encode()
         ai_id = str(req.get("ai_id", ""))
         account_id = str(req.get("account_id", ""))
         group_id = str(req.get("group_id", ""))
