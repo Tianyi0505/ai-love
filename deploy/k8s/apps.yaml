@@ -25,6 +25,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "1"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -80,6 +82,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "2"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -131,6 +135,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "3"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -185,6 +191,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "4"
             - name: AILOVE_NACOS_ADDRS
               value: nacos:8848
             - name: AILOVE_NACOS_GROUP
@@ -236,6 +244,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "5"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -291,6 +301,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "6"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -353,6 +365,9 @@ spec:
           envFrom:
             - secretRef:
                 name: ailove-secrets
+          env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "7"
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 300m, memory: 192Mi}
@@ -384,6 +399,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "8"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -426,6 +443,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "9"
             - name: AILOVE_NACOS_ADDRS
               value: nacos:8848
             - name: AILOVE_NACOS_GROUP

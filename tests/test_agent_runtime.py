@@ -24,6 +24,7 @@ from shared.contracts.social import Chat, ChatType, SocialMessage, SocialSender
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand
 from shared.contracts.tools import ToolExecutionContext
 from shared.infrastructure.run_repo import AgentRunRepository
+from shared.infrastructure.snowflake import is_snowflake_id
 
 
 class _Prompts:
@@ -43,30 +44,30 @@ class _StepLLM:
             yield ChatStreamChunk(content="最终回答")
 
 
-class _RecordingDB:
-    def __init__(self) -> None:
-        self.rows = []
+class _FakeSession:
+    def __init__(self, rows) -> None:
+        self.rows = rows
+        self.executed = []
 
-    async def execute(self, query, *args):
-        self.rows.append((query, args))
-        return "OK"
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def execute(self, stmt):
+        self.executed.append(stmt)
+        return self.rows
 
 
-class _FetchDB:
-    def __init__(self) -> None:
-        self.calls = []
+class _FakeDB:
+    def __init__(self, rows=[]) -> None:
+        self._rows = rows
+        self.session_calls = 0
 
-    async def fetch(self, query, *args):
-        self.calls.append((query, args))
-        return []
-
-    async def fetchrow(self, query, *args):
-        self.calls.append((query, args))
-        return None
-
-    async def execute(self, query, *args):
-        self.calls.append((query, args))
-        return "OK"
+    def session(self):
+        self.session_calls += 1
+        return _FakeSession(self._rows)
 
 
 class TurnCoordinatorTests(unittest.IsolatedAsyncioTestCase):
@@ -135,8 +136,7 @@ class AgentExecutionContextTests(unittest.TestCase):
             meta={},
         )
         execution = AgentExecutionContext.from_social_message(message, "luoyu")
-        self.assertTrue(execution.run_id)
-        self.assertEqual(32, len(execution.run_id))
+        self.assertTrue(is_snowflake_id(execution.run_id))
 
 
 class ResponseCommandTests(unittest.TestCase):
@@ -213,29 +213,33 @@ class ResponsePlanTextTests(unittest.TestCase):
 
 
 class AgentRunSearchTests(unittest.IsolatedAsyncioTestCase):
-    async def test_search_runs_applies_filters(self) -> None:
-        db = _FetchDB()
+    async def test_search_runs_returns_rows(self) -> None:
+        row = SimpleNamespace(
+            run_id=1001, ai_id="luoyu", account_id="qq-main", conversation_id=2001,
+            platform="qq", chat_type="group", chat_id="782795932", sender_person_id=3001,
+            source="social", message_id="9001", reply_to_message_id="",
+            status="finished", outcome="replied", tool_rounds=2, response_text="hi",
+            started_at=None, finished_at=None,
+        )
+        db = _FakeDB(rows=[row])
         repo = AgentRunRepository(db)
-        await repo.search_runs(
+        runs = await repo.search_runs(
             ai_id="luoyu",
-            conversation_id="11111111-1111-1111-1111-111111111111",
+            conversation_id="2001",
             source="social",
             limit=20,
         )
-        self.assertEqual(1, len(db.calls))
-        query, args = db.calls[0]
-        self.assertIn("ai_id=$1", query)
-        self.assertIn("conversation_id=$2::uuid", query)
-        self.assertIn("source=$3", query)
-        self.assertIn("LIMIT $4 OFFSET $5", query)
-        self.assertEqual(["luoyu", "11111111-1111-1111-1111-111111111111", "social", 20, 0], list(args))
+        self.assertEqual(1, db.session_calls)
+        self.assertEqual(1, len(runs))
+        self.assertEqual("1001", runs[0]["run_id"])
+        self.assertEqual("2001", runs[0]["conversation_id"])
 
     async def test_search_runs_rejects_invalid_conversation_id(self) -> None:
-        db = _FetchDB()
+        db = _FakeDB()
         repo = AgentRunRepository(db)
-        runs = await repo.search_runs(conversation_id="not-a-uuid")
+        runs = await repo.search_runs(conversation_id="not-a-snowflake")
         self.assertEqual([], runs)
-        self.assertEqual([], db.calls)
+        self.assertEqual(0, db.session_calls)
 
 
 class AgentLoopStepTests(unittest.IsolatedAsyncioTestCase):

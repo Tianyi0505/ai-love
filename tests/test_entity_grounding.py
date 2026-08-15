@@ -70,47 +70,92 @@ class _LoopRegistry:
         self.executor = executor
 
 
+class _Rows(list):
+    def first(self):
+        return self[0] if self else None
+
+    def scalar_one_or_none(self):
+        return self[0][0] if self and self[0] else None
+
+
 class _MemoryDB:
     def __init__(self, member_allowed: bool = True) -> None:
         self.member_allowed = member_allowed
         self.queries = []
 
-    async def fetchrow(self, query, *args):
-        self.queries.append(query)
-        if "FROM conversations" in query:
-            return {"exists": True}
-        if "FROM group_members" in query:
-            return {"exists": True} if self.member_allowed else None
-        if "FROM conversation_summaries" in query:
-            return {"summary": "仅当前群摘要"}
-        return None
+    def session(self):
+        return _FakeSession(self)
 
-    async def fetch(self, query, *args):
-        self.queries.append(query)
-        return [
-            {
-                "content": "群里公开讨论过 Voice Agent",
-                "memory_type": "fact",
-                "importance": 0.8,
-                "confidence": 0.9,
-                "created_at": "now",
-            }
-        ]
+
+class _FakeSession:
+    def __init__(self, db) -> None:
+        self._db = db
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def execute(self, stmt):
+        sql = str(stmt)
+        self._db.queries.append(sql)
+        lowered = sql.lower()
+        if "from conversations" in lowered:
+            return _Rows([(True,)])
+        if "from messages" in lowered:
+            return _Rows([(True,)])
+        if "from group_members" in lowered:
+            return _Rows([(True,)]) if self._db.member_allowed else _Rows([])
+        if "from memory_atoms" in lowered:
+            return _Rows(
+                [
+                    SimpleNamespace(
+                        content="群里公开讨论过 Voice Agent",
+                        memory_type="fact",
+                        importance=0.8,
+                        confidence=0.9,
+                        created_at="now",
+                    )
+                ]
+            )
+        if "from conversation_summaries" in lowered:
+            return _Rows([SimpleNamespace(summary="仅当前群摘要")])
+        return _Rows([])
 
 
 class _RoleDB:
     def __init__(self) -> None:
         self.queries = []
 
-    async def fetch(self, query, *args):
-        self.queries.append(query)
-        return [
-            {
-                "person_id": "22222222-2222-2222-2222-222222222222",
-                "display_name": "当前群主",
-                "role": "owner",
-            }
-        ]
+    def session(self):
+        return _RoleSession(self)
+
+
+class _RoleSession:
+    def __init__(self, db) -> None:
+        self._db = db
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def execute(self, stmt):
+        sql = str(stmt)
+        self._db.queries.append(sql)
+        if "group_members" in sql.lower():
+            return _Rows(
+                [
+                    SimpleNamespace(
+                        person_id="222222222222222222",
+                        display_name="当前群主",
+                        role="owner",
+                    )
+                ]
+            )
+        return _Rows([])
 
 
 class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
@@ -127,7 +172,7 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
         result = await repo.resolve_people(context, "群主", 5)
 
         self.assertEqual(
-            "22222222-2222-2222-2222-222222222222",
+            "222222222222222222",
             result["candidates"][0]["person_id"],
         )
         self.assertEqual("group_role", result["candidates"][0]["evidence"][0]["type"])
@@ -178,16 +223,16 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
         context = ToolExecutionContext(
             ai_id="ai",
             account_id="account",
-            conversation_id="11111111-1111-1111-1111-111111111111",
+            conversation_id="111111111111111111",
             platform="qq",
             chat_type="group",
             chat_id="group",
-            sender_person_id="22222222-2222-2222-2222-222222222222",
+            sender_person_id="222222222222222222",
         )
 
         result = await repo.person_context(
             context,
-            "22222222-2222-2222-2222-222222222222",
+            "222222222222222222",
             8,
         )
 
@@ -201,7 +246,7 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
         context = ToolExecutionContext(
             ai_id="ai",
             account_id="account",
-            conversation_id="11111111-1111-1111-1111-111111111111",
+            conversation_id="111111111111111111",
             platform="qq",
             chat_type="group",
             chat_id="group",
@@ -209,7 +254,7 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
 
         result = await repo.person_context(
             context,
-            "22222222-2222-2222-2222-222222222222",
+            "222222222222222222",
             8,
         )
 

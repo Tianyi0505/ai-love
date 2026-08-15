@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ailove-dbmigrate
+  namespace: ailove
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      restartPolicy: Never
+      containers:
+        - name: dbmigrate
+          image: ailove/gateway:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "99"
+          command:
+            - sh
+            - -c
+            - |
+              python -m alembic -c alembic.ini stamp 0001_initial && python -m alembic -c alembic.ini upgrade head && echo MIGRATION-DONE

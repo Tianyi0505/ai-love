@@ -4,6 +4,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 COPY shared/ ./shared/
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 
 FROM base AS gateway
 COPY gateway/ ./gateway/

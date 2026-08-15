@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ailove-kvflush
+  namespace: ailove
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        ailove.role: app
+      restartPolicy: Never
+      containers:
+        - name: kvflush
+          image: ailove/gateway:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: ailove-secrets
+          env:
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
+          command:
+            - sh
+            - -c
+            - |
+              python -c "
+              import asyncio, os
+              import nats
+              from nats.js.errors import NotFoundError
+              async def main():
+                  nc = await nats.connect(os.environ['AILOVE_BUS_URL'], token=os.environ.get('AILOVE_BUS_TOKEN') or None)
+                  js = nc.jetstream()
+                  for bucket in ('MEMORY_ACTIVITY', 'MEMORY_PENDING'):
+                      try:
+                          await js.delete_key_value(bucket)
+                          print('deleted KV', bucket)
+                      except NotFoundError:
+                          print('KV missing', bucket)
+                  await nc.close()
+              asyncio.run(main())
+              "
