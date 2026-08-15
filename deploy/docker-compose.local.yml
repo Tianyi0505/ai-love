@@ -17,7 +17,7 @@ services:
     networks: [ailove]
 
   gpt-sovits:
-    image: ghcr.io/rvc-boss/gpt-sovits:latest
+    image: ${GPT_SOVITS_IMAGE:?}   # 必须显式给出明确 tag/digest（ghcr 需登录），禁止 latest
     container_name: ailove-gpt-sovits
     environment:
       - GPT_SOVITS_URL=http://127.0.0.1:9880
