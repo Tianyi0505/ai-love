@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 
 from shared.contracts.tools import ToolExecutionContext
+from shared.infrastructure.snowflake import new_snowflake_id
 
 
 # 生成一次执行链路标识
 def new_run_id() -> str:
-    return uuid.uuid4().hex
+    return new_snowflake_id()
 
 
 # 描述一轮消息执行上下文

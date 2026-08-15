@@ -2,25 +2,13 @@
 from __future__ import annotations
 
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared.infrastructure.snowflake import new_snowflake_id
+
 
 SCHEMA_VERSION = 1
-_CONVERSATION_NAMESPACE = uuid.UUID("3d1da1d1-cd6d-4ccd-9f34-69469e5b906e")
-
-
-# 生成会话标识
-def make_conversation_id(
-    platform: str,
-    account_id: str,
-    platform_chat_id: str,
-    thread_id: str = "",
-) -> str:
-
-    raw = "\x1f".join((platform, account_id, platform_chat_id, thread_id))
-    return str(uuid.uuid5(_CONVERSATION_NAMESPACE, raw))
 
 
 # 封装消息总线事件
@@ -34,9 +22,9 @@ class EventEnvelope:
     platform_identity_id: str = ""
     conversation_id: str = ""
     session_id: str = ""
-    correlation_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    correlation_id: str = field(default_factory=new_snowflake_id)
     causation_id: str = ""
-    event_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    event_id: str = field(default_factory=new_snowflake_id)
     occurred_at: int = field(default_factory=lambda: int(time.time() * 1000))
     schema_version: int = SCHEMA_VERSION
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -65,10 +53,10 @@ class EventEnvelope:
     def from_dict(cls, data: dict[str, Any]) -> "EventEnvelope":
         return cls(
             schema_version=int(data.get("schema_version", SCHEMA_VERSION)),
-            event_id=data.get("event_id", "") or uuid.uuid4().hex,
+            event_id=data.get("event_id", "") or new_snowflake_id(),
             event_type=data.get("event_type", ""),
             occurred_at=int(data.get("occurred_at", 0) or int(time.time() * 1000)),
-            correlation_id=data.get("correlation_id", "") or uuid.uuid4().hex,
+            correlation_id=data.get("correlation_id", "") or new_snowflake_id(),
             causation_id=data.get("causation_id", ""),
             ai_id=data.get("ai_id", ""),
             account_id=data.get("account_id", ""),
@@ -79,57 +67,6 @@ class EventEnvelope:
             payload=dict(data.get("payload", {})),
             metadata=dict(data.get("metadata", {})),
         )
-
-# 描述入站社交消息
-@dataclass(frozen=True)
-class InboundSocialMessage:
-    account_id: str
-    platform: str
-    platform_message_id: str
-    platform_chat_id: str
-    chat_type: str
-    sender_identity_id: str
-    sender_platform_user_id: str
-    sender_name: str
-    content_type: str
-    text: str = ""
-    media_url: str = ""
-    to_ai: bool = False
-    at_ai_id: str = ""
-    timestamp: int = 0
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    # 返回会话标识
-    @property
-    def conversation_id(self) -> str:
-        return make_conversation_id(self.platform, self.account_id, self.platform_chat_id)
-
-    # 转换为事件信封
-    def to_envelope(self, *, person_id: str = "", correlation_id: str = "") -> EventEnvelope:
-        return EventEnvelope(
-            event_type="social.message.received",
-            account_id=self.account_id,
-            person_id=person_id,
-            platform_identity_id=self.sender_identity_id,
-            conversation_id=self.conversation_id,
-            correlation_id=correlation_id or uuid.uuid4().hex,
-            payload={
-                "platform": self.platform,
-                "platform_message_id": self.platform_message_id,
-                "platform_chat_id": self.platform_chat_id,
-                "chat_type": self.chat_type,
-                "sender_platform_user_id": self.sender_platform_user_id,
-                "sender_name": self.sender_name,
-                "content_type": self.content_type,
-                "text": self.text,
-                "media_url": self.media_url,
-                "to_ai": self.to_ai,
-                "at_ai_id": self.at_ai_id,
-                "timestamp": self.timestamp,
-                "metadata": self.metadata,
-            },
-        )
-
 
 # 表示轮次请求数据
 @dataclass
@@ -143,7 +80,7 @@ class TurnRequest:
     person_id: str = ""
     platform_identity_id: str = ""
     session_id: str = ""
-    correlation_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    correlation_id: str = field(default_factory=new_snowflake_id)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # 转换为事件信封

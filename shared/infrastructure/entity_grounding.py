@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import json
 import re
-import uuid
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import and_, desc, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from shared.contracts.entity import EntityCandidate, EntityContext, EntityReference
 from shared.contracts.tools import ToolExecutionContext
 from shared.infrastructure.database import Database
+from shared.infrastructure import models as m
+from shared.infrastructure.snowflake import new_snowflake_id
 
 
 _ROLE_NAMES = {
@@ -36,16 +41,21 @@ class EntityGroundingRepository:
             and context.chat_id
         ):
             return False
-        row = await self._db.fetchrow(
-            "SELECT EXISTS(SELECT 1 FROM conversations c WHERE c.conversation_id=$1::uuid "
-            "AND c.platform=$2 AND c.account_id=$3 AND c.platform_chat_id=$4 AND c.chat_type=$5) AS exists",
-            context.conversation_id,
-            context.platform,
-            context.account_id,
-            context.chat_id,
-            context.chat_type,
-        )
-        return bool(row["exists"])
+        async with self._db.session() as session:
+            row = await session.execute(
+                select(
+                    select(m.Conversation.conversation_id)
+                    .where(
+                        m.Conversation.conversation_id == int(context.conversation_id),
+                        m.Conversation.platform == context.platform,
+                        m.Conversation.account_id == context.account_id,
+                        m.Conversation.platform_chat_id == context.chat_id,
+                        m.Conversation.chat_type == context.chat_type,
+                    )
+                    .exists()
+                )
+            )
+            return bool(row.scalar())
 
     async def sync_group_members(
         self,
@@ -54,32 +64,39 @@ class EntityGroundingRepository:
         chat_id: str,
         members: list[dict],
     ) -> None:
-        async with self._db.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute(
-                    "UPDATE group_members SET is_active=false WHERE platform=$1 "
-                    "AND account_id=$2 AND chat_id=$3",
-                    platform,
-                    account_id,
-                    chat_id,
+        async with self._db.session() as session:
+            async with session.begin():
+                await session.execute(
+                    update(m.GroupMember)
+                    .where(
+                        m.GroupMember.platform == platform,
+                        m.GroupMember.account_id == account_id,
+                        m.GroupMember.chat_id == chat_id,
+                    )
+                    .values(is_active=False)
                 )
                 for member in members:
-                    await conn.execute(
-                        "INSERT INTO group_members(platform,account_id,chat_id,platform_user_id,"
-                        "person_id,nickname,group_card,role,is_active,last_seen_at) "
-                        "VALUES($1,$2,$3,$4,$5::uuid,$6,$7,$8,true,now()) "
-                        "ON CONFLICT(platform,account_id,chat_id,platform_user_id) DO UPDATE SET "
-                        "person_id=EXCLUDED.person_id,nickname=EXCLUDED.nickname,"
-                        "group_card=EXCLUDED.group_card,role=EXCLUDED.role,is_active=true,last_seen_at=now()",
-                        platform,
-                        account_id,
-                        chat_id,
-                        str(member["platform_user_id"]),
-                        str(member["person_id"]),
-                        str(member.get("nickname") or ""),
-                        str(member.get("group_card") or ""),
-                        str(member.get("role") or "member"),
+                    values = {
+                        "platform": platform,
+                        "account_id": account_id,
+                        "chat_id": chat_id,
+                        "platform_user_id": str(member["platform_user_id"]),
+                        "person_id": int(member["person_id"]),
+                        "nickname": str(member.get("nickname") or ""),
+                        "group_card": str(member.get("group_card") or ""),
+                        "role": str(member.get("role") or "member"),
+                        "is_active": True,
+                    }
+                    stmt = pg_insert(m.GroupMember).values(**values).on_conflict_do_update(
+                        index_elements=[
+                            m.GroupMember.platform,
+                            m.GroupMember.account_id,
+                            m.GroupMember.chat_id,
+                            m.GroupMember.platform_user_id,
+                        ],
+                        set_={**values, "last_seen_at": func.now()},
                     )
+                    await session.execute(stmt)
 
     async def record_mention_evidence(
         self,
@@ -96,24 +113,39 @@ class EntityGroundingRepository:
         normalized = normalize_mention(mention_text)
         if not normalized or not person_id:
             return
-        await self._db.execute(
-            "INSERT INTO person_mentions(mention_id,mention_text,normalized_mention,person_id,"
-            "scope_type,scope_id,conversation_id,source_message_id,evidence_type,confidence) "
-            "VALUES($1::uuid,$2,$3,$4::uuid,$5,$6,$7::uuid,$8,$9,$10) "
-            "ON CONFLICT(normalized_mention,person_id,scope_type,scope_id,evidence_type,source_message_id) "
-            "DO UPDATE SET confidence=GREATEST(person_mentions.confidence,EXCLUDED.confidence),"
-            "observed_at=now()",
-            str(uuid.uuid4()),
-            mention_text.strip(),
-            normalized,
-            person_id,
-            scope_type,
-            scope_id,
-            conversation_id or None,
-            source_message_id,
-            evidence_type,
-            max(0.0, min(1.0, confidence)),
-        )
+        confidence = max(0.0, min(1.0, confidence))
+        async with self._db.session() as session:
+            stmt = (
+                pg_insert(m.PersonMention)
+                .values(
+                    mention_id=int(new_snowflake_id()),
+                    mention_text=mention_text.strip(),
+                    normalized_mention=normalized,
+                    person_id=int(person_id),
+                    scope_type=scope_type,
+                    scope_id=scope_id,
+                    conversation_id=int(conversation_id) if conversation_id else None,
+                    source_message_id=source_message_id,
+                    evidence_type=evidence_type,
+                    confidence=confidence,
+                )
+                .on_conflict_do_update(
+                    index_elements=[
+                        m.PersonMention.normalized_mention,
+                        m.PersonMention.person_id,
+                        m.PersonMention.scope_type,
+                        m.PersonMention.scope_id,
+                        m.PersonMention.evidence_type,
+                        m.PersonMention.source_message_id,
+                    ],
+                    set_={
+                        "confidence": func.greatest(m.PersonMention.confidence, confidence),
+                        "observed_at": func.now(),
+                    },
+                )
+            )
+            await session.execute(stmt)
+            await session.commit()
 
     async def resolve_people(
         self,
@@ -127,94 +159,141 @@ class EntityGroundingRepository:
 
         candidates: dict[str, dict] = {}
         roles = _ROLE_NAMES.get(normalized)
-        if roles:
-            rows = await self._db.fetch(
-                "SELECT gm.person_id::text,COALESCE(NULLIF(gm.group_card,''),"
-                "NULLIF(gm.nickname,''),p.display_name,'') AS display_name,gm.role "
-                "FROM group_members gm JOIN persons p ON p.person_id=gm.person_id "
-                "WHERE gm.platform=$1 AND gm.account_id=$2 AND gm.chat_id=$3 "
-                "AND gm.is_active AND gm.role=ANY($4::text[]) ORDER BY gm.role,display_name",
-                context.platform,
-                context.account_id,
-                context.chat_id,
-                list(roles),
+        async with self._db.session() as session:
+            display_name_expr = func.coalesce(
+                func.nullif(m.GroupMember.group_card, ""),
+                func.nullif(m.GroupMember.nickname, ""),
+                m.Person.display_name,
+                "",
             )
-            for row in rows:
-                self._add_candidate(
-                    candidates,
-                    row["person_id"],
-                    row["display_name"],
-                    1.0 if len(rows) == 1 else 0.9,
-                    {"type": "group_role", "role": row["role"]},
+            if roles:
+                rows = await session.execute(
+                    select(
+                        m.GroupMember.person_id,
+                        display_name_expr.label("display_name"),
+                        m.GroupMember.role,
+                    )
+                    .select_from(m.GroupMember)
+                    .join(m.Person, m.Person.person_id == m.GroupMember.person_id)
+                    .where(
+                        m.GroupMember.platform == context.platform,
+                        m.GroupMember.account_id == context.account_id,
+                        m.GroupMember.chat_id == context.chat_id,
+                        m.GroupMember.is_active.is_(True),
+                        m.GroupMember.role.in_(list(roles)),
+                    )
+                    .order_by(m.GroupMember.role, display_name_expr)
                 )
-        else:
-            rows = await self._db.fetch(
-                "SELECT gm.person_id::text,COALESCE(NULLIF(gm.group_card,''),"
-                "NULLIF(gm.nickname,''),p.display_name,'') AS display_name,"
-                "gm.platform_user_id,gm.nickname,gm.group_card "
-                "FROM group_members gm JOIN persons p ON p.person_id=gm.person_id "
-                "WHERE gm.platform=$1 AND gm.account_id=$2 AND gm.chat_id=$3 AND gm.is_active "
-                "AND (lower(gm.platform_user_id)=lower($4) OR lower(gm.nickname)=lower($5) "
-                "OR lower(gm.group_card)=lower($5) OR lower(p.display_name)=lower($5))",
-                context.platform,
-                context.account_id,
-                context.chat_id,
-                mention.strip().lstrip("@"),
-                mention.strip(),
-            )
-            for row in rows:
-                if row["platform_user_id"].casefold() == mention.strip().lstrip("@").casefold():
-                    confidence, evidence_type = 1.0, "platform_identity"
-                elif str(row["group_card"]).casefold() == mention.strip().casefold():
-                    confidence, evidence_type = 0.98, "group_card"
-                else:
-                    confidence, evidence_type = 0.95, "display_name"
-                self._add_candidate(
-                    candidates,
-                    row["person_id"],
-                    row["display_name"],
-                    confidence,
-                    {"type": evidence_type},
+                role_rows = list(rows)
+                for row in role_rows:
+                    self._add_candidate(
+                        candidates,
+                        row.person_id,
+                        row.display_name,
+                        1.0 if len(role_rows) == 1 else 0.9,
+                        {"type": "group_role", "role": row.role},
+                    )
+            else:
+                rows = await session.execute(
+                    select(
+                        m.GroupMember.person_id,
+                        display_name_expr.label("display_name"),
+                        m.GroupMember.platform_user_id,
+                        m.GroupMember.nickname,
+                        m.GroupMember.group_card,
+                    )
+                    .select_from(m.GroupMember)
+                    .join(m.Person, m.Person.person_id == m.GroupMember.person_id)
+                    .where(
+                        m.GroupMember.platform == context.platform,
+                        m.GroupMember.account_id == context.account_id,
+                        m.GroupMember.chat_id == context.chat_id,
+                        m.GroupMember.is_active.is_(True),
+                        or_(
+                            func.lower(m.GroupMember.platform_user_id)
+                            == func.lower(mention.strip().lstrip("@")),
+                            func.lower(m.GroupMember.nickname) == func.lower(mention.strip()),
+                            func.lower(m.GroupMember.group_card) == func.lower(mention.strip()),
+                            func.lower(m.Person.display_name) == func.lower(mention.strip()),
+                        ),
+                    )
                 )
+                for row in rows:
+                    if row.platform_user_id.casefold() == mention.strip().lstrip("@").casefold():
+                        confidence, evidence_type = 1.0, "platform_identity"
+                    elif str(row.group_card).casefold() == mention.strip().casefold():
+                        confidence, evidence_type = 0.98, "group_card"
+                    else:
+                        confidence, evidence_type = 0.95, "display_name"
+                    self._add_candidate(
+                        candidates,
+                        row.person_id,
+                        row.display_name,
+                        confidence,
+                        {"type": evidence_type},
+                    )
 
-            evidence_rows = await self._db.fetch(
-                "SELECT pm.person_id::text,p.display_name,MAX(pm.confidence) AS confidence,"
-                "COUNT(*)::int AS evidence_count,MAX(pm.observed_at) AS last_seen_at,"
-                "EXTRACT(EPOCH FROM now()-MAX(pm.observed_at)) AS age_sec "
-                "FROM person_mentions pm JOIN persons p ON p.person_id=pm.person_id "
-                "JOIN group_members gm ON gm.person_id=pm.person_id AND gm.platform=$2 "
-                "AND gm.account_id=$3 AND gm.chat_id=$4 AND gm.is_active "
-                "WHERE pm.normalized_mention=$1 AND ((pm.scope_type='group' AND pm.scope_id=$4) "
-                "OR (pm.scope_type='conversation' AND pm.scope_id=$6) OR pm.scope_type='global') "
-                "GROUP BY pm.person_id,p.display_name "
-                "ORDER BY confidence DESC,evidence_count DESC,last_seen_at DESC LIMIT $5",
-                normalized,
-                context.platform,
-                context.account_id,
-                context.chat_id,
-                limit,
-                context.conversation_id,
-            )
-            for row in evidence_rows:
-                recency = 0.5 ** (
-                    max(0.0, float(row["age_sec"] or 0.0)) / self._evidence_half_life_sec
+                evidence_rows = await session.execute(
+                    select(
+                        m.PersonMention.person_id,
+                        m.Person.display_name,
+                        func.max(m.PersonMention.confidence).label("confidence"),
+                        func.count().label("evidence_count"),
+                        func.max(m.PersonMention.observed_at).label("last_seen_at"),
+                        func.extract(
+                            "epoch", func.now() - func.max(m.PersonMention.observed_at)
+                        ).label("age_sec"),
+                    )
+                    .select_from(m.PersonMention)
+                    .join(m.Person, m.Person.person_id == m.PersonMention.person_id)
+                    .join(
+                        m.GroupMember,
+                        and_(
+                            m.GroupMember.person_id == m.PersonMention.person_id,
+                            m.GroupMember.platform == context.platform,
+                            m.GroupMember.account_id == context.account_id,
+                            m.GroupMember.chat_id == context.chat_id,
+                            m.GroupMember.is_active.is_(True),
+                        ),
+                    )
+                    .where(
+                        m.PersonMention.normalized_mention == normalized,
+                        or_(
+                            and_(
+                                m.PersonMention.scope_type == "group",
+                                m.PersonMention.scope_id == context.chat_id,
+                            ),
+                            and_(
+                                m.PersonMention.scope_type == "conversation",
+                                m.PersonMention.scope_id == context.conversation_id,
+                            ),
+                            m.PersonMention.scope_type == "global",
+                        ),
+                    )
+                    .group_by(m.PersonMention.person_id, m.Person.display_name)
+                    .order_by(desc("confidence"), desc("evidence_count"), desc("last_seen_at"))
+                    .limit(limit)
                 )
-                confidence = min(
-                    0.99,
-                    float(row["confidence"]) * recency
-                    + min(0.12, int(row["evidence_count"]) * 0.02),
-                )
-                self._add_candidate(
-                    candidates,
-                    row["person_id"],
-                    row["display_name"],
-                    confidence,
-                    {
-                        "type": "mention_evidence",
-                        "count": int(row["evidence_count"]),
-                        "last_seen_at": str(row["last_seen_at"]),
-                    },
-                )
+                for row in evidence_rows:
+                    recency = 0.5 ** (
+                        max(0.0, float(row.age_sec or 0.0)) / self._evidence_half_life_sec
+                    )
+                    confidence = min(
+                        0.99,
+                        float(row.confidence) * recency
+                        + min(0.12, int(row.evidence_count) * 0.02),
+                    )
+                    self._add_candidate(
+                        candidates,
+                        row.person_id,
+                        row.display_name,
+                        confidence,
+                        {
+                            "type": "mention_evidence",
+                            "count": int(row.evidence_count),
+                            "last_seen_at": str(row.last_seen_at),
+                        },
+                    )
 
         ordered = sorted(
             candidates.values(),
@@ -263,19 +342,31 @@ class EntityGroundingRepository:
             references.append(self._mention_from_result(role_name, "group_role", result))
             matched_roles.append(role_name)
 
-        name_rows = await self._db.fetch(
-            "SELECT gm.person_id::text,COALESCE(NULLIF(gm.group_card,''),NULLIF(gm.nickname,''),'') AS name "
-            "FROM group_members gm WHERE gm.platform=$1 AND gm.account_id=$2 AND gm.chat_id=$3 "
-            "AND gm.is_active AND (length(gm.group_card)>=2 OR length(gm.nickname)>=2)",
-            context.platform,
-            context.account_id,
-            context.chat_id,
-        )
-        matched_names: dict[str, list[str]] = {}
-        for row in name_rows:
-            name = str(row["name"] or "")
-            if name and name in text:
-                matched_names.setdefault(name, []).append(str(row["person_id"]))
+        async with self._db.session() as session:
+            name_rows = await session.execute(
+                select(
+                    m.GroupMember.person_id,
+                    func.coalesce(
+                        func.nullif(m.GroupMember.group_card, ""),
+                        func.nullif(m.GroupMember.nickname, ""),
+                        "",
+                    ).label("name"),
+                ).where(
+                    m.GroupMember.platform == context.platform,
+                    m.GroupMember.account_id == context.account_id,
+                    m.GroupMember.chat_id == context.chat_id,
+                    m.GroupMember.is_active.is_(True),
+                    or_(
+                        func.length(m.GroupMember.group_card) >= 2,
+                        func.length(m.GroupMember.nickname) >= 2,
+                    ),
+                )
+            )
+            matched_names: dict[str, list[str]] = {}
+            for row in name_rows:
+                name = str(row.name or "")
+                if name and name in text:
+                    matched_names.setdefault(name, []).append(str(row.person_id))
         selected_names: list[str] = []
         for name in sorted(matched_names, key=len, reverse=True):
             if any(name in existing for existing in selected_names):
@@ -337,39 +428,65 @@ class EntityGroundingRepository:
     ) -> tuple[dict, ...]:
         if not context.conversation_id or not context.ai_id:
             return ()
-        rows = await self._db.fetch(
-            "SELECT pi.person_id::text AS person_id,"
-            "COALESCE(NULLIF(gm.group_card,''),NULLIF(gm.nickname,''),NULLIF(p.display_name,''),'') AS display_name,"
-            "NULLIF(gm.group_card,'') AS group_card, gm.role AS role, "
-            "MAX(m.message_id)::text AS last_message_id, MAX(m.occurred_at) AS last_seen_at "
-            "FROM messages m "
-            "JOIN platform_identities pi ON pi.identity_id=m.platform_identity_id "
-            "JOIN persons p ON p.person_id=pi.person_id "
-            "LEFT JOIN group_members gm ON gm.person_id=pi.person_id AND gm.platform=$2 "
-            "AND gm.account_id=$3 AND gm.chat_id=$4 AND gm.is_active "
-            "WHERE m.conversation_id=$1::uuid AND m.ai_id=$5 AND m.role='user' "
-            "AND m.occurred_at>=now()-($6::text || ' seconds')::interval "
-            "GROUP BY pi.person_id,p.display_name,gm.group_card,gm.nickname,gm.role "
-            "ORDER BY last_seen_at DESC LIMIT $7",
-            context.conversation_id,
-            context.platform,
-            context.account_id,
-            context.chat_id,
-            context.ai_id,
-            str(int(lookback_sec)),
-            int(limit),
-        )
-        return tuple(
-            {
-                "person_id": row["person_id"],
-                "display_name": row["display_name"] or "",
-                "group_card": row["group_card"] or "",
-                "roles": [row["role"]] if row["role"] else [],
-                "last_message_id": row["last_message_id"] or "",
-                "last_seen_at": str(row["last_seen_at"]),
-            }
-            for row in rows
-        )
+        async with self._db.session() as session:
+            rows = await session.execute(
+                select(
+                    m.PlatformIdentity.person_id.label("person_id"),
+                    func.coalesce(
+                        func.nullif(m.GroupMember.group_card, ""),
+                        func.nullif(m.GroupMember.nickname, ""),
+                        func.nullif(m.Person.display_name, ""),
+                        "",
+                    ).label("display_name"),
+                    func.nullif(m.GroupMember.group_card, "").label("group_card"),
+                    m.GroupMember.role.label("role"),
+                    func.max(m.Message.message_id).label("last_message_id"),
+                    func.max(m.Message.occurred_at).label("last_seen_at"),
+                )
+                .select_from(m.Message)
+                .join(
+                    m.PlatformIdentity,
+                    m.PlatformIdentity.identity_id == m.Message.platform_identity_id,
+                )
+                .join(m.Person, m.Person.person_id == m.PlatformIdentity.person_id)
+                .outerjoin(
+                    m.GroupMember,
+                    and_(
+                        m.GroupMember.person_id == m.PlatformIdentity.person_id,
+                        m.GroupMember.platform == context.platform,
+                        m.GroupMember.account_id == context.account_id,
+                        m.GroupMember.chat_id == context.chat_id,
+                        m.GroupMember.is_active.is_(True),
+                    ),
+                )
+                .where(
+                    m.Message.conversation_id == int(context.conversation_id),
+                    m.Message.ai_id == context.ai_id,
+                    m.Message.role == "user",
+                    m.Message.occurred_at
+                    >= datetime.now(timezone.utc) - timedelta(seconds=int(lookback_sec)),
+                )
+                .group_by(
+                    m.PlatformIdentity.person_id,
+                    m.Person.display_name,
+                    m.GroupMember.group_card,
+                    m.GroupMember.nickname,
+                    m.GroupMember.role,
+                )
+                .order_by(desc("last_seen_at"))
+                .limit(int(limit))
+            )
+            return tuple(
+                {
+                    "person_id": str(row.person_id),
+                    "display_name": row.display_name or "",
+                    "group_card": row.group_card or "",
+                    "roles": [row.role] if row.role else [],
+                    "last_message_id": str(row.last_message_id),
+                    "last_seen_at": str(row.last_seen_at),
+                }
+                for row in rows
+            )
 
     async def search_group_history(
         self,
@@ -378,43 +495,66 @@ class EntityGroundingRepository:
         limit: int,
         lookback_sec: int,
     ) -> list[dict]:
-        pattern = f"%{query.strip()}%"
-        rows = await self._db.fetch(
-            "SELECT m.message_id::text,m.role,m.content,m.occurred_at,"
-            "pi.person_id::text AS person_id,COALESCE(NULLIF(gm.group_card,''),"
-            "NULLIF(gm.nickname,''),NULLIF(p.display_name,''),'') AS display_name "
-            "FROM messages m "
-            "LEFT JOIN platform_identities pi ON pi.identity_id=m.platform_identity_id "
-            "LEFT JOIN persons p ON p.person_id=pi.person_id "
-            "LEFT JOIN group_members gm ON gm.person_id=pi.person_id AND gm.platform=$3 "
-            "AND gm.account_id=$4 AND gm.chat_id=$5 "
-            "WHERE m.conversation_id=$1::uuid AND m.ai_id=$2 "
-            "AND m.occurred_at>=now()-($6::text || ' seconds')::interval "
-            "AND ($7='' OR COALESCE(m.content->>'text','') ILIKE $8) "
-            "ORDER BY m.occurred_at DESC LIMIT $9",
-            context.conversation_id,
-            context.ai_id,
-            context.platform,
-            context.account_id,
-            context.chat_id,
-            str(lookback_sec),
-            query.strip(),
-            pattern,
-            limit,
-        )
-        return [
-            {
-                "message_id": row["message_id"],
-                "sender": {
-                    "person_id": row["person_id"],
-                    "display_name": row["display_name"] or ("AI" if row["role"] == "assistant" else ""),
-                    "role": row["role"],
-                },
-                "text": self._message_text(row["content"]),
-                "occurred_at": str(row["occurred_at"]),
-            }
-            for row in rows
-        ]
+        pattern = query.strip()
+        async with self._db.session() as session:
+            rows = await session.execute(
+                select(
+                    m.Message.message_id,
+                    m.Message.role,
+                    m.Message.content,
+                    m.Message.occurred_at,
+                    m.PlatformIdentity.person_id.label("person_id"),
+                    func.coalesce(
+                        func.nullif(m.GroupMember.group_card, ""),
+                        func.nullif(m.GroupMember.nickname, ""),
+                        func.nullif(m.Person.display_name, ""),
+                        "",
+                    ).label("display_name"),
+                )
+                .select_from(m.Message)
+                .outerjoin(
+                    m.PlatformIdentity,
+                    m.PlatformIdentity.identity_id == m.Message.platform_identity_id,
+                )
+                .outerjoin(m.Person, m.Person.person_id == m.PlatformIdentity.person_id)
+                .outerjoin(
+                    m.GroupMember,
+                    and_(
+                        m.GroupMember.person_id == m.PlatformIdentity.person_id,
+                        m.GroupMember.platform == context.platform,
+                        m.GroupMember.account_id == context.account_id,
+                        m.GroupMember.chat_id == context.chat_id,
+                    ),
+                )
+                .where(
+                    m.Message.conversation_id == int(context.conversation_id),
+                    m.Message.ai_id == context.ai_id,
+                    m.Message.occurred_at
+                    >= datetime.now(timezone.utc) - timedelta(seconds=int(lookback_sec)),
+                    or_(
+                        pattern == "",
+                        func.coalesce(m.Message.content["text"].astext, "").ilike(
+                            f"%{pattern}%"
+                        ),
+                    ),
+                )
+                .order_by(m.Message.occurred_at.desc())
+                .limit(int(limit))
+            )
+            return [
+                {
+                    "message_id": str(row.message_id),
+                    "sender": {
+                        "person_id": str(row.person_id) if row.person_id else "",
+                        "display_name": row.display_name
+                        or ("AI" if row.role == "assistant" else ""),
+                        "role": row.role,
+                    },
+                    "text": self._message_text(row.content),
+                    "occurred_at": str(row.occurred_at),
+                }
+                for row in rows
+            ]
 
     @staticmethod
     def _message_text(content) -> str:

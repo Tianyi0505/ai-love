@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -18,6 +17,7 @@ from v2.nacos import (
 )
 
 from shared.infrastructure.runtime_config import ConfigKey, required_config, required_setting
+from shared.infrastructure.snowflake import new_snowflake_id
 
 
 # 定义配置提供器接口
@@ -129,7 +129,7 @@ class ServiceConfig:
     bus_url: str
     bus_token: str | None
     instance_addr: str
-    instance_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    instance_id: str = field(default_factory=lambda: new_snowflake_id()[-8:])
     _section: dict = field(init=False, default_factory=dict)
     _section_key: str = field(init=False, default="")
 
