@@ -19,7 +19,7 @@ spec:
         ailove.role: core
       containers:
         - name: ops-panel
-          image: ailove/ops-panel:fc057ba
+          image: ailove/ops-panel:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:

@@ -13,7 +13,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: kvflush
-          image: ailove/gateway:fc057ba
+          image: ailove/gateway:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
