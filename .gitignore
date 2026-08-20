@@ -10,6 +10,7 @@ napcat-qrcode.png
 # 忽略前端依赖与构建产物
 node_modules/
 package-lock.json
+!ops/panel/frontend/package-lock.json
 
 # 忽略 Python 构建文件
 __pycache__/
@@ -19,6 +20,7 @@ __pycache__/
 venv/
 dist/
 build/
+*.tsbuildinfo
 
 # 忽略编辑器配置
 .vscode/

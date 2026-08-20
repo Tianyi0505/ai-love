@@ -13,4 +13,10 @@ anthropic>=0.40
 mcp>=2.0,<3
 
 # 安装 NapCat WebSocket 渠道依赖
-websockets>=12.0
+websockets==17.0.1
+
+# 安装 ai-love 面板依赖
+fastapi>=0.141,<0.142
+uvicorn>=0.52,<0.53
+redis>=8.1,<9
+argon2-cffi>=25.1,<26

@@ -56,6 +56,14 @@ COPY ai/__init__.py ./ai/__init__.py
 COPY ai/llm/ ./ai/llm/
 CMD ["python", "-m", "memory.main"]
 
+FROM node:22-alpine AS ops-panel-frontend
+WORKDIR /frontend
+COPY ops/panel/frontend/package.json ops/panel/frontend/package-lock.json ./
+RUN npm ci
+COPY ops/panel/frontend/ ./
+RUN npm run build
+
 FROM base AS ops-panel
 COPY ops/ ./ops/
-CMD ["python", "-m", "ops.panel.server"]
+COPY --from=ops-panel-frontend /frontend/dist ./ops/panel/frontend/dist
+CMD ["python", "-m", "ops.panel.backend.main"]
