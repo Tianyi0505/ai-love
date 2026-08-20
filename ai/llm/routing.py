@@ -7,8 +7,8 @@ from typing import AsyncIterator
 
 from ai.llm.errors import LLMErrorMessage
 from ai.llm.model import ModelHealthStore, ModelSelector, ModelTarget
+from ai.llm.providers.base import StreamingChatProvider
 from ai.llm.tier import Tier
-from ai.llm.provider import LLMProvider
 from ai.llm.types import ChatRequest, ChatStreamChunk
 
 logger = logging.getLogger("ailove.llm.routing")
@@ -53,7 +53,7 @@ class RoutingLLMService:
         raise RuntimeError(LLMErrorMessage.ALL_FAILED.value) from last_error
 
     # 读取首个流式响应包
-    async def _try_first_packet(self, provider: LLMProvider, req: ChatRequest, target: ModelTarget) -> tuple[ChatStreamChunk | None, AsyncIterator]:
+    async def _try_first_packet(self, provider: StreamingChatProvider, req: ChatRequest, target: ModelTarget) -> tuple[ChatStreamChunk | None, AsyncIterator]:
         try:
             stream = provider.chat_stream(req)
             async with asyncio.timeout(target.timeout_ms / 1000):

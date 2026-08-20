@@ -21,7 +21,7 @@ from agent.application.turn_coordinator import TurnCoordinator
 from ai.tts.factory import create_tts
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand, new_run_id
 from shared.infrastructure.run_repo import AgentRunRepository
-from ai.llm.providers import anthropic_gw, deepseek, ollama
+from ai.llm.providers import deepseek, deepseek_v4_flash_0731, ollama
 from ai.llm.factory import create_llm
 from ai.llm.types import ChatMessage
 from agent.context.understanding import MessageUnderstanding

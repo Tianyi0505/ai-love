@@ -1,71 +1,27 @@
-
 from __future__ import annotations
 
-import time
-from typing import AsyncIterator
-
-from openai import AsyncOpenAI
-
-from ai.llm.provider import LLMProvider
+from ai.llm.openai_compatible import OpenAICompatibleProvider
 from ai.llm.registry import provider_registry
-from ai.llm.types import ChatMessage, ChatRequest, ChatStreamChunk, ToolCall, ToolSchema
 from shared.infrastructure.runtime_config import ConfigKey, required_setting
 
 
 # 提供DeepSeek大模型调用能力
 @provider_registry.register("deepseek")
-class DeepSeekProvider(LLMProvider):
+class DeepSeekProvider(OpenAICompatibleProvider):
     # 初始化当前实例
-    def __init__(self, model: str, request_timeout_sec: float, api_key: str | None = None, base_url: str | None = None, **_) -> None:
-        self._client = AsyncOpenAI(
+    def __init__(
+        self,
+        model: str,
+        max_tokens: int,
+        request_timeout_sec: float,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        **_,
+    ) -> None:
+        super().__init__(
+            model=model,
+            max_tokens=max_tokens,
+            request_timeout_sec=request_timeout_sec,
             api_key=required_setting(api_key, ConfigKey.DEEPSEEK_API_KEY),
             base_url=required_setting(base_url, ConfigKey.DEEPSEEK_BASE_URL),
-            timeout=request_timeout_sec,
         )
-        self._model = model
-
-    # 转换为消息列表
-    def _to_messages(self, msgs: list[ChatMessage]) -> list[dict]:
-        out = []
-        for m in msgs:
-            item: dict = {"role": m.role, "content": m.content}
-            if m.name:
-                item["name"] = m.name
-            out.append(item)
-        return out
-
-    # 转换为工具列表
-    def _to_tools(self, tools: list[ToolSchema]) -> list[dict]:
-        return [{"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}} for t in tools]
-
-    # 流式生成聊天内容
-    async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatStreamChunk]:
-        kwargs: dict = {"model": self._model, "messages": self._to_messages(req.messages), "stream": True}
-        if req.tools:
-            kwargs["tools"] = self._to_tools(req.tools)
-            kwargs["tool_choice"] = "auto"
-        if "temperature" in req.options:
-            kwargs["temperature"] = req.options["temperature"]
-
-        t0 = time.perf_counter()
-        sent_first = False
-        async for chunk in await self._client.chat.completions.create(**kwargs):
-            if not sent_first:
-                sent_first = True
-                latency = int((time.perf_counter() - t0) * 1000)
-            else:
-                latency = 0
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            tool_calls = delta.tool_calls
-            if tool_calls:
-                tc = tool_calls[0]
-                yield ChatStreamChunk(
-                    tool_call=ToolCall(name=tc.function.name or "", arguments=tc.function.arguments or ""),
-                    latency_ms=latency,
-                )
-            elif delta.content:
-                yield ChatStreamChunk(content=delta.content, latency_ms=latency)
-            elif chunk.choices[0].finish_reason:
-                yield ChatStreamChunk(finish_reason=chunk.choices[0].finish_reason, latency_ms=latency)

@@ -6,7 +6,7 @@ import logging
 from string import Template
 
 from ai.llm.factory import create_llm
-from ai.llm.providers import anthropic_gw, deepseek, ollama
+from ai.llm.providers import deepseek, deepseek_v4_flash_0731, ollama
 from ai.llm.types import ChatMessage, ChatRequest
 
 from memory.documents import normalize_markdown
