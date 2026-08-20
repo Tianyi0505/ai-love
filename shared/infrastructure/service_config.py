@@ -1,12 +1,12 @@
-
 from __future__ import annotations
 
 import asyncio
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TypeVar
 
 import yaml
+from pydantic import BaseModel
 from v2.nacos import (
     ClientConfigBuilder,
     ConfigParam,
@@ -16,8 +16,11 @@ from v2.nacos import (
     RegisterInstanceParam,
 )
 
-from shared.infrastructure.runtime_config import ConfigKey, required_config, required_setting
-from shared.infrastructure.snowflake import new_snowflake_id
+from shared.configuration.connection_settings import NacosConnectionSettings, ServiceConnectionSettings
+from shared.configuration.service_settings import ServiceIdentitySettings
+from shared.infrastructure.snowflake_id_generator import snowflake_ids
+
+SettingsT = TypeVar("SettingsT", bound=BaseModel)
 
 
 # 定义配置提供器接口
@@ -45,17 +48,9 @@ class ConfigProvider(ABC):
 
 # 从Nacos加载和监听配置
 class NacosConfigProvider(ConfigProvider):
-
     # 初始化当前实例
     def __init__(self) -> None:
-        self._server_addrs = required_setting(None, ConfigKey.AILOVE_NACOS_ADDRS)
-        self._grpc_timeout_ms = int(
-            required_setting(None, ConfigKey.AILOVE_NACOS_GRPC_TIMEOUT_MS)
-        )
-        self._namespace = os.environ.get("AILOVE_NACOS_NAMESPACE", "")
-        self._group = required_setting(None, ConfigKey.AILOVE_NACOS_GROUP)
-        self._username = os.environ.get("AILOVE_NACOS_USER", "")
-        self._password = os.environ.get("AILOVE_NACOS_PASSWORD", "")
+        self._settings = NacosConnectionSettings()
         self._config_client = None
         self._naming_client = None
 
@@ -63,13 +58,15 @@ class NacosConfigProvider(ConfigProvider):
     async def connect(self) -> None:
         builder = (
             ClientConfigBuilder()
-            .server_address(self._server_addrs)
-            .username(self._username)
-            .password(self._password)
-            .grpc_config(GRPCConfig(grpc_timeout=self._grpc_timeout_ms))
+            .server_address(self._settings.addrs)
+            .grpc_config(GRPCConfig(grpc_timeout=self._settings.grpc_timeout_ms))
         )
-        if self._namespace:
-            builder = builder.namespace_id(self._namespace)
+        if self._settings.user is not None:
+            builder = builder.username(self._settings.user)
+        if self._settings.password is not None:
+            builder = builder.password(self._settings.password)
+        if self._settings.namespace is not None:
+            builder = builder.namespace_id(self._settings.namespace)
         self._client_config = builder.build()
         self._config_client = await NacosConfigService.create_config_service(self._client_config)
 
@@ -77,21 +74,27 @@ class NacosConfigProvider(ConfigProvider):
     async def get(self, key: str) -> dict:
         if self._config_client is None:
             raise RuntimeError("NacosConfigProvider 未 connect")
-        content = await self._config_client.get_config(ConfigParam(data_id=key, group=self._group))
+        content = await self._config_client.get_config(ConfigParam(data_id=key, group=self._settings.group))
         if not content:
-            return {}
+            raise KeyError(f"Nacos 缺少配置: {key}")
         parsed = yaml.safe_load(content)
-        return parsed if isinstance(parsed, dict) else {}
+        if not isinstance(parsed, dict):
+            raise TypeError(f"Nacos 配置 {key} 必须是对象")
+        return parsed
 
     # 监听配置变化
     async def watch(self, key: str, callback) -> None:
 
         # 监听配置变化事件
         async def _listener(tenant: str, group: str, data_id: str, content: str) -> None:
-            parsed = yaml.safe_load(content) if content else {}
-            await callback(data_id, parsed if isinstance(parsed, dict) else {})
+            if not content:
+                raise KeyError(f"Nacos 配置 {data_id} 不能为空")
+            parsed = yaml.safe_load(content)
+            if not isinstance(parsed, dict):
+                raise TypeError(f"Nacos 配置 {data_id} 必须是对象")
+            await callback(data_id, parsed)
 
-        await self._config_client.add_listener(key, self._group, _listener)
+        await self._config_client.add_listener(key, self._settings.group, _listener)
 
     # 注册组件
     async def register(self, service_name: str, instance_id: str, addr: str) -> None:
@@ -101,11 +104,9 @@ class NacosConfigProvider(ConfigProvider):
         await self._naming_client.register_instance(
             RegisterInstanceParam(
                 service_name=service_name,
-                group_name=self._group,
+                group_name=self._settings.group,
                 ip=ip,
                 port=int(port),
-                weight=1.0,
-                ephemeral=True,
                 metadata={"instance_id": instance_id},
             )
         )
@@ -123,41 +124,40 @@ class NacosConfigProvider(ConfigProvider):
 # 表示服务配置数据
 @dataclass
 class ServiceConfig:
-
     service_name: str
     nacos: ConfigProvider
     bus_url: str
     bus_token: str | None
     instance_addr: str
-    instance_id: str = field(default_factory=lambda: new_snowflake_id()[-8:])
-    _section: dict = field(init=False, default_factory=dict)
-    _section_key: str = field(init=False, default="")
+    instance_id: str = field(default_factory=lambda: str(snowflake_ids().next_id()))
+    _section: dict = field(init=False)
+    _section_key: str = field(init=False)
+    _watching: bool = field(init=False, default=False)
 
     # 加载数据
     @classmethod
     async def load(cls, service_name: str) -> "ServiceConfig":
         provider = NacosConfigProvider()
         await provider.connect()
-        section = {}
-        retry_count = int(required_setting(None, ConfigKey.AILOVE_CONFIG_RETRY_COUNT))
-        retry_interval = float(
-            required_setting(None, ConfigKey.AILOVE_CONFIG_RETRY_INTERVAL_SEC)
-        )
-        for _ in range(retry_count):
-            section = await provider.get(f"service.{service_name}")
-            if section:
+        connection = ServiceConnectionSettings()
+        section = None
+        for attempt in range(connection.config_retry_count):
+            try:
+                section = await provider.get(f"service.{service_name}")
                 break
-            await asyncio.sleep(retry_interval)
-        if not section:
-            raise RuntimeError(f"Nacos 缺少配置: service.{service_name}")
+            except KeyError:
+                if attempt + 1 == connection.config_retry_count:
+                    raise
+                await asyncio.sleep(connection.config_retry_interval_sec)
+        if section is None:
+            raise RuntimeError(f"配置重试次数必须大于零: service.{service_name}")
+        identity = ServiceIdentitySettings.model_validate(section)
         cfg = cls(
             service_name=service_name,
             nacos=provider,
-            bus_url=required_setting(None, ConfigKey.AILOVE_BUS_URL),
-            bus_token=os.environ.get("AILOVE_BUS_TOKEN"),
-            instance_addr=str(
-                required_config(section, "instance_addr", f"service.{service_name}.instance_addr")
-            ),
+            bus_url=connection.bus_url,
+            bus_token=connection.bus_token,
+            instance_addr=identity.instance_addr,
         )
         cfg._section = section
         cfg._section_key = f"service.{service_name}"
@@ -166,7 +166,7 @@ class ServiceConfig:
 
     # 订阅消息
     async def _subscribe(self) -> None:
-        if getattr(self, "_watching", False):
+        if self._watching:
             return
         self._watching = True
 
@@ -179,19 +179,13 @@ class ServiceConfig:
         await self.nacos.watch(self._section_key, _on_change)
 
     # 读取配置段
-    async def section(self, key: str = "") -> dict:
-        section = self._section
-        if not key:
-            return section
-        value = required_config(section, key, f"{self._section_key}.{key}")
-        if not isinstance(value, dict):
-            raise RuntimeError(f"{self._section_key}.{key} 必须是对象")
-        return value
+    async def section(self, settings_type: type[SettingsT]) -> SettingsT:
+        return settings_type.model_validate(self._section)
 
     # 加载导演配置
-    async def director(self, session_id: str) -> dict:
+    async def director(self, session_id: str, settings_type: type[SettingsT]) -> SettingsT:
         key = f"director.{session_id}"
         section = await self.nacos.get(key)
         if not section:
             raise RuntimeError(f"Nacos 缺少配置: {key}")
-        return section
+        return settings_type.model_validate(section)

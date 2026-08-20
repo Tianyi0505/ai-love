@@ -1,9 +1,10 @@
-
 from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
+
+from shared.contracts.agent import BehaviorPolicyConfig
 
 
 # 表示工作时段数据
@@ -28,12 +29,12 @@ class BehaviorSchedule:
 
     # 从配置创建实例
     @classmethod
-    def from_config(cls, config: dict) -> "BehaviorSchedule":
-        proactive = config["proactive"]
+    def from_config(cls, config: BehaviorPolicyConfig) -> "BehaviorSchedule":
+        proactive = config.proactive
         periods = []
-        for item in proactive["work_hours"]:
-            periods.append(WorkPeriod(cls._time(item["start"]), cls._time(item["end"])))
-        return cls(str(proactive["timezone"]), periods)
+        for item in proactive.work_hours:
+            periods.append(WorkPeriod(cls._time(item.start), cls._time(item.end)))
+        return cls(proactive.timezone, periods)
 
     # 判断是否允许主动交互
     def allows_proactive(self, moment: dt.datetime | None = None) -> bool:

@@ -1,13 +1,12 @@
-
 from __future__ import annotations
 
 import asyncio
 
-from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from shared.infrastructure import models as m
-from shared.infrastructure.runtime_config import ConfigKey, required_setting
+from alembic import context
+from shared.configuration.connection_settings import DatabaseURLSettings
+from shared.persistence import database_models as m
 
 
 # 转换为异步驱动URL
@@ -15,14 +14,14 @@ def _async_url(url: str) -> str:
     if url.startswith("postgresql+asyncpg://"):
         return url
     if url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + url[len("postgres://"):]
+        return "postgresql+asyncpg://" + url[len("postgres://") :]
     if url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+        return "postgresql+asyncpg://" + url[len("postgresql://") :]
     return url
 
 
 def run_migrations_online() -> None:
-    url = _async_url(required_setting(None, ConfigKey.AILOVE_DATABASE_URL))
+    url = _async_url(DatabaseURLSettings().url)
     engine = create_async_engine(url)
 
     def do_run(connection) -> None:

@@ -1,13 +1,13 @@
-"""初始雪花ID表结构
+"""初始表结构
 
 Revision ID: 0001_initial
 Revises:
 Create Date: 2026-08-15
 
 """
-from alembic import op
 
-from shared.infrastructure import models as m
+from alembic import op
+from shared.persistence import database_models as m
 
 revision = "0001_initial"
 down_revision = None

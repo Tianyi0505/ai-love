@@ -1,6 +1,6 @@
-
 from __future__ import annotations
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -8,25 +8,12 @@ from sqlalchemy import (
     Float,
     Index,
     Integer,
-    String,
     Text,
     UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import UserDefinedType
-
-
-# 表示向量类型
-class VectorType(UserDefinedType):
-    cache_ok = True
-
-    def __init__(self, dim: int = 1536) -> None:
-        self._dim = dim
-
-    def get_col_spec(self, **kw) -> str:
-        return f"vector({self._dim})"
 
 
 class Base(DeclarativeBase):
@@ -36,7 +23,8 @@ class Base(DeclarativeBase):
 # 表示AI档案记录
 class AIProfile(Base):
     __tablename__ = "ai_profiles"
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     definition_version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     model_profile_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="default")
@@ -48,7 +36,8 @@ class AIProfile(Base):
 # 表示社交平台账号
 class SocialAccount(Base):
     __tablename__ = "social_accounts"
-    account_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    social_account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    account_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     platform: Mapped[str] = mapped_column(Text, nullable=False)
     platform_account_id: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
@@ -94,10 +83,11 @@ class PlatformIdentity(Base):
 # 表示群成员
 class GroupMember(Base):
     __tablename__ = "group_members"
-    platform: Mapped[str] = mapped_column(Text, primary_key=True)
-    account_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    chat_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    platform_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    group_member_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    account_id: Mapped[str] = mapped_column(Text, nullable=False)
+    chat_id: Mapped[str] = mapped_column(Text, nullable=False)
+    platform_user_id: Mapped[str] = mapped_column(Text, nullable=False)
     person_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     nickname: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     group_card: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
@@ -105,6 +95,7 @@ class GroupMember(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     last_seen_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     __table_args__ = (
+        UniqueConstraint("platform", "account_id", "chat_id", "platform_user_id"),
         Index(
             "idx_group_members_scope_role",
             "platform",
@@ -174,7 +165,8 @@ class Message(Base):
 # 表示直播会话
 class LiveSession(Base):
     __tablename__ = "live_sessions"
-    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    live_session_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     account_id: Mapped[str] = mapped_column(Text, nullable=False)
     director_policy_id: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
@@ -185,38 +177,44 @@ class LiveSession(Base):
 # 表示直播会话角色
 class LiveSessionActor(Base):
     __tablename__ = "live_session_actors"
-    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    live_session_actor_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
     stage_slot: Mapped[str] = mapped_column(Text, nullable=False)
     is_lead: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     talk_weight: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1"))
+    __table_args__ = (UniqueConstraint("session_id", "ai_id"),)
 
 
 # 表示人物关系
 class PersonRelationship(Base):
     __tablename__ = "person_relationships"
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    person_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    person_relationship_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
+    person_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     familiarity: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     affinity: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     trust: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     importance: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
-    ceiling_policy: Mapped[str] = mapped_column(Text, nullable=False, server_default="default")
+    ceiling_policy: Mapped[str] = mapped_column(Text, nullable=False)
     last_interaction_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (UniqueConstraint("ai_id", "person_id"),)
 
 
 # 表示群关系
 class GroupRelationship(Base):
     __tablename__ = "group_relationships"
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    account_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    platform_group_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    group_relationship_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
+    account_id: Mapped[str] = mapped_column(Text, nullable=False)
+    platform_group_id: Mapped[str] = mapped_column(Text, nullable=False)
     familiarity: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     belonging: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     affinity: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     activity_willingness: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
-    ceiling_policy: Mapped[str] = mapped_column(Text, nullable=False, server_default="default")
+    ceiling_policy: Mapped[str] = mapped_column(Text, nullable=False)
     last_interaction_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (UniqueConstraint("ai_id", "account_id", "platform_group_id"),)
 
 
 # 表示记忆
@@ -229,7 +227,7 @@ class Memory(Base):
     scope: Mapped[str] = mapped_column(Text, nullable=False)
     memory_type: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[object | None] = mapped_column(VectorType(1536), nullable=True)
+    embedding: Mapped[object | None] = mapped_column(Vector(), nullable=True)
     importance: Mapped[float] = mapped_column(Float, nullable=False)
     strength: Mapped[float] = mapped_column(Float, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
@@ -241,7 +239,9 @@ class Memory(Base):
     consolidated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     reference_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-    last_strength_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    last_strength_at: Mapped[object] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
     last_recalled_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recall_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
@@ -268,10 +268,14 @@ class ConversationEpisode(Base):
     started_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    source_message_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=False, server_default=text("'{}'"))
+    source_message_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(BigInteger), nullable=False, server_default=text("'{}'")
+    )
     estimated_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-    __table_args__ = (Index("idx_conversation_episodes_owner", "ai_id", "person_id", "conversation_id", text("ended_at DESC")),)
+    __table_args__ = (
+        Index("idx_conversation_episodes_owner", "ai_id", "person_id", "conversation_id", text("ended_at DESC")),
+    )
 
 
 # 表示原子记忆
@@ -287,7 +291,9 @@ class MemoryAtom(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     importance: Mapped[float] = mapped_column(Float, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
-    source_message_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=False, server_default=text("'{}'"))
+    source_message_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(BigInteger), nullable=False, server_default=text("'{}'")
+    )
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     __table_args__ = (Index("idx_memory_atoms_owner", "ai_id", "owner_type", "owner_id", text("created_at DESC")),)
 
@@ -295,22 +301,49 @@ class MemoryAtom(Base):
 # 表示记忆文档
 class MemoryDocument(Base):
     __tablename__ = "memory_documents"
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    owner_type: Mapped[str] = mapped_column(Text, primary_key=True)
-    owner_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    memory_document_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_type: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_id: Mapped[str] = mapped_column(Text, nullable=False)
     markdown_content: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    __table_args__ = (UniqueConstraint("ai_id", "owner_type", "owner_id"),)
 
 
 # 表示会话摘要
 class ConversationSummary(Base):
     __tablename__ = "conversation_summaries"
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    conversation_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    conversation_summary_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
+    conversation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    __table_args__ = (UniqueConstraint("ai_id", "conversation_id"),)
+
+
+class Sticker(Base):
+    __tablename__ = "stickers"
+    sticker_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
+    image_url: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    match_quality: Mapped[float] = mapped_column(Float, nullable=False)
+    usage_strength: Mapped[float] = mapped_column(Float, nullable=False)
+    boost_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    last_used_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class QZoneCommentedFeed(Base):
+    __tablename__ = "qzone_commented_feeds"
+    qzone_commented_feed_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    account_id: Mapped[str] = mapped_column(Text, nullable=False)
+    feed_id: Mapped[str] = mapped_column(Text, nullable=False)
+    commented_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    __table_args__ = (UniqueConstraint("account_id", "feed_id"),)
 
 
 # 表示审计日志
@@ -330,7 +363,8 @@ class AuditLog(Base):
 # 表示扩展目录
 class ExtensionCatalog(Base):
     __tablename__ = "extension_catalog"
-    tool_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    extension_catalog_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tool_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     provider_id: Mapped[str] = mapped_column(Text, nullable=False)
     definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
@@ -340,16 +374,19 @@ class ExtensionCatalog(Base):
 # 表示扩展绑定
 class AIExtensionBinding(Base):
     __tablename__ = "ai_extension_bindings"
-    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    tool_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    ai_extension_binding_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
+    tool_id: Mapped[str] = mapped_column(Text, nullable=False)
     permission: Mapped[str] = mapped_column(Text, nullable=False)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    __table_args__ = (UniqueConstraint("ai_id", "tool_id"),)
 
 
 # 表示模型档案
 class ModelProfile(Base):
     __tablename__ = "model_profiles"
-    model_profile_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    model_profile_record_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    model_profile_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False)
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
@@ -357,46 +394,6 @@ class ModelProfile(Base):
 # 表示面板设置
 class PanelSetting(Base):
     __tablename__ = "panel_settings"
-    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    panel_setting_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
-
-
-# 表示执行链路
-class AgentRun(Base):
-    __tablename__ = "agent_runs"
-    run_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    ai_id: Mapped[str] = mapped_column(Text, nullable=False)
-    account_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    conversation_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    platform: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    chat_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    chat_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    sender_person_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    source: Mapped[str] = mapped_column(Text, nullable=False, server_default="social")
-    message_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    reply_to_message_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="running")
-    outcome: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    tool_rounds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    response_text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    started_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-    finished_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    __table_args__ = (
-        Index("idx_agent_runs_conversation", "ai_id", "conversation_id", text("started_at DESC")),
-        Index("idx_agent_runs_message", "platform", "account_id", "message_id"),
-    )
-
-
-# 表示执行步骤
-class AgentRunStep(Base):
-    __tablename__ = "agent_run_steps"
-    step_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    run_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    step_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    step_type: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="ok")
-    content: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    error: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    occurred_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-    __table_args__ = (Index("idx_agent_run_steps_run", "run_id", "step_index"),)
