@@ -1,123 +1,123 @@
-
 from __future__ import annotations
 
-import re
+import math
+from datetime import datetime, timezone
 
-from memory.repositories.sticker_repo import StickerRepo
+import bm25s
+import jieba
+
+from memory.repositories.sticker_repository import StickerRepository
+from shared.configuration.global_settings import StickerSettings
 
 
-# 提供表情服务能力
 class StickerService:
+    def __init__(self, repo: StickerRepository, config: StickerSettings) -> None:
+        self._repo = repo
+        self._settings = config
 
-    # 初始化当前实例
-    def __init__(self, gcfg) -> None:
-        self._gcfg = gcfg
-        self._config = gcfg.section("sticker")
-        self._repos: dict[str, StickerRepo] = {}
+    def _freshness(self, sticker: dict) -> float:
+        anchor = sticker["last_used_at"] or sticker["created_at"]
+        elapsed = (datetime.now(timezone.utc) - anchor).total_seconds()
+        return math.exp2(-elapsed / self._settings.half_life_sec)
 
-    # 获取记忆存储库
-    def _repo(self, ai_id: str) -> StickerRepo:
-        if ai_id not in self._repos:
-            repo = StickerRepo(
-                ai_id=ai_id,
-                data_dir="/app/data/stickers",
-                config=self._config,
-            )
-            repo.delete_unusable(self._collect_min_quality)
-            self._repos[ai_id] = repo
-        return self._repos[ai_id]
+    def _retention_score(self, sticker: dict) -> float:
+        weights = self._settings.retention_weights
+        return (
+            sticker["match_quality"] * weights.match_quality
+            + sticker["usage_strength"] * weights.usage_strength
+            + self._freshness(sticker) * weights.freshness
+        )
 
-    # 计算记忆容量上限
-    @property
-    def _capacity(self) -> int:
-        return int(self._gcfg.get("sticker", "capacity"))
+    def _present(self, sticker: dict) -> dict:
+        return {
+            **sticker,
+            "freshness": self._freshness(sticker),
+            "retention_score": self._retention_score(sticker),
+        }
 
-    # 计算记忆强度增量
-    @property
-    def _boost_delta(self) -> float:
-        return float(self._gcfg.get("sticker", "boost_delta"))
-
-    # 读取记忆处理阈值
-    @property
-    def _threshold(self) -> float:
-        return float(self._gcfg.get("sticker", "threshold"))
-
-    # 读取表情采集质量阈值
-    @property
-    def _collect_min_quality(self) -> float:
-        return float(self._gcfg.get("sticker", "collect_min_quality"))
-
-    # 添加数据
-    def add(self, ai_id: str, data: dict) -> dict:
-        repo = self._repo(ai_id)
-        sid = data.get("id", "")
-        if float(data.get("match_quality", 0.0)) < self._collect_min_quality or not data.get("description"):
+    async def add(self, ai_id: str, data: dict) -> dict:
+        if data["match_quality"] < self._settings.collect_min_quality:
             return {"ok": True, "action": "ignored"}
-        if repo.exists(sid):
+        if await self._repo.exists(ai_id, data["id"]):
             return {"ok": True, "action": "exists"}
-        if repo.count() >= self._capacity:
-            evicted = repo.delete_lowest()
-            repo.insert(data)
-            return {"ok": True, "action": "evict", "evicted": evicted}
-        repo.insert(data)
-        return {"ok": True, "action": "add"}
+        evicted = None
+        if await self._repo.count(ai_id) >= self._settings.capacity:
+            stickers = await self._repo.all(ai_id)
+            lowest = min(stickers, key=self._retention_score)
+            await self._repo.delete(ai_id, [lowest["id"]])
+            evicted = lowest["description"]
+        await self._repo.insert(
+            ai_id,
+            data,
+            self._settings.initial_usage_strength,
+            self._settings.initial_boost_count,
+        )
+        return (
+            {"ok": True, "action": "evict", "evicted": evicted}
+            if evicted is not None
+            else {"ok": True, "action": "add"}
+        )
 
-    # 检索匹配内容
-    def search(self, ai_id: str, query: str) -> dict | None:
-        stickers = self._repo(ai_id).all()
+    async def search(self, ai_id: str, query: str) -> dict | None:
+        stickers = await self._repo.all(ai_id)
         if not stickers:
             return None
-        q_tokens = set(_tokenize(query))
-        scored = []
-        for s in stickers:
-            desc_tokens = set(_tokenize(s.get("description", ""))) | set(_tokenize(" ".join(s.get("tags", []))))
-            overlap = len(q_tokens & desc_tokens)
-            score = (
-                overlap * float(self._config["search_weights"]["token_overlap"])
-                + float(s["match_quality"]) * float(self._config["search_weights"]["match_quality"])
-                + float(s["usage_strength"]) * float(self._config["search_weights"]["usage_strength"])
-                + float(s["freshness"]) * float(self._config["search_weights"]["freshness"])
+        corpus_tokens = [jieba.lcut(f"{sticker['description']} {' '.join(sticker['tags'])}") for sticker in stickers]
+        retriever = bm25s.BM25()
+        retriever.index(corpus_tokens, show_progress=False)
+        candidate_count = min(self._settings.search_candidate_limit, len(stickers))
+        candidates, lexical_scores = retriever.retrieve(
+            [jieba.lcut(query)],
+            corpus=stickers,
+            k=candidate_count,
+            show_progress=False,
+        )
+        weights = self._settings.search_weights
+        scored = [
+            (
+                float(lexical_score) * weights.lexical
+                + sticker["match_quality"] * weights.match_quality
+                + sticker["usage_strength"] * weights.usage_strength
+                + self._freshness(sticker) * weights.freshness,
+                sticker,
             )
-            scored.append((score, s))
-        scored.sort(key=lambda x: -x[0])
-        if not scored or len(q_tokens & (
-            set(_tokenize(scored[0][1].get("description", "")))
-            | set(_tokenize(" ".join(scored[0][1].get("tags", []))))
-        )) == 0:
+            for sticker, lexical_score in zip(
+                candidates[0],
+                lexical_scores[0],
+                strict=True,
+            )
+        ]
+        score, sticker = max(scored, key=lambda item: item[0])
+        if score < self._settings.search_min_score:
             return None
-        return scored[0][1]
+        return self._present(sticker)
 
-    # 列出数据
-    def list(self, ai_id: str, top_k: int) -> list[dict]:
-        stickers = self._repo(ai_id).all()
-        stickers.sort(key=lambda s: -s.get("retention_score", 0.0))
+    async def list(self, ai_id: str, top_k: int) -> list[dict]:
+        stickers = [self._present(sticker) for sticker in await self._repo.all(ai_id)]
+        stickers.sort(key=lambda sticker: -sticker["retention_score"])
         return stickers[:top_k]
 
-    # 列出限制
     @property
     def list_limit(self) -> int:
-        return int(self._config["list_limit"])
+        return self._settings.list_limit
 
-    # 增强记忆强度
-    def boost(self, ai_id: str, sticker_id: str) -> None:
-        self._repo(ai_id).boost(sticker_id, self._boost_delta)
+    async def boost(self, ai_id: str, sticker_id: str) -> None:
+        await self._repo.boost(
+            ai_id,
+            sticker_id,
+            self._settings.boost_delta,
+            self._settings.usage_strength_max,
+            self._settings.boost_count_increment,
+        )
 
-    # 清理过期数据
-    def cleanup(self) -> int:
-        return sum(repo.cleanup(self._threshold) for repo in self._repos.values())
-
-    # 关闭资源
-    def close(self) -> None:
-        for repo in self._repos.values():
-            repo.close()
-        self._repos.clear()
-
-
-# 对检索文本分词
-def _tokenize(text: str) -> list[str]:
-    tokens = re.findall(r"[a-z0-9]+", text.lower())
-    stop_chars = set("的一了是在我你他她它和就都也很还啊呀呢吧吗哦嗯这那有被把与及")
-    for ch in text:
-        if "一" <= ch <= "鿿" and ch not in stop_chars:
-            tokens.append(ch)
-    return tokens
+    async def cleanup(self) -> int:
+        removed = 0
+        for ai_id in await self._repo.list_ai_ids():
+            stickers = await self._repo.all(ai_id)
+            sticker_ids = [
+                sticker["id"] for sticker in stickers if self._retention_score(sticker) < self._settings.threshold
+            ]
+            if sticker_ids:
+                await self._repo.delete(ai_id, sticker_ids)
+                removed += len(sticker_ids)
+        return removed

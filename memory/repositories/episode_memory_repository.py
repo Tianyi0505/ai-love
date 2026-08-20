@@ -4,12 +4,13 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from shared.configuration.global_settings import MemorySettings
 from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure import models as m
-from shared.infrastructure.snowflake import new_snowflake_id
+from shared.infrastructure.snowflake_id_generator import snowflake_ids
+from shared.persistence import database_models as m
 
 
 # 表示会话片段消息数据
@@ -27,7 +28,7 @@ class EpisodeMessage:
 @dataclass(frozen=True)
 class MemoryDocument:
     markdown: str
-    version: int
+    version: int | None
 
 
 # 表示记忆提取记录数据
@@ -42,9 +43,9 @@ class EpisodeMemoryRepository:
     """持久化会话片段、原子记忆和长期 Markdown"""
 
     # 初始化当前实例
-    def __init__(self, db, history_episode_limit: int) -> None:
+    def __init__(self, db, settings: MemorySettings) -> None:
         self._db = db
-        self._history_episode_limit = int(history_episode_limit)
+        self._settings = settings
 
     # 加载会话片段消息列表
     async def load_episode_messages(
@@ -68,8 +69,7 @@ class EpisodeMemoryRepository:
             conditions = [
                 m.Message.ai_id == ai_id,
                 m.Message.conversation_id == int(conversation_id),
-                m.Message.occurred_at
-                <= datetime.fromtimestamp(float(ended_at), tz=timezone.utc),
+                m.Message.occurred_at <= datetime.fromtimestamp(float(ended_at), tz=timezone.utc),
                 or_(
                     m.Message.role == "assistant",
                     m.PlatformIdentity.person_id == int(person_id),
@@ -83,9 +83,7 @@ class EpisodeMemoryRepository:
                     m.Message.role,
                     m.Message.content,
                     func.extract("epoch", m.Message.occurred_at).label("occurred_at"),
-                    func.coalesce(m.Person.display_name, m.PlatformIdentity.platform_user_id, "").label(
-                        "speaker"
-                    ),
+                    func.coalesce(m.Person.display_name, m.PlatformIdentity.platform_user_id, "").label("speaker"),
                     m.PlatformIdentity.person_id.label("person_id"),
                 )
                 .select_from(m.Message)
@@ -132,57 +130,47 @@ class EpisodeMemoryRepository:
             async with session.begin():
                 existing = (
                     await session.execute(
-                        select(m.ConversationEpisode.episode_id).where(
-                            m.ConversationEpisode.activity_id == activity_id
-                        )
+                        select(m.ConversationEpisode.episode_id).where(m.ConversationEpisode.activity_id == activity_id)
                     )
                 ).first()
                 if existing:
                     return await self._existing_extraction(session, existing.episode_id)
-                episode_id = int(new_snowflake_id())
-                session.add(
-                    m.ConversationEpisode(
-                        episode_id=episode_id,
-                        activity_id=activity_id,
-                        ai_id=ai_id,
-                        person_id=int(person_id),
-                        conversation_id=int(conversation_id),
-                        started_at=datetime.fromtimestamp(
-                            messages[0].occurred_at, tz=timezone.utc
-                        ),
-                        ended_at=datetime.fromtimestamp(
-                            messages[-1].occurred_at, tz=timezone.utc
-                        ),
-                        summary=summary,
-                        source_message_ids=[int(item.message_id) for item in messages],
-                        estimated_tokens=estimated_tokens,
-                    )
+                episode = m.ConversationEpisode(
+                    episode_id=snowflake_ids().next_id(),
+                    activity_id=activity_id,
+                    ai_id=ai_id,
+                    person_id=int(person_id),
+                    conversation_id=int(conversation_id),
+                    started_at=datetime.fromtimestamp(messages[0].occurred_at, tz=timezone.utc),
+                    ended_at=datetime.fromtimestamp(messages[-1].occurred_at, tz=timezone.utc),
+                    summary=summary,
+                    source_message_ids=[int(item.message_id) for item in messages],
+                    estimated_tokens=estimated_tokens,
                 )
+                session.add(episode)
+                await session.flush()
                 atom_ids_by_owner: dict[tuple[str, str], list[str]] = {}
                 for atom in atoms:
-                    atom_id = int(new_snowflake_id())
                     owner_type = str(atom["owner_type"])
                     owner_id = ai_id if owner_type == "self" else person_id
-                    session.add(
-                        m.MemoryAtom(
-                            atom_id=atom_id,
-                            ai_id=ai_id,
-                            owner_type=owner_type,
-                            owner_id=owner_id,
-                            person_id=int(person_id),
-                            episode_id=episode_id,
-                            memory_type=atom["type"],
-                            content=atom["content"],
-                            importance=atom["importance"],
-                            confidence=atom["confidence"],
-                            source_message_ids=[int(item.message_id) for item in messages],
-                        )
+                    memory_atom = m.MemoryAtom(
+                        atom_id=snowflake_ids().next_id(),
+                        ai_id=ai_id,
+                        owner_type=owner_type,
+                        owner_id=owner_id,
+                        person_id=int(person_id),
+                        episode_id=episode.episode_id,
+                        memory_type=atom["type"],
+                        content=atom["content"],
+                        importance=atom["importance"],
+                        confidence=atom["confidence"],
+                        source_message_ids=[int(item.message_id) for item in messages],
                     )
-                    atom_ids_by_owner.setdefault((owner_type, owner_id), []).append(
-                        str(atom_id)
-                    )
+                    session.add(memory_atom)
+                    await session.flush()
+                    atom_ids_by_owner.setdefault((owner_type, owner_id), []).append(str(memory_atom.atom_id))
                 await self._refresh_conversation_summary(session, ai_id, conversation_id)
-                return ExtractionRecord(str(episode_id), atom_ids_by_owner)
+                return ExtractionRecord(str(episode.episode_id), atom_ids_by_owner)
 
     # 查找已有记忆提取记录
     async def _existing_extraction(self, session, episode_id: int) -> ExtractionRecord:
@@ -197,9 +185,7 @@ class EpisodeMemoryRepository:
         return ExtractionRecord(str(episode_id), atoms)
 
     # 刷新会话摘要
-    async def _refresh_conversation_summary(
-        self, session, ai_id: str, conversation_id: str
-    ) -> None:
+    async def _refresh_conversation_summary(self, session, ai_id: str, conversation_id: str) -> None:
         rows = await session.execute(
             select(m.ConversationEpisode.summary)
             .where(
@@ -207,17 +193,23 @@ class EpisodeMemoryRepository:
                 m.ConversationEpisode.conversation_id == int(conversation_id),
             )
             .order_by(m.ConversationEpisode.ended_at.desc())
-            .limit(self._history_episode_limit)
+            .limit(self._settings.episode.history_episode_limit)
         )
         summary = "\n".join(row.summary for row in reversed(list(rows)) if row.summary.strip())
         stmt = (
             pg_insert(m.ConversationSummary)
-            .values(ai_id=ai_id, conversation_id=int(conversation_id), summary=summary, version=1)
+            .values(
+                conversation_summary_id=snowflake_ids().next_id(),
+                ai_id=ai_id,
+                conversation_id=int(conversation_id),
+                summary=summary,
+                version=self._settings.initial_document_version,
+            )
             .on_conflict_do_update(
                 index_elements=[m.ConversationSummary.ai_id, m.ConversationSummary.conversation_id],
                 set_={
                     "summary": summary,
-                    "version": m.ConversationSummary.version + 1,
+                    "version": m.ConversationSummary.version + self._settings.document_version_increment,
                     "updated_at": func.now(),
                 },
             )
@@ -410,15 +402,13 @@ class EpisodeMemoryRepository:
                 select(m.ConversationEpisode.summary)
                 .where(
                     m.ConversationEpisode.ai_id == ai_id,
-                    m.ConversationEpisode.episode_id.in_(
-                        [int(item) for item in episode_ids]
-                    ),
+                    m.ConversationEpisode.episode_id.in_([int(item) for item in episode_ids]),
                 )
                 .order_by(m.ConversationEpisode.ended_at, m.ConversationEpisode.episode_id)
             )
             document = MemoryDocument(
                 markdown=document_row.markdown_content if document_row else "",
-                version=int(document_row.version) if document_row else 0,
+                version=int(document_row.version) if document_row else None,
             )
             return (
                 document,
@@ -442,18 +432,19 @@ class EpisodeMemoryRepository:
         owner_type: str,
         owner_id: str,
         markdown: str,
-        expected_version: int,
+        expected_version: int | None,
     ) -> int:
         async with self._db.session() as session:
-            if expected_version == 0:
+            if expected_version is None:
                 stmt = (
                     pg_insert(m.MemoryDocument)
                     .values(
+                        memory_document_id=snowflake_ids().next_id(),
                         ai_id=ai_id,
                         owner_type=owner_type,
                         owner_id=owner_id,
                         markdown_content=markdown,
-                        version=1,
+                        version=self._settings.initial_document_version,
                     )
                     .on_conflict_do_nothing(
                         index_elements=[
@@ -477,7 +468,7 @@ class EpisodeMemoryRepository:
                         )
                         .values(
                             markdown_content=markdown,
-                            version=m.MemoryDocument.version + 1,
+                            version=m.MemoryDocument.version + self._settings.document_version_increment,
                             updated_at=func.now(),
                         )
                         .returning(m.MemoryDocument.version)
