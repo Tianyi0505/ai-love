@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 
-from shared.infrastructure.config import ServiceConfig
-from shared.infrastructure.runtime_config import required_value
-from shared.infrastructure.service import BaseService
+from shared.configuration.service_settings import StreamSettings
+from shared.contracts.stream_control import StreamControl
+from shared.infrastructure.base_service import BaseService
+from shared.infrastructure.service_config import ServiceConfig
 
 logger = logging.getLogger("ailove.stream")
 
@@ -20,21 +20,20 @@ class StreamService(BaseService):
 
     # 启动服务
     async def on_start(self) -> None:
-        section = await self.cfg.section()
-        self._obs_url = required_value(section["obs_ws_url"], "service.stream.obs_ws_url")
-        self._stream_key = required_value(section["stream_key"], "service.stream.stream_key")
+        section = await self.cfg.section(StreamSettings)
+        self._obs_url = section.obs_ws_url
+        self._stream_key = section.stream_key
         # 通过 OBS WebSocket 创建场景并配置推流地址
-        await self.bus.subscribe(SUBJ_OBS_CONTROL, self._on_control)
+        await self.bus.subscribe_model(SUBJ_OBS_CONTROL, StreamControl, self._on_control)
 
     # 停止服务
     async def on_stop(self) -> None:
         pass
 
     # 处理控制命令
-    async def _on_control(self, payload: bytes) -> None:
-        cmd = json.loads(payload.decode("utf-8"))
+    async def _on_control(self, command: StreamControl) -> None:
         # 处理开播、停播和场景切换命令
-        logger.info("[stream] 控制: %s", cmd.get("action"))
+        logger.info("[stream] 控制: %s", command.action)
 
 
 # 启动程序入口
