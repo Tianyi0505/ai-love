@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 
 try:
     import websockets  # noqa: F401
@@ -16,58 +15,10 @@ except ModuleNotFoundError:
     sys.modules["asyncpg"] = SimpleNamespace()
 
 from agent.application.turn_coordinator import TurnCoordinator
-from agent.generation.agent_loop import AgentLoop
-from agent.generation.response import ResponsePlan
-from ai.llm.types import ChatMessage, ChatStreamChunk, ToolCall
+from agent.generation.response_plan import Emotion, ResponsePlan, Speech
 from shared.contracts.entity import EntityCandidate, EntityContext, EntityReference
 from shared.contracts.social import Chat, ChatType, SocialMessage, SocialSender
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand
-from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure.run_repo import AgentRunRepository
-from shared.infrastructure.snowflake import is_snowflake_id
-
-
-class _Prompts:
-    def render(self, key: str, **values) -> str:
-        return f"{key}:{values}"
-
-
-class _StepLLM:
-    def __init__(self) -> None:
-        self.requests = []
-
-    async def chat(self, request):
-        self.requests.append(request)
-        if len(self.requests) == 1:
-            yield ChatStreamChunk(tool_call=ToolCall(name="resolve_people", arguments={"mention": "老王"}))
-        else:
-            yield ChatStreamChunk(content="最终回答")
-
-
-class _FakeSession:
-    def __init__(self, rows) -> None:
-        self.rows = rows
-        self.executed = []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        return False
-
-    async def execute(self, stmt):
-        self.executed.append(stmt)
-        return self.rows
-
-
-class _FakeDB:
-    def __init__(self, rows=[]) -> None:
-        self._rows = rows
-        self.session_calls = 0
-
-    def session(self):
-        self.session_calls += 1
-        return _FakeSession(self._rows)
 
 
 class TurnCoordinatorTests(unittest.IsolatedAsyncioTestCase):
@@ -136,7 +87,7 @@ class AgentExecutionContextTests(unittest.TestCase):
             meta={},
         )
         execution = AgentExecutionContext.from_social_message(message, "luoyu")
-        self.assertTrue(is_snowflake_id(execution.run_id))
+        self.assertTrue(execution.run_id.isdecimal())
 
 
 class ResponseCommandTests(unittest.TestCase):
@@ -146,126 +97,74 @@ class ResponseCommandTests(unittest.TestCase):
             ai_id="luoyu",
             account_id="qq-main",
             conversation_id="conv-1",
+            platform="qq",
             chat={"chat_id": "12345", "chat_type": "group"},
             reply_to_message_id="987654",
             text="在的",
             sticker={"id": "s1", "image_url": "http://img"},
+            voice=None,
         )
-        payload = command.send_payload()
+        payload = command.send_request().model_dump(mode="json", exclude_none=True)
         self.assertEqual("987654", payload["reply_to_message_id"])
         self.assertEqual("在的", payload["text"])
         self.assertEqual({"id": "s1", "image_url": "http://img"}, payload["sticker"])
         self.assertNotIn("voice", payload)
         self.assertEqual("run-1", payload["run_id"])
 
-    def test_without_sticker_drops_only_sticker(self) -> None:
-        command = ResponseCommand(
-            run_id="run-1",
-            ai_id="luoyu",
-            account_id="qq-main",
-            conversation_id="conv-1",
-            chat={"chat_id": "u1", "chat_type": "private"},
-            text="在的",
-            sticker={"id": "s1"},
-            voice={"audio_path": "/a"},
-        )
-        retry = command.without_sticker()
-        self.assertIsNone(retry.sticker)
-        self.assertEqual(command.voice, retry.voice)
-        self.assertEqual(command.text, retry.text)
-        self.assertNotIn("sticker", retry.send_payload())
-
-
 class EntityContextTests(unittest.TestCase):
     def test_round_trip(self) -> None:
         context = EntityContext(
             current_sender={"person_id": "p1", "display_name": "饼干罐橘子"},
-            references=(EntityReference(
-                text="群主",
-                status="candidate",
-                candidates=(EntityCandidate(person_id="p2", display_name="李四", confidence=0.9),),
-            ),),
+            references=(
+                EntityReference(
+                    text="群主",
+                    status="candidate",
+                    person_id="",
+                    display_name="",
+                    candidates=(
+                        EntityCandidate(
+                            person_id="p2",
+                            display_name="李四",
+                            confidence=0.9,
+                            evidence=(),
+                        ),
+                    ),
+                    evidence=(),
+                ),
+            ),
             recent_participants=(
-                {"person_id": "p2", "display_name": "李四", "group_card": "老李", "roles": ["owner"], "last_message_id": "m1", "last_seen_at": "now"},
+                {
+                    "person_id": "p2",
+                    "display_name": "李四",
+                    "group_card": "老李",
+                    "roles": ["owner"],
+                    "last_message_id": "m1",
+                    "last_seen_at": "now",
+                },
             ),
         )
-        restored = EntityContext.from_dict(json.loads(json.dumps(context.to_dict())))
-        self.assertEqual(context.to_dict(), restored.to_dict())
+        restored = EntityContext.model_validate_json(context.model_dump_json())
+        self.assertEqual(context, restored)
         self.assertEqual("candidate", restored.references[0].status)
         self.assertEqual("p2", restored.references[0].candidates[0].person_id)
 
-    def test_from_dict_tolerates_missing(self) -> None:
-        self.assertEqual(EntityContext().to_dict(), EntityContext.from_dict(None).to_dict())
+    def test_invalid_entity_context_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            EntityContext.model_validate(None)
 
 
 class ResponsePlanTextTests(unittest.TestCase):
-    def test_markdown_is_stripped_from_text(self) -> None:
-        output = '{"speech":[{"text":"**嘿嘿** `好耶` [链接](http://x) 来了","delivery":"text"}],"emotion":{"name":"happy","intensity":0.5},"actions":[],"tool_calls":[],"memory_candidates":[]}'
-        plan = ResponsePlan.from_model_output(output)
-        self.assertEqual("嘿嘿 好耶 链接 来了", plan.text)
-        self.assertNotIn("*", plan.text)
-        self.assertNotIn("]", plan.text)
+    def test_markdown_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Speech(text="**嘿嘿** `好耶` [链接](http://x) 来了", delivery="text")
 
     def test_plain_text_keeps_normal_content(self) -> None:
-        output = '{"speech":[{"text":"好耶，就这么办","delivery":"text"}],"emotion":{},"actions":[],"tool_calls":[],"memory_candidates":[]}'
-        plan = ResponsePlan.from_model_output(output)
+        plan = ResponsePlan(
+            speech=[Speech(text="好耶，就这么办", delivery="text")],
+            emotion=Emotion(name="happy", intensity=0.5),
+            actions=[],
+        )
         self.assertEqual("好耶，就这么办", plan.text)
-
-
-class AgentRunSearchTests(unittest.IsolatedAsyncioTestCase):
-    async def test_search_runs_returns_rows(self) -> None:
-        row = SimpleNamespace(
-            run_id=1001, ai_id="luoyu", account_id="qq-main", conversation_id=2001,
-            platform="qq", chat_type="group", chat_id="782795932", sender_person_id=3001,
-            source="social", message_id="9001", reply_to_message_id="",
-            status="finished", outcome="replied", tool_rounds=2, response_text="hi",
-            started_at=None, finished_at=None,
-        )
-        db = _FakeDB(rows=[row])
-        repo = AgentRunRepository(db)
-        runs = await repo.search_runs(
-            ai_id="luoyu",
-            conversation_id="2001",
-            source="social",
-            limit=20,
-        )
-        self.assertEqual(1, db.session_calls)
-        self.assertEqual(1, len(runs))
-        self.assertEqual("1001", runs[0]["run_id"])
-        self.assertEqual("2001", runs[0]["conversation_id"])
-
-    async def test_search_runs_rejects_invalid_conversation_id(self) -> None:
-        db = _FakeDB()
-        repo = AgentRunRepository(db)
-        runs = await repo.search_runs(conversation_id="not-a-snowflake")
-        self.assertEqual([], runs)
-        self.assertEqual(0, db.session_calls)
-
-
-class AgentLoopStepTests(unittest.IsolatedAsyncioTestCase):
-    async def test_on_step_receives_tool_and_final(self) -> None:
-        loop = AgentLoop(_StepLLM(), _Prompts(), ai_id="ai", max_rounds=3)
-        loop.register_tool(
-            "resolve_people",
-            {"description": "", "parameters": {}},
-            lambda arguments, context: "{}",
-        )
-        steps: list[tuple[int, str, dict]] = []
-
-        async def on_step(index: int, kind: str, data: dict) -> None:
-            steps.append((index, kind, data))
-
-        result = await loop.run(
-            [ChatMessage(role="user", content="老王是谁")],
-            tool_context=ToolExecutionContext(ai_id="ai", chat_type="group", chat_id="真实群"),
-            on_step=on_step,
-        )
-        self.assertEqual("最终回答", result)
-        self.assertEqual(2, len(steps))
-        self.assertEqual("tool", steps[0][1])
-        self.assertEqual("resolve_people", steps[0][2]["tool_name"])
-        self.assertEqual("final", steps[1][1])
-        self.assertEqual({"text": "最终回答"}, steps[1][2])
 
 
 if __name__ == "__main__":

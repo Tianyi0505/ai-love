@@ -1,17 +1,17 @@
+import unittest
 from pathlib import Path
 from types import SimpleNamespace
-import unittest
 from unittest.mock import AsyncMock
 
 import yaml
 
-from agent.application.proactive import GroupChatManager
-from agent.context.understanding import MessageUnderstanding
-from agent.generation.prompting import PromptAssembler
-from agent.runtime import AIRuntime
+from agent.application.group_participation_service import GroupParticipationService
+from agent.context.message_understanding import MessageUnderstanding
+from agent.generation.prompt_assembler import PromptAssembler
+from agent.generation.response_plan import ParticipationDecision
+from shared.contracts.rpc.relationship import GroupRelationshipData, GroupRelationshipResponse
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
-from shared.infrastructure.agent_store import NacosAgentDefinitionStore
-
+from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,8 +30,11 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
     async def test_message_separator_survives_real_config_loading(self) -> None:
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         prompts = PromptAssembler(definition)
-        understanding = MessageUnderstanding(prompts, {})
-        understanding.register_handler(ContentType.TEXT, lambda _: "扩展内容")
+        understanding = MessageUnderstanding(
+            prompts,
+            {ContentType.TEXT: (lambda _: "扩展内容",)},
+            image_describer=object(),
+        )
 
         result = await understanding.understand(
             SocialMessage(
@@ -48,39 +51,58 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
     # 验证被点名消息进入群聊参与决策
     async def test_addressed_group_message_reaches_participation_model(self) -> None:
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
-        runtime = object.__new__(AIRuntime)
-        runtime.ai_id = definition.ai_id
-        runtime._proactive_enabled = True
-        runtime._proactive_config = {
-            "group_join_min_messages": 2,
-            "group_join_history_messages": 5,
-            "group_min_score": 0.08,
-            "group_participation_weights": {
-                "activity_willingness": 0.4,
-                "belonging": 0.25,
-                "affinity": 0.2,
-                "familiarity": 0.15,
-            },
-        }
-        runtime.group_manager = GroupChatManager()
-        runtime.conversation = SimpleNamespace(
+        conversation = SimpleNamespace(
             window=lambda _chat_type, _chat_id: [
-                ("user", "联系人: 你还记得群主吗", {"speaker_name": "联系人"})
+                (
+                    "user",
+                    "联系人: 你还记得群主吗",
+                    {"speaker_id": "person", "speaker_name": "联系人"},
+                )
             ]
         )
-        runtime._group_relationship = AsyncMock(return_value={})
-        runtime.prompt_assembler = PromptAssembler(definition)
-        runtime.agent_loop = SimpleNamespace(
-            run=AsyncMock(return_value='{"participate": true, "reason": "问题明确"}')
+        bus = SimpleNamespace(
+            request_model=AsyncMock(
+                return_value=GroupRelationshipResponse(
+                    relationship=GroupRelationshipData(
+                        familiarity=0.0,
+                        belonging=0.0,
+                        affinity=0.0,
+                        activity_willingness=0.0,
+                    )
+                )
+            )
+        )
+        prompt_assembler = PromptAssembler(definition)
+        chat_agent = SimpleNamespace(
+            decide_participation=AsyncMock(
+                return_value=ParticipationDecision(
+                    participate=True,
+                    reason="问题明确",
+                )
+            )
+        )
+        participation = GroupParticipationService(
+            ai_id=definition.ai_id,
+            account_id="account",
+            bus=bus,
+            relationship_timeout_sec=1.0,
+            sessions=object(),
+            conversation=conversation,
+            persona=SimpleNamespace(name=definition.name),
+            prompt_assembler=prompt_assembler,
+            chat_agent=chat_agent,
+            proactive=definition.behavior_policy.proactive,
+            behavior_schedule=SimpleNamespace(allows_proactive=lambda: True),
         )
 
-        result = await runtime._join_group_checker("group", explicitly_addressed=True)
+        result = await participation.should_join("group", explicitly_addressed=True)
 
         self.assertTrue(result)
-        messages = runtime.agent_loop.run.await_args.args[0]
-        self.assertIn("当前真实消息明确 @ 了你", messages[1].content)
-        self.assertIn("[联系人]", messages[1].content)
-        self.assertIn("联系人: 你还记得群主吗", messages[1].content)
+        system_prompt, user_prompt = chat_agent.decide_participation.await_args.args
+        self.assertIn("当前真实消息明确 @ 了你", user_prompt)
+        self.assertIn("[person | 联系人]", user_prompt)
+        self.assertIn("联系人: 你还记得群主吗", user_prompt)
+        self.assertIn("只输出合法 JSON", system_prompt)
 
 
 if __name__ == "__main__":

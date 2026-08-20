@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import sys
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
+import yaml
 
 try:
     import websockets  # noqa: F401
@@ -13,61 +16,45 @@ try:
 except ModuleNotFoundError:
     sys.modules["asyncpg"] = SimpleNamespace()
 
-from agent.clients.extensions import register_tools
-from agent.generation.agent_loop import AgentLoop
-from ai.llm.types import ChatMessage, ChatStreamChunk, ToolCall
-from gateway.channels.qq import QQChannel
-from memory.repositories.episode_repo import EpisodeMemoryRepository
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.usage import RunUsage
+
+from agent.clients.extension_toolset_loader import load_toolset
+from gateway.channels.napcat_message_event import NapCatMessageEvent
+from gateway.channels.qq_channel import QQChannel
+from memory.repositories.episode_memory_repository import EpisodeMemoryRepository
+from shared.configuration.global_settings import GlobalSettings
 from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure.entity_grounding import EntityGroundingRepository
+from shared.domain.entity_grounding_facade import EntityGroundingFacade
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
-class _Prompts:
-    def render(self, key: str, **values) -> str:
-        return f"{key}:{values}"
-
-
-class _RoundLLM:
-    def __init__(self) -> None:
-        self.requests = []
-
-    async def chat(self, request):
-        self.requests.append(request)
-        if len(self.requests) <= 3:
-            yield ChatStreamChunk(
-                tool_call=ToolCall(
-                    name="resolve_people",
-                    arguments={"mention": "群主", "chat_id": "模型伪造群"},
-                )
-            )
-        else:
-            yield ChatStreamChunk(content="最终回答")
+def global_settings():
+    config = yaml.safe_load((ROOT / "deploy" / "nacos" / "ailove.config.yaml").read_text(encoding="utf-8"))
+    config["qq"]["whitelist"] = []
+    return GlobalSettings.model_validate(config)
 
 
 class _ExtensionBus:
     def __init__(self) -> None:
         self.execute_request = None
 
-    async def request_json(self, subject, payload, timeout):
+    async def request_model(self, subject, request, response_type, timeout):
         if subject == "tool.list.request":
-            return {
+            return response_type.model_validate({
                 "tools": [
                     {
                         "name": "resolve_people",
                         "description": "解析称呼",
                         "parameters": {"type": "object"},
+                        "provider": "grounding",
                     }
                 ]
-            }
-        self.execute_request = payload
-        return {"content": "{}"}
-
-
-class _LoopRegistry:
-    def register_tool(self, name, info, executor):
-        self.name = name
-        self.info = info
-        self.executor = executor
+            })
+        self.execute_request = request.model_dump(mode="json")
+        return response_type.model_validate({"content": "{}", "data": {}})
 
 
 class _Rows(list):
@@ -161,7 +148,7 @@ class _RoleSession:
 class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
     async def test_group_owner_is_resolved_from_live_group_members(self) -> None:
         db = _RoleDB()
-        repo = EntityGroundingRepository(db, evidence_half_life_sec=2592000)
+        repo = EntityGroundingFacade(db, global_settings().grounding)
         context = ToolExecutionContext(
             platform="qq",
             account_id="account",
@@ -173,53 +160,43 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             "222222222222222222",
-            result["candidates"][0]["person_id"],
+            result.candidates[0].person_id,
         )
-        self.assertEqual("group_role", result["candidates"][0]["evidence"][0]["type"])
+        self.assertEqual("group_role", result.candidates[0].evidence[0]["type"])
         self.assertFalse(any("person_mentions" in query for query in db.queries))
-
-    async def test_three_tool_rounds_still_have_final_generation(self) -> None:
-        llm = _RoundLLM()
-        loop = AgentLoop(llm, _Prompts(), ai_id="ai", max_rounds=3)
-        trusted = ToolExecutionContext(ai_id="ai", chat_type="group", chat_id="真实群")
-        received = []
-
-        async def execute(arguments, context):
-            received.append((arguments, context))
-            return "{}"
-
-        loop.register_tool("resolve_people", {"description": "", "parameters": {}}, execute)
-        result = await loop.run(
-            [ChatMessage(role="user", content="群主是谁")],
-            tool_context=trusted,
-        )
-
-        self.assertEqual("最终回答", result)
-        self.assertEqual(4, len(llm.requests))
-        self.assertEqual([], llm.requests[-1].tools)
-        self.assertEqual(["真实群"] * 3, [context.chat_id for _, context in received])
-        self.assertTrue(all(arguments["chat_id"] == "模型伪造群" for arguments, _ in received))
 
     async def test_extension_request_keeps_arguments_and_context_separate(self) -> None:
         bus = _ExtensionBus()
-        loop = _LoopRegistry()
-        await register_tools(
-            loop,
+        toolset = await load_toolset(
             bus,
             "ai",
-            {"tool_list_sec": 1, "tool_execute_sec": 1},
+            SimpleNamespace(tool_list_sec=1, tool_execute_sec=1),
+            max_retries=0,
         )
         trusted = ToolExecutionContext(ai_id="ai", chat_type="group", chat_id="真实群")
-
-        await loop.executor({"mention": "群主", "chat_id": "模型伪造群"}, trusted)
+        context = RunContext(deps=trusted, model=TestModel(), usage=RunUsage())
+        tools = await toolset.get_tools(context)
+        await toolset.call_tool(
+            "resolve_people",
+            {"mention": "群主", "chat_id": "模型伪造群"},
+            context,
+            tools["resolve_people"],
+        )
 
         self.assertEqual("真实群", bus.execute_request["execution_context"]["chat_id"])
         self.assertEqual("模型伪造群", bus.execute_request["arguments"]["chat_id"])
-        self.assertNotIn("chat_id", {key: value for key, value in bus.execute_request.items() if key != "arguments" and key != "execution_context"})
+        self.assertNotIn(
+            "chat_id",
+            {
+                key: value
+                for key, value in bus.execute_request.items()
+                if key != "arguments" and key != "execution_context"
+            },
+        )
 
     async def test_group_person_context_only_reads_current_conversation_atoms(self) -> None:
         db = _MemoryDB()
-        repo = EpisodeMemoryRepository(db, history_episode_limit=12)
+        repo = EpisodeMemoryRepository(db, global_settings().memory)
         context = ToolExecutionContext(
             ai_id="ai",
             account_id="account",
@@ -242,7 +219,7 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_group_person_context_rejects_non_member_before_reading_memory(self) -> None:
         db = _MemoryDB(member_allowed=False)
-        repo = EpisodeMemoryRepository(db, history_episode_limit=12)
+        repo = EpisodeMemoryRepository(db, global_settings().memory)
         context = ToolExecutionContext(
             ai_id="ai",
             account_id="account",
@@ -270,22 +247,27 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
                 "account_id": "qq-main",
                 "message_timeout_sec": 1,
                 "forward_timeout_sec": 1,
-                "reconnect_delay_sec": 1,
-            }
+                "content_strategies": ["quote", "forward", "voice", "image", "file", "at", "text"],
+            },
+            http_client=object(),
         )
         message = channel._to_message(
-            {
+            NapCatMessageEvent.model_validate(
+                {
                 "post_type": "message",
                 "message_type": "group",
                 "group_id": 123,
                 "user_id": 20000,
+                "message_id": 999,
+                "time": 1,
                 "sender": {"nickname": "发送者", "role": "member"},
                 "message": [
                     {"type": "at", "data": {"qq": "30000", "name": "老王"}},
                     {"type": "at", "data": {"qq": "10000", "name": "洛雨"}},
                     {"type": "text", "data": {"text": " 群主怎么看"}},
                 ],
-            }
+                }
+            )
         )
 
         self.assertEqual(["30000", "10000"], message.meta["at_user_ids"])
