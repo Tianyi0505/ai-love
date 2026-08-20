@@ -1,13 +1,10 @@
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Type, TypeVar
 
 from shared.contracts.social import ContentType
-
-T = TypeVar("T")
 
 
 # 表示内容类型判定上下文
@@ -27,44 +24,26 @@ class ContentContext:
 
 # 定义内容类型判定策略
 class ContentTypeStrategy(ABC):
-
     # 尝试按当前策略判定，返回是否命中
     @abstractmethod
     def apply(self, ctx: ContentContext) -> bool: ...
 
 
-# 按优先级注册并执行内容判定策略
-class ContentTypeRegistry:
-
-    # 初始化当前实例
-    def __init__(self) -> None:
-        self._strategies: list[tuple[int, type[ContentTypeStrategy]]] = []
-
-    # 注册策略装饰器
-    def register(self, order: int) -> Callable[[Type[T]], Type[T]]:
-
-        # 包装注册目标
-        def deco(cls: Type[T]) -> Type[T]:
-            self._strategies.append((order, cls))
-            return cls
-
-        return deco
+# 按优先级执行内容判定策略
+class ContentTypeResolver:
+    def __init__(self, strategies: Sequence[ContentTypeStrategy]) -> None:
+        self._strategies = tuple(strategies)
 
     # 依次尝试策略直到命中
     def resolve(self, ctx: ContentContext) -> ContentContext:
-        for _, cls in sorted(self._strategies, key=lambda item: item[0]):
-            if cls().apply(ctx):
+        for strategy in self._strategies:
+            if strategy.apply(ctx):
                 break
         return ctx
 
 
-content_registry = ContentTypeRegistry()
-
-
 # 引用回复判定
-@content_registry.register(order=10)
 class QuoteStrategy(ContentTypeStrategy):
-
     # 尝试判定为引用回复
     def apply(self, ctx: ContentContext) -> bool:
         if not ctx.reply_id:
@@ -75,9 +54,7 @@ class QuoteStrategy(ContentTypeStrategy):
 
 
 # 合并转发判定
-@content_registry.register(order=20)
 class ForwardStrategy(ContentTypeStrategy):
-
     # 尝试判定为合并转发
     def apply(self, ctx: ContentContext) -> bool:
         if not ctx.forwards:
@@ -91,9 +68,7 @@ class ForwardStrategy(ContentTypeStrategy):
 
 
 # 语音判定
-@content_registry.register(order=30)
 class VoiceStrategy(ContentTypeStrategy):
-
     # 尝试判定为语音
     def apply(self, ctx: ContentContext) -> bool:
         if not ctx.voices:
@@ -104,9 +79,7 @@ class VoiceStrategy(ContentTypeStrategy):
 
 
 # 图片判定
-@content_registry.register(order=40)
 class ImageStrategy(ContentTypeStrategy):
-
     # 尝试判定为图片
     def apply(self, ctx: ContentContext) -> bool:
         if not ctx.images:
@@ -117,9 +90,7 @@ class ImageStrategy(ContentTypeStrategy):
 
 
 # 文件判定
-@content_registry.register(order=50)
 class FileStrategy(ContentTypeStrategy):
-
     # 尝试判定为文件
     def apply(self, ctx: ContentContext) -> bool:
         if not ctx.files:
@@ -131,9 +102,7 @@ class FileStrategy(ContentTypeStrategy):
 
 
 # @提及判定
-@content_registry.register(order=60)
 class AtStrategy(ContentTypeStrategy):
-
     # 尝试判定为@提及
     def apply(self, ctx: ContentContext) -> bool:
         if not ctx.at_targets:
@@ -142,11 +111,9 @@ class AtStrategy(ContentTypeStrategy):
         return True
 
 
-# 纯文本兜底
-@content_registry.register(order=100)
+# 纯文本判定
 class TextStrategy(ContentTypeStrategy):
-
-    # 兜底判定为纯文本
+    # 判定为纯文本
     def apply(self, ctx: ContentContext) -> bool:
         ctx.content_type = ContentType.TEXT
         return True
