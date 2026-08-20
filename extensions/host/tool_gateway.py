@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
@@ -77,22 +78,22 @@ class ToolProvider(Protocol):
 # 管理工具注册授权与调用
 class ToolGateway:
     # 初始化当前实例
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        providers: Iterable[ToolProvider],
+        bindings: Mapping[tuple[str, str], ToolGrant],
+    ) -> None:
         self._providers: dict[str, ToolProvider] = {}
         self._definitions: dict[str, ToolDefinition] = {}
-        self._bindings: dict[tuple[str, str], ToolGrant] = {}
-
-    # 注册提供器
-    def register_provider(self, provider: ToolProvider) -> None:
-        self._providers[provider.provider_id] = provider
-        for definition in provider.definitions():
-            if definition.tool_id in self._definitions:
-                raise ValueError(f"重复工具 ID: {definition.tool_id}")
-            self._definitions[definition.tool_id] = definition
-
-    # 绑定工具调用权限
-    def bind(self, ai_id: str, tool_id: str, grant: ToolGrant) -> None:
-        self._bindings[(ai_id, tool_id)] = grant
+        self._bindings = dict(bindings)
+        for provider in providers:
+            if provider.provider_id in self._providers:
+                raise ValueError(f"重复工具 Provider ID: {provider.provider_id}")
+            self._providers[provider.provider_id] = provider
+            for definition in provider.definitions():
+                if definition.tool_id in self._definitions:
+                    raise ValueError(f"重复工具 ID: {definition.tool_id}")
+                self._definitions[definition.tool_id] = definition
 
     # 列出智能体可用工具
     def list_for_ai(self, ai_id: str) -> list[ToolDefinition]:

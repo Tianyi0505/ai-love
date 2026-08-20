@@ -6,7 +6,7 @@ import json
 from mcp import Client
 from mcp.types import TextContent
 
-from extensions.host.tools import ToolDefinition, ToolInvocation, ToolResult
+from extensions.host.tool_gateway import ToolDefinition, ToolInvocation, ToolResult
 
 
 # 通过MCP提供扩展工具
@@ -40,24 +40,10 @@ class MCPToolProvider:
 
     # 调用工具
     async def invoke(self, invocation: ToolInvocation) -> ToolResult:
-        try:
-            async with Client(self._url) as client:
-                result = await client.call_tool(invocation.tool_id, invocation.arguments)
-        except Exception as exc:
-            return ToolResult(
-                False,
-                f"MCP 工具调用失败：{exc}",
-                error_code="mcp_transport_error",
-            )
+        async with Client(self._url) as client:
+            result = await client.call_tool(invocation.tool_id, invocation.arguments)
         texts = [block.text for block in result.content if isinstance(block, TextContent)]
         data = result.structured_content if isinstance(result.structured_content, dict) else {}
-        if not data and len(texts) == 1:
-            try:
-                parsed = json.loads(texts[0])
-                if isinstance(parsed, dict):
-                    data = parsed
-            except json.JSONDecodeError:
-                pass
         content = "\n".join(texts) or json.dumps(data, ensure_ascii=False)
         return ToolResult(
             ok=not result.is_error,

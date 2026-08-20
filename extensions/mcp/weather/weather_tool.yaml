@@ -17,3 +17,7 @@ weather:
     description: 返回语言
 client:
   request_timeout_sec: 10
+  accept_encoding: gzip
+  location_result_limit: 1
+  coordinate_precision: 2
+  percent_multiplier: 100
