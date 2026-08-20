@@ -25,8 +25,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "1"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -37,12 +35,22 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "1"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
             - name: AILOVE_DATABASE_POOL_MIN_SIZE
               value: "1"
             - name: AILOVE_DATABASE_POOL_MAX_SIZE
               value: "10"
+            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
+              value: "300"
+            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
+              value: "30"
           resources:
             requests: {cpu: 20m, memory: 48Mi}
             limits: {cpu: 500m, memory: 256Mi}
@@ -82,8 +90,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "2"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -94,6 +100,12 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "2"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
@@ -135,8 +147,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "3"
+            - name: AILOVE_REDIS_URL
+              value: redis://redis:6379/0
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -147,12 +159,22 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "3"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
             - name: AILOVE_DATABASE_POOL_MIN_SIZE
               value: "1"
             - name: AILOVE_DATABASE_POOL_MAX_SIZE
               value: "10"
+            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
+              value: "300"
+            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
+              value: "30"
           resources:
             requests: {cpu: 25m, memory: 64Mi}
             limits: {cpu: "1", memory: 384Mi}
@@ -193,8 +215,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "4"
             - name: AILOVE_NACOS_ADDRS
               value: nacos:8848
             - name: AILOVE_NACOS_GROUP
@@ -205,6 +225,12 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "4"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://nats:4222
           resources:
@@ -246,8 +272,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "5"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -258,6 +282,12 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "5"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
@@ -303,8 +333,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "6"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -315,6 +343,12 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "6"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
@@ -368,8 +402,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "7"
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 300m, memory: 192Mi}
@@ -401,8 +433,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "8"
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -413,6 +443,12 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "7"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
@@ -445,8 +481,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "9"
             - name: AILOVE_NACOS_ADDRS
               value: nacos:8848
             - name: AILOVE_NACOS_GROUP
@@ -457,12 +491,22 @@ spec:
               value: "5"
             - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
               value: "2"
+            - name: AILOVE_SNOWFLAKE_WORKER_ID
+              value: "8"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://nats:4222
             - name: AILOVE_DATABASE_POOL_MIN_SIZE
               value: "1"
             - name: AILOVE_DATABASE_POOL_MAX_SIZE
               value: "10"
+            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
+              value: "300"
+            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
+              value: "30"
           resources:
             requests: {cpu: 20m, memory: 48Mi}
             limits: {cpu: 500m, memory: 256Mi}

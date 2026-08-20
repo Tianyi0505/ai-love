@@ -1,6 +1,5 @@
 qq:
   whitelist: __AILOVE_QQ_WHITELIST__
-  reconnect_delay_sec: 5
   group_member_refresh_sec: 60
   voice_reply: true
   space_interval_sec: 3600
@@ -12,6 +11,9 @@ qq:
   qzone_comment_max_sentences: 2
   qzone_data_dir: /app/data
   qzone_relationship_curve_exponent: 2
+  qzone_relationship_score_min: 0.0
+  qzone_relationship_score_max: 1.0
+  qzone_probability_max: 1.0
   qzone_picture_template: '[动态图片${index}：${description}]'
   qzone_picture_unavailable_template: '[附 ${count} 张图片，暂时无法识别]'
   qzone_existing_comments_template: '，已有评论: ${names}'
@@ -20,29 +22,26 @@ qq:
   qzone_feed_template: |-
     ${content}
     ${pictures}${comments}${reply}
-  qzone_fallback_comments:
-    - 看到${author_name}的动态啦，支持支持～
-    - 哇，这个有意思！
-    - 哈哈哈太真实了
-    - 今天也要开心呀！
-    - 来啦来啦，踩踩～
 
 sticker:
   capacity: 50
   half_life_sec: 2592000
-  boost_delta: 10.0
-  threshold: 20.0
+  boost_delta: 0.1
+  usage_strength_max: 1.0
+  threshold: 0.2
   collect_min_quality: 0.65
   list_limit: 20
-  initial_match_quality: 0.5
   initial_usage_strength: 0.2
-  legacy_value_divisor: 100.0
+  initial_boost_count: 0
+  boost_count_increment: 1
+  search_candidate_limit: 20
+  search_min_score: 0.01
   retention_weights:
     match_quality: 0.45
     usage_strength: 0.35
     freshness: 0.2
   search_weights:
-    token_overlap: 3.0
+    lexical: 3.0
     match_quality: 0.25
     usage_strength: 0.15
     freshness: 0.1
@@ -51,24 +50,18 @@ social:
   contact_names: {}
   send_timeout_sec: 15
   window_size: 20
-  compensate_interval_sec: 600
   prompt_history_messages: 7
   live_prompt_history_messages: 7
-  compensation_history_messages: 6
   channel_history_since: 0
   channel_history_limit: 50
   drain_poll_interval_sec: 0.01
+  session_state_ttl_sec: 2592000
+  message_retention_days: 180
+  log_preview_chars: 40
 
 live:
   default_interaction_type: danmaku
   default_importance: 10
-
-search:
-  bm25_k1: 1.5
-  bm25_b: 0.75
-  top_k: 5
-  reciprocal_rank_k: 60
-  each_source_limit: 3
 
 grounding:
   candidate_limit: 5
@@ -79,47 +72,79 @@ grounding:
   person_context_fact_limit: 8
   recent_participants_limit: 6
   recent_participants_lookback_sec: 86400
+  relevant_people_limit: 4
+  group_memory_top_k_per_person: 2
+  group_memory_result_limit: 4
+  explicit_mention_confidence: 1.0
+  ignored_mention_names: [群主, 管理员, 群管理员]
+  confidence_min: 0.0
+  confidence_max: 1.0
+  role_unique_confidence: 1.0
+  role_ambiguous_confidence: 0.9
+  platform_identity_confidence: 1.0
+  group_card_confidence: 0.98
+  display_name_confidence: 0.95
+  recency_base: 0.5
+  evidence_confidence_max: 0.99
+  evidence_boost_max: 0.12
+  evidence_boost_per_occurrence: 0.02
+  ambiguous_name_confidence: 0.7
+  resolved_confidence_threshold: 0.9
+  at_candidate_limit: 2
+  quote_candidate_limit: 2
+  role_candidate_limit: 3
+  primary_candidate_limit: 1
+  member_name_min_chars: 2
+  role_names:
+    群主: [owner]
+    管理员: [admin]
+    群管理员: [admin]
 
 llm:
   timeout_ms: 60000
   health_fail_threshold: 3
   health_recover_after_sec: 60
-  max_tool_rounds: 3
+  max_requests: 4
+  participation_max_requests: 1
+  memory_max_requests: 1
   max_tokens: 4096
+  retry_count: 0
+  tool_retry_count: 0
   provider_request_timeout_sec: 60
+  output_limits:
+    speech_min_chars: 1
+    speech_max_chars: 200
+    action_query_min_chars: 1
+    action_query_max_chars: 200
+    participation_reason_min_chars: 1
+    participation_reason_max_chars: 200
+    emotion_intensity_min: 0.0
+    emotion_intensity_max: 1.0
 
 tts:
-  providers:
-    - provider: gptsovits
-      base_url: http://127.0.0.1:19881
+  provider: gptsovits
+  base_url: http://127.0.0.1:19881
 
 image:
-  providers:
-    - provider: openai_compatible
-      model: qwen-vl-plus
-      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      api_key_env: BAILIAN_API_KEY
-    - provider: anthropic
-      model: minimax-m3
-      base_url: https://tokendance.space/gateway/v1/messages
-      api_key_env: ANTHROPIC_AUTH_TOKEN
+  model: qwen-vl-plus
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key_env: BAILIAN_API_KEY
   fetch_timeout_sec: 15
   request_timeout_sec: 30
   max_tokens: 400
+  retry_count: 0
   media_type: image/jpeg
   fetch_headers:
     User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
     Referer: https://qzone.qq.com/
-  limits:
-    description_chars: 200
-    sticker_description_chars: 100
-    plain_description_chars: 120
-    tags: 8
-  fallbacks:
-    unreadable: 图片内容暂时无法读取
-    unrecognized: 图片内容暂时无法识别
-    default_description: 图片
-    match_quality: 0.0
+  output_limits:
+    description_min_chars: 1
+    description_max_chars: 200
+    sticker_description_max_chars: 100
+    emotion_max_chars: 100
+    tags_max_count: 8
+    match_quality_min: 0.0
+    match_quality_max: 1.0
   prompt: |-
     同时完成聊天识图和表情素材判断，只输出紧凑 JSON，不要 Markdown：
     {"description":"客观描述画面和可见文字，不超过100字","sticker_description":"若作为表情，它表达的情绪、态度和适用语境，不超过40字","tags":["核心情绪","聊天意图","适用语境"],"match_quality":0到1}。
@@ -130,15 +155,50 @@ memory:
   data_dir: /app/data
   cleanup_interval_sec: 86400
   file_max_age_sec: 604800
-  default_scope: private
-  default_type: observation
-  default_importance: 0.5
-  default_strength: 0.6
-  default_confidence: 0.7
-  default_emotion_intensity: 0.0
-  default_consolidated: true
   worker_concurrency: 4
   worker_lease_sec: 300
+  state_cas_retry_count: 8
+  token_estimation:
+    characters_per_token: 4
+    minimum_tokens: 1
+  generation:
+    output_limits:
+      episode_summary_min_chars: 1
+      episode_summary_max_chars: 120
+      memories_max_count: 8
+      memory_content_min_chars: 1
+      memory_content_max_chars: 300
+      importance_min: 0.0
+      importance_max: 1.0
+      confidence_min: 0.0
+      confidence_max: 1.0
+      markdown_min_chars: 8
+      markdown_max_chars: 12000
+  document_schemas:
+    person:
+      title: 联系人长期认知
+      sections:
+        - 基本信息
+        - 当前关注
+        - 稳定偏好
+        - 交流偏好
+        - 重要经历
+        - 关系认知
+        - 未完成事项
+        - 不确定信息
+      empty_document: '# 联系人长期认知'
+    self:
+      title: 自我长期认知
+      sections:
+        - 核心身份
+        - 当前关注
+        - 稳定偏好
+        - 交流方式
+        - 重要经历
+        - 行为原则
+        - 未完成事项
+        - 不确定信息
+      empty_document: '# 自我长期认知'
   episode:
     history_episode_limit: 12
   extraction:
@@ -164,12 +224,24 @@ memory:
   dormant_threshold: 0.2
   delete_threshold: 0.05
   recall_boost: 0.12
+  strength_max: 1.0
+  elapsed_floor_sec: 0.0
+  deletable_reference_count: 0
+  recall_count_increment: 1
+  initial_document_version: 1
+  document_version_increment: 1
   retrieval_weights:
     relevance: 0.45
     strength: 0.25
     importance: 0.15
     confidence: 0.1
     emotion_intensity: 0.05
+
+relationship_storage:
+  initial_score: 0.0
+  default_ceiling_policy: default
+  whitelist_ceiling_policy: whitelist
+  latest_identity_limit: 1
 
 timeouts:
   relationship_update_sec: 2
@@ -193,11 +265,7 @@ timeouts:
   qq_forward_sec: 15
   web_search_sec: 10
 
-fallbacks:
-  response: 嗯嗯，我在听～
-  private_response: 嗯嗯，我在听～你继续说呀
-  image_unreadable: 图片内容暂时无法识别
-  voice_unrecognized: （无法识别）
-  qzone_empty_feed: （无文本）
-  relationship_unknown: 尚未形成明确关系
-  person_name: 朋友
+observability:
+  include_model_content: false
+  include_binary_content: false
+  include_model_request_parameters: true

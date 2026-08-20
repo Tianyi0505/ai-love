@@ -13,6 +13,12 @@ relationship_policy:
   inherit_qq_whitelist_ceiling: true
   person_ceiling_whitelist: []
   group_ceiling_whitelist: []
+  bounds:
+    quality_min: -1.0
+    quality_max: 1.0
+    score_min: 0.0
+    gift_amount_min: 0.0
+    neutral_quality: 0.0
   conversation:
     familiarity_delta: 0.02
     affinity_quality_multiplier: 0.02
@@ -54,7 +60,6 @@ behavior_policy:
   proactive:
     enabled: true
     timezone: Asia/Shanghai
-    private_interval_sec: 1800
     group_min_score: 0.08
     group_join_window_sec: 180
     group_join_min_messages: 2
@@ -66,14 +71,12 @@ behavior_policy:
     group_turn_in_flight_sec: 60
     group_join_history_messages: 5
     group_cooldown_curve_exponent: 2
+    participation_score_ceiling: 1.0
     group_participation_weights:
       activity_willingness: 0.4
       belonging: 0.25
       affinity: 0.2
       familiarity: 0.15
-    min_weight: 0.15
-    private_quiet_period_sec: 21600
-    private_cooldown_sec: 43200
     work_hours:
       - start: "09:00"
         end: "22:00"
@@ -101,27 +104,7 @@ extensions:
     config: {}
 
 model_config:
-  fast:
-    - id: deepseek-v4-flash
-      provider: deepseek
-      thinking: false
-    - id: deepseek-v4-flash-0731
-      provider: deepseek_v4_flash_0731
-      thinking: false
-  standard:
-    - id: deepseek-v4-flash
-      provider: deepseek
-      thinking: false
-    - id: deepseek-v4-flash-0731
-      provider: deepseek_v4_flash_0731
-      thinking: false
-  deep:
-    - id: deepseek-v4-flash
-      provider: deepseek
-      thinking: true
-    - id: deepseek-v4-flash-0731
-      provider: deepseek_v4_flash_0731
-      thinking: true
+  model: deepseek:deepseek-v4-flash
 
 prompts:
   system: |-
@@ -278,11 +261,8 @@ prompts:
     只输出合法 JSON：{"markdown":"完整 Markdown"}
   social-sender-identity: |-
     当前联系人：${sender_name}。
-  unknown-relationship: 尚未形成明确关系
   live-input: 观众${actor_name}发来${event_type}：${content}
   live-relationship: 当前观众：${actor_name}
-  proactive-private-input: 你此刻想和${name}分享：${reason}
-  proactive-private-relationship: 当前联系人：${name}。
   group-join-addressed-input: |-
     当前真实消息明确 @ 了你：
     ${current_message}
@@ -322,8 +302,6 @@ prompts:
     内容应当与当前切入点直接相关：回答被问到的内容、补充有价值的信息、承接正在进行的互动，或简短回应与你直接相关的内容。避免重复别人已经说清楚的话和抢占多人正在进行的对话。
   live: |-
     优先回应刚发生的观众事件，并用近期发言理解现场；过时内容不再追答，表达保持简洁以保证实时性。
-  proactive-private: |-
-    自然说出此刻想分享的具体内容，控制在一两句话，不要用机械问候代替真正想说的事。
   qzone-comment: |-
     评论只针对动态中实际出现的文字和图片信息，控制在一两句话，避免空泛客套和批量模板式表达。
   group-join: |-

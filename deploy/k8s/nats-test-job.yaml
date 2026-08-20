@@ -21,8 +21,6 @@ spec:
           env:
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "98"
           command:
             - sh
             - -c
