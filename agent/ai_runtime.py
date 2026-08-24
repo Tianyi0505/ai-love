@@ -5,9 +5,6 @@ import logging
 import os
 
 import httpx
-from openai import AsyncOpenAI
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 from stevedore.driver import DriverManager
 from stevedore.extension import error_on_conflict
 
@@ -37,6 +34,10 @@ from shared.contracts.events import TurnRequest
 from shared.contracts.rpc.social import CommentRequest, CommentResponse, SocialSendResponse
 from shared.contracts.social import SocialMessage
 from shared.contracts.turn import ResponseCommand
+from shared.infrastructure.chat_model_factory import (
+    create_chat_model,
+    create_openai_compatible_chat_model,
+)
 
 logger = logging.getLogger("ailove.ai-agent")
 
@@ -73,18 +74,22 @@ class AIRuntime:
             headers=image_config.fetch_headers,
             follow_redirects=True,
         )
-        self._vision_model_client = AsyncOpenAI(
-            api_key=os.environ[image_config.api_key_env],
-            base_url=image_config.base_url,
+        self._vision_model_http_client = httpx.AsyncClient(
             timeout=image_config.request_timeout_sec,
         )
-        vision_model = OpenAIChatModel(
+        vision_model = create_openai_compatible_chat_model(
             image_config.model,
-            provider=OpenAIProvider(openai_client=self._vision_model_client),
+            api_key=os.environ[image_config.api_key_env],
+            base_url=image_config.base_url,
+            max_tokens=image_config.max_tokens,
+            timeout_sec=image_config.request_timeout_sec,
+            max_retries=image_config.retry_count,
+            http_async_client=self._vision_model_http_client,
         )
         vision_output_policy = VisionOutputPolicy(VisionOutputLimits.model_validate(image_config.output_limits))
         self.vision = ImageDescriber(
             vision_model,
+            f"openai-compatible:{image_config.model}",
             ImageFetcher(self._vision_fetch_client, image_config.media_type),
             vision_output_policy,
             image_config.prompt,
@@ -103,16 +108,24 @@ class AIRuntime:
             self.bus,
             self.ai_id,
             self._timeouts,
-            llm_config.tool_retry_count,
+        )
+        model_name = self.definition.model_profile.model
+        chat_model = create_chat_model(
+            model_name,
+            max_tokens=llm_config.max_tokens,
+            timeout_sec=llm_config.provider_request_timeout_sec,
+            max_retries=llm_config.retry_count,
         )
         self.chat_agent = ChatAgent(
-            model=self.definition.model_profile.model,
-            toolset=toolset,
+            model=chat_model,
+            model_name=model_name,
+            tools=toolset,
             output_policy=response_output_policy,
             max_requests=llm_config.max_requests,
             participation_max_requests=llm_config.participation_max_requests,
             max_tokens=llm_config.max_tokens,
             retry_count=llm_config.retry_count,
+            tool_retry_count=llm_config.tool_retry_count,
             observability=self.settings.observability,
         )
 
@@ -189,7 +202,7 @@ class AIRuntime:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
         await self._vision_fetch_client.aclose()
-        await self._vision_model_client.close()
+        await self._vision_model_http_client.aclose()
         await self._tts_http_client.aclose()
 
     # 创建后台任务

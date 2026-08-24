@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import httpx
-from pydantic_ai import BinaryContent
+
+
+@dataclass(frozen=True)
+class FetchedImage:
+    data: bytes
+    media_type: str
 
 
 class ImageFetcher:
@@ -9,7 +16,7 @@ class ImageFetcher:
         self._client = client
         self._media_type = media_type
 
-    async def fetch(self, image_url: str) -> BinaryContent:
+    async def fetch(self, image_url: str) -> FetchedImage:
         response = await self._client.get(image_url)
         response.raise_for_status()
-        return BinaryContent(data=response.content, media_type=self._media_type)
+        return FetchedImage(data=response.content, media_type=self._media_type)

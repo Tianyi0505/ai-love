@@ -6,6 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import yaml
+from langchain_core.messages import AIMessage
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
 
 try:
     import websockets  # noqa: F401
@@ -15,10 +18,6 @@ try:
     import asyncpg  # noqa: F401
 except ModuleNotFoundError:
     sys.modules["asyncpg"] = SimpleNamespace()
-
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.usage import RunUsage
 
 from agent.clients.extension_toolset_loader import load_toolset
 from gateway.channels.napcat_message_event import NapCatMessageEvent
@@ -198,16 +197,33 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
             bus,
             "ai",
             SimpleNamespace(tool_list_sec=1, tool_execute_sec=1),
-            max_retries=0,
         )
         trusted = ToolExecutionContext(ai_id="ai", chat_type="group", chat_id="真实群")
-        context = RunContext(deps=trusted, model=TestModel(), usage=RunUsage())
-        tools = await toolset.get_tools(context)
-        await toolset.call_tool(
-            "resolve_people",
-            {"mention": "群主", "chat_id": "模型伪造群"},
-            context,
-            tools["resolve_people"],
+        builder = StateGraph(MessagesState, context_schema=ToolExecutionContext)
+        builder.add_node("tools", ToolNode(toolset))
+        builder.add_edge(START, "tools")
+        builder.add_edge("tools", END)
+        graph = builder.compile()
+        await graph.ainvoke(
+            {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "resolve_people",
+                                "args": {
+                                    "mention": "群主",
+                                    "chat_id": "模型伪造群",
+                                },
+                                "id": "tool-call-1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                ]
+            },
+            context=trusted,
         )
 
         self.assertEqual("真实群", bus.execute_request["execution_context"]["chat_id"])
