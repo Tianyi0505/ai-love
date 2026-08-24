@@ -16,11 +16,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from ops.panel.backend.app import PanelConfig
-from ops.panel.backend.observability.people_memory import PeopleMemoryReader
-from ops.panel.backend.observability.personality import PersonalityReader
-from ops.panel.backend.observability.router import router
-from ops.panel.backend.observability.schemas import (
+from admin.console.backend.app import PanelConfig
+from admin.console.backend.observability.people_memory import PeopleMemoryReader
+from admin.console.backend.observability.personality import PersonalityReader
+from admin.console.backend.observability.router import router
+from admin.console.backend.observability.schemas import (
     MemoryDocumentResponse,
     PeopleResponse,
     PersonalityResponse,
@@ -28,7 +28,7 @@ from ops.panel.backend.observability.schemas import (
     PersonSummary,
     SelfMemoryResponse,
 )
-from ops.panel.backend.observability.sso import create_nacos_access_token
+from admin.console.backend.observability.sso import create_nacos_access_token
 from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -213,7 +213,7 @@ class ObservabilityRouteTests(unittest.TestCase):
         self.assertEqual("no-store", response.headers["cache-control"])
 
     @patch(
-        "ops.panel.backend.observability.router.create_dashboard_session",
+        "admin.console.backend.observability.router.create_dashboard_session",
         new_callable=AsyncMock,
         return_value="dashboard-session",
     )

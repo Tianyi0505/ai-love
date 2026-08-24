@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from ops.panel.backend.auth.router import require_session
+from admin.console.backend.auth.router import require_session
 
 from .people_memory import InvalidPersonId, PeopleMemoryReader
 from .personality import PersonalityReader

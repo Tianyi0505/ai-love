@@ -55,12 +55,12 @@ CMD ["python", "-m", "memory.memory_service"]
 
 FROM node:22-alpine AS ops-panel-frontend
 WORKDIR /frontend
-COPY ops/panel/frontend/package.json ops/panel/frontend/package-lock.json ./
+COPY admin/console/frontend/package.json admin/console/frontend/package-lock.json ./
 RUN npm ci
-COPY ops/panel/frontend/ ./
+COPY admin/console/frontend/ ./
 RUN npm run build
 
 FROM base AS ops-panel
-COPY ops/ ./ops/
-COPY --from=ops-panel-frontend /frontend/dist ./ops/panel/frontend/dist
-CMD ["python", "-m", "ops.panel.backend.main"]
+COPY admin/ ./admin/
+COPY --from=ops-panel-frontend /frontend/dist ./admin/console/frontend/dist
+CMD ["python", "-m", "admin.console.backend.main"]

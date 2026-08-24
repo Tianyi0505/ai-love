@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import hashlib
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 
 from argon2 import PasswordHasher
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ops.panel.backend.auth.credentials import (
+from admin.console.backend.auth.credentials import (
     CredentialRecord,
     CredentialService,
 )
-from ops.panel.backend.auth.login import LoginService
-from ops.panel.backend.auth.router import router
-from ops.panel.backend.auth.session import RedisSessionStore, SESSION_TTL_SECONDS
+from admin.console.backend.auth.login import LoginService
+from admin.console.backend.auth.router import router
+from admin.console.backend.auth.session import SESSION_TTL_SECONDS, RedisSessionStore
 
 
 class MemoryCredentialRepository:
