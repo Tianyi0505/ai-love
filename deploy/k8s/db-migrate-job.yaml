@@ -19,8 +19,6 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "99"
           command:
             - sh
             - -c

@@ -1,8 +1,0 @@
-music:
-  name: music_control
-  title: 音乐控制
-  description: 播放、暂停、恢复、停止、切歌或调节音乐音量。
-  action_description: 要执行的音乐控制动作
-  query_description: 播放时使用的歌曲、歌手或歌单关键词
-  volume_description: 音量百分比，仅 volume 动作需要
-  adapter_note: 当前音乐适配器仅记录控制指令，等待接入实际播放器。

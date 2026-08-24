@@ -1,49 +1,52 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+from shared.contracts.rpc.social import SocialSendRequest
 from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure.snowflake import new_snowflake_id
+from shared.infrastructure.snowflake_id_generator import snowflake_ids
 
 
 # 生成一次执行链路标识
 def new_run_id() -> str:
-    return new_snowflake_id()
+    return str(snowflake_ids().next_id())
 
 
 # 描述一轮消息执行上下文
 @dataclass(frozen=True)
 class AgentExecutionContext:
-    run_id: str = field(default_factory=new_run_id)
-    ai_id: str = ""
-    account_id: str = ""
-    conversation_id: str = ""
-    platform: str = ""
-    chat_type: str = ""
-    chat_id: str = ""
-    sender_person_id: str = ""
-    sender_platform_user_id: str = ""
-    message_id: str = ""
-    reply_to_message_id: str = ""
-    occurred_at: int = 0
-    source: str = "social"
+    run_id: str
+    ai_id: str
+    account_id: str
+    conversation_id: str
+    platform: str
+    chat_type: str
+    chat_id: str
+    sender_person_id: str
+    sender_platform_user_id: str
+    message_id: str
+    reply_to_message_id: str
+    occurred_at: int
+    source: str
 
     # 从社交消息构建执行上下文
     @classmethod
-    def from_social_message(cls, message, ai_id: str, run_id: str = "") -> "AgentExecutionContext":
+    def from_social_message(cls, message, ai_id: str, run_id: str | None = None) -> "AgentExecutionContext":
+        resolved_run_id = run_id or message.meta.get("run_id") or new_run_id()
         return cls(
-            run_id=run_id or str(message.meta.get("run_id") or "") or new_run_id(),
+            run_id=str(resolved_run_id),
             ai_id=ai_id,
-            account_id=str(message.account_id or ""),
-            conversation_id=str(message.meta.get("conversation_id") or ""),
-            platform=str(message.platform or ""),
+            account_id=message.account_id,
+            conversation_id=str(message.meta.get("conversation_id", "")),
+            platform=message.platform,
             chat_type=message.chat.chat_type.value,
-            chat_id=str(message.chat.chat_id or ""),
-            sender_person_id=str(message.meta.get("person_id") or ""),
-            sender_platform_user_id=str(message.sender.user_id or ""),
-            message_id=str(message.message_id or ""),
+            chat_id=message.chat.chat_id,
+            sender_person_id=str(message.meta.get("person_id", "")),
+            sender_platform_user_id=message.sender.user_id,
+            message_id=message.message_id,
             reply_to_message_id=str(message.quote_ref.message_id) if message.quote_ref else "",
-            occurred_at=int(message.timestamp or 0),
+            occurred_at=message.timestamp,
+            source="social",
         )
 
     # 返回工具执行作用域
@@ -72,46 +75,25 @@ class ResponseCommand:
     ai_id: str
     account_id: str
     conversation_id: str
-    platform: str = "qq"
-    chat: dict = field(default_factory=dict)
-    reply_to_message_id: str = ""
-    text: str = ""
-    sticker: dict | None = None
-    voice: dict | None = None
+    platform: str
+    chat: dict
+    reply_to_message_id: str
+    text: str
+    sticker: dict | None
+    voice: dict | None
 
     # 返回发送负载
-    def send_payload(self) -> dict:
-        payload: dict = {
-            "ai_id": self.ai_id,
-            "account_id": self.account_id,
-            "conversation_id": self.conversation_id,
-            "channel": self.platform or "qq",
-            "chat": self.chat,
-            "type": "text",
-            "text": self.text,
-            "run_id": self.run_id,
-        }
-        if self.reply_to_message_id:
-            payload["reply_to_message_id"] = self.reply_to_message_id
-        if self.sticker:
-            payload["sticker"] = self.sticker
-        if self.voice:
-            payload["voice"] = self.voice
-        return payload
-
-    # 返回去掉表情后的重试指令
-    def without_sticker(self) -> "ResponseCommand":
-        if self.sticker is None:
-            return self
-        return ResponseCommand(
-            run_id=self.run_id,
+    def send_request(self) -> SocialSendRequest:
+        return SocialSendRequest(
             ai_id=self.ai_id,
             account_id=self.account_id,
             conversation_id=self.conversation_id,
-            platform=self.platform,
+            channel=self.platform,
             chat=self.chat,
-            reply_to_message_id=self.reply_to_message_id,
+            type="text",
             text=self.text,
-            sticker=None,
+            run_id=self.run_id,
+            reply_to_message_id=self.reply_to_message_id,
+            sticker=self.sticker,
             voice=self.voice,
         )

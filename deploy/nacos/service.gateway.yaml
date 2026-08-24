@@ -7,3 +7,4 @@ accounts:
       ws_url: __NAPCAT_WS_URL__
       http_url: __NAPCAT_HTTP_URL__
       uin: __AILOVE_QQ_UIN__
+      content_strategies: [quote, forward, voice, image, file, at, text]

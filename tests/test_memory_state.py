@@ -4,27 +4,15 @@ import json
 import unittest
 from dataclasses import dataclass
 
-from memory.documents import normalize_markdown
-from memory.state import MemoryStateStore
-from agent.clients.memory import MemoryClient
-from agent.generation.prompting import PromptAssembler, PromptContext
-from shared.contracts.agent import AgentDefinition
+from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError, NoKeysError
+
+from agent.clients.memory_client import MemoryClient
+from agent.generation.prompt_assembler import PromptAssembler, PromptContext
+from memory.generation.memory_output_policy import MemoryDocumentPolicy, MemoryDocumentSchemas
+from memory.memory_state_store import MemoryStateStore
+from shared.configuration.global_settings import MemoryConsolidationSettings
+from shared.contracts.agent import AgentDefinition, ModelSelectionConfig, PersonalityConfig
 from shared.contracts.memory import MemoryActivity
-
-
-# 表示键不存在错误
-class KeyNotFoundError(Exception):
-    pass
-
-
-# 表示键列表为空错误
-class NoKeysError(Exception):
-    pass
-
-
-# 表示键序列冲突错误
-class KeyWrongLastSequenceError(Exception):
-    pass
 
 
 # 提供测试用状态条目
@@ -89,8 +77,8 @@ class FakeBus:
         self.published = []
 
     # 向持久化主题发布JSON消息
-    async def publish_durable_json(self, subject: str, payload: dict) -> None:
-        self.published.append((subject, payload))
+    async def publish_durable_model(self, subject: str, payload) -> None:
+        self.published.append((subject, payload.model_dump(mode="json")))
 
 
 # 验证记忆任务状态管理
@@ -99,7 +87,7 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.activity = FakeKV()
         self.pending = FakeKV()
-        self.state = MemoryStateStore(self.activity, self.pending, 10, 30)
+        self.state = MemoryStateStore(self.activity, self.pending, 10, 30, 8)
 
     # 验证多条消息只保留最新静默检查
     async def test_many_messages_keep_only_latest_quiet_check(self) -> None:
@@ -122,11 +110,25 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
     # 验证新活动使在途静默检查失效
     async def test_new_activity_invalidates_in_flight_quiet_check(self) -> None:
         await self.state.record_activity(
-            MemoryActivity("ai", "person", "conversation", "old", 1, 1)
+            MemoryActivity(
+                ai_id="ai",
+                person_id="person",
+                conversation_id="conversation",
+                message_id="old",
+                sequence=1,
+                active_at=1,
+            )
         )
         claim = await self.state.claim_activity((await self.state.due_activities(now=11))[0], now=11)
         await self.state.record_activity(
-            MemoryActivity("ai", "person", "conversation", "new", 2, 12)
+            MemoryActivity(
+                ai_id="ai",
+                person_id="person",
+                conversation_id="conversation",
+                message_id="new",
+                sequence=2,
+                active_at=12,
+            )
         )
         await self.state.finish_activity(claim)
         self.assertEqual("new", self.activity.values()[0]["message_id"])
@@ -135,10 +137,23 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
     async def test_new_pending_atoms_survive_completed_batch(self) -> None:
         await self.state.add_pending("ai", "person", "person", "episode-1", ["atom-1"], 10, 1)
         ready = await self.state.ready_pending(
-            {
-                "person": {"min_episode_count": 1, "min_atom_count": 10, "token_threshold": 100, "max_wait_sec": 100},
-                "self": {"min_episode_count": 10, "min_atom_count": 10, "token_threshold": 100, "max_wait_sec": 100},
-            },
+            MemoryConsolidationSettings.model_validate(
+                {
+                    "scheduler_poll_sec": 1,
+                    "person": {
+                        "min_episode_count": 1,
+                        "min_atom_count": 10,
+                        "token_threshold": 100,
+                        "max_wait_sec": 100,
+                    },
+                    "self": {
+                        "min_episode_count": 10,
+                        "min_atom_count": 10,
+                        "token_threshold": 100,
+                        "max_wait_sec": 100,
+                    },
+                }
+            ),
             now=2,
         )
         claim = await self.state.claim_pending(ready[0], now=2)
@@ -166,9 +181,25 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
 
 # 验证记忆文档渲染
 class MemoryDocumentTests(unittest.TestCase):
-    # 验证固定配置段保持独立偏好
-    def test_fixed_sections_keep_distinct_preferences(self) -> None:
-        markdown = """# 任意标题
+    # 验证未配置标题被明确拒绝
+    def test_document_rejects_unknown_sections(self) -> None:
+        policy = MemoryDocumentPolicy(
+            MemoryDocumentSchemas.model_validate(
+                {
+                    "person": {
+                        "title": "联系人长期认知",
+                        "sections": ["稳定偏好", "不确定信息"],
+                        "empty_document": "# 联系人长期认知",
+                    },
+                    "self": {
+                        "title": "自我长期认知",
+                        "sections": ["稳定偏好", "不确定信息"],
+                        "empty_document": "# 自我长期认知",
+                    },
+                }
+            )
+        )
+        markdown = """# 联系人长期认知
 ## 稳定偏好
 - 喜欢纵向流程图
 - 喜欢先讲代码执行流程
@@ -176,23 +207,22 @@ class MemoryDocumentTests(unittest.TestCase):
 ## 模型自创标题
 - 来源还不确定
 """
-        normalized = normalize_markdown("person", markdown)
-        self.assertTrue(normalized.startswith("# 联系人长期认知"))
-        self.assertIn("## 稳定偏好", normalized)
-        self.assertIn("喜欢纵向流程图", normalized)
-        self.assertIn("喜欢先讲代码执行流程", normalized)
-        self.assertIn("不喜欢箭头指向箭头", normalized)
-        self.assertNotIn("模型自创标题", normalized)
-        self.assertIn("## 不确定信息", normalized)
+        with self.assertRaises(ValueError):
+            policy.validate("person", markdown)
 
     # 验证提示词包含身份关系摘要和当前消息
     def test_prompt_contains_self_person_summary_and_current_message_layers(self) -> None:
-        definition = AgentDefinition(
+        definition = AgentDefinition.model_construct(
             ai_id="ai",
             version=1,
             name="AI",
             identity="identity",
-            personality={"traits": [], "speaking_style": "style", "catchphrases": [], "taboos": []},
+            personality=PersonalityConfig(
+                traits=[],
+                speaking_style="style",
+                catchphrases=[],
+                taboos=[],
+            ),
             relationship_policy={},
             behavior_policy={},
             extensions=[],
@@ -206,7 +236,7 @@ class MemoryDocumentTests(unittest.TestCase):
             model_profile_id="default",
             voice_profile_id="default",
             avatar_profile_id="default",
-            model_config={},
+            model_profile=ModelSelectionConfig(model="test:model"),
             definition_key="agent.ai",
             fingerprint="1",
         )

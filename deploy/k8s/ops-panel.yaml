@@ -15,6 +15,7 @@ spec:
         app: ops-panel
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
         ailove.role: core
       containers:
@@ -27,17 +28,43 @@ spec:
           env:
             - name: PANEL_PORT
               value: "8090"
+            - name: PANEL_AI_ID
+              value: ai_luoyu
             - name: PANEL_NACOS_URL
-              value: http://127.0.0.1:8848/nacos
-            - name: PANEL_K3S_URL
-              value: http://127.0.0.1:8001
+              value: /nacos/
+            - name: PANEL_NAPCAT_URL
+              value: /webui/
+            - name: PANEL_K8S_URL
+              value: /dashboard/
+            - name: AILOVE_REDIS_URL
+              value: redis://redis:6379/0
+            - name: AILOVE_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ailove-secrets
+                  key: AILOVE_REDIS_PASSWORD
+            - name: PANEL_NAPCAT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ailove-secrets
+                  key: NAPCAT_WEBUI_TOKEN
+            - name: PANEL_INITIAL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ailove-secrets
+                  key: PANEL_INITIAL_USERNAME
+            - name: PANEL_INITIAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ailove-secrets
+                  key: PANEL_INITIAL_PASSWORD
           ports:
             - name: http
               containerPort: 8090
               hostPort: 8090
           resources:
-            requests: {cpu: 10m, memory: 48Mi}
-            limits: {cpu: 300m, memory: 128Mi}
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {cpu: 300m, memory: 192Mi}
           volumeMounts:
             - name: data
               mountPath: /app/data
