@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import jieba
+
 from memory.application.memory_cleanup_service import MemoryCleanupService
 from memory.application.memory_query_handler import MemoryQueryHandler
 from memory.application.relationship_handler import RelationshipHandler
@@ -63,6 +65,9 @@ class MemoryService(BaseService):
         self._settings = await GlobalSettingsStore(self.cfg.nacos).load()
         self._memory_config = self._settings.memory
         self._grounding_config = self._settings.grounding
+
+        # 中文分词首次加载会阻塞事件循环，必须在开始接收 NATS 请求前完成。
+        await asyncio.to_thread(jieba.initialize)
 
         self._memory_activity_sub = None
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)

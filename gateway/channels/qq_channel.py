@@ -55,7 +55,10 @@ class QQChannel(Channel):
             names=strategy_names,
             invoke_on_load=True,
         )
-        self._content_resolver = ContentTypeResolver([extension.obj for extension in strategies.extensions])
+        loaded_strategies = {extension.name: extension.obj for extension in strategies.extensions}
+        self._content_resolver = ContentTypeResolver(
+            [loaded_strategies[name] for name in strategy_names if name in loaded_strategies]
+        )
 
     # 启动服务
     async def start(self) -> None:
@@ -65,11 +68,14 @@ class QQChannel(Channel):
                 try:
                     logger.info("[qq] 已连接 NapCat WS: %s", self._ws_url)
                     async for raw in ws:
-                        payload = TypeAdapter(dict[str, Any]).validate_json(raw)
-                        if payload["post_type"] == EventPostType.MESSAGE.value:
-                            msg = self._to_message(NapCatMessageEvent.model_validate(payload))
-                            if msg is not None:
-                                tasks.create_task(self._handle_message(msg))
+                        try:
+                            payload = TypeAdapter(dict[str, Any]).validate_json(raw)
+                            if payload["post_type"] == EventPostType.MESSAGE.value:
+                                msg = self._to_message(NapCatMessageEvent.model_validate(payload))
+                                if msg is not None:
+                                    tasks.create_task(self._handle_message(msg))
+                        except Exception:
+                            logger.exception("[qq] 消息解析失败，已跳过当前事件")
                 finally:
                     self._ws = None
 
@@ -82,8 +88,13 @@ class QQChannel(Channel):
     async def _handle_message(self, msg: SocialMessage) -> None:
         key = f"{msg.account_id}:{msg.chat.chat_type.value}:{msg.chat.chat_id}"
         lock = self._session_locks.setdefault(key, asyncio.Lock())
-        async with lock:
-            await asyncio.wait_for(self.message_handler(msg), timeout=self._message_timeout_sec)
+        try:
+            async with lock:
+                await asyncio.wait_for(self.message_handler(msg), timeout=self._message_timeout_sec)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[qq] 消息处理失败，已跳过: message_id=%s", msg.message_id)
 
     # 转换为消息
     def _to_message(self, evt: NapCatMessageEvent) -> SocialMessage | None:
@@ -92,24 +103,14 @@ class QQChannel(Channel):
         user_id = str(evt.user_id)
         text = "".join(str(seg.data["text"]) for seg in segments if seg.type == SegmentType.TEXT.value).strip()
         at_targets = [str(seg.data["qq"]) for seg in segments if seg.type == SegmentType.AT.value]
-        at_mentions = [
-            {
-                "user_id": str(seg.data["qq"]),
-                "name": str(seg.data["name"]),
-            }
-            for seg in segments
-            if seg.type == SegmentType.AT.value
-        ]
         images = [seg.data for seg in segments if seg.type == SegmentType.IMAGE.value]
         voices = [seg.data for seg in segments if seg.type == SegmentType.RECORD.value]
         forwards = [seg.data for seg in segments if seg.type == SegmentType.FORWARD.value]
         files = [seg.data for seg in segments if seg.type == "file"]
         reply_id = ""
-        quote_user_id = ""
         for seg in segments:
             if seg.type == SegmentType.REPLY.value:
                 reply_id = str(seg.data["id"])
-                quote_user_id = str(seg.data["user_id"])
                 break
         if not text and not at_targets and not images and not voices and not forwards and not files and not reply_id:
             return None
@@ -125,7 +126,6 @@ class QQChannel(Channel):
             chat_name = evt.group_name if evt.group_name is not None else ""
         meta: dict = {
             "at_user_ids": at_targets,
-            "at_mentions": at_mentions,
             "sender_role": evt.sender.role if evt.sender.role is not None else "",
         }
         ctx = self._content_resolver.resolve(
@@ -158,7 +158,7 @@ class QQChannel(Channel):
             message_id=str(evt.message_id),
             timestamp=evt.time,
             at_user_id=at_user_id,
-            to_ai=bool(self._self_uin) and (quote_user_id == self._self_uin or self._self_uin in at_targets),
+            to_ai=bool(self._self_uin) and self._self_uin in at_targets,
             account_id=self.account_id,
             platform=self.name,
             meta=meta,

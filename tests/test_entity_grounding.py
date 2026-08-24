@@ -65,6 +65,27 @@ class _Rows(list):
         return self[0][0] if self and self[0] else None
 
 
+class _NapCatResponse:
+    def __init__(self, data) -> None:
+        self._data = data
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self):
+        return self._data
+
+
+class _NapCatHTTP:
+    def __init__(self, message) -> None:
+        self.message = message
+        self.requests = []
+
+    async def post(self, url, json, timeout):
+        self.requests.append((url, json, timeout))
+        return _NapCatResponse({"data": self.message})
+
+
 class _MemoryDB:
     def __init__(self, member_allowed: bool = True) -> None:
         self.member_allowed = member_allowed
@@ -271,8 +292,133 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(["30000", "10000"], message.meta["at_user_ids"])
-        self.assertEqual("老王", message.meta["at_mentions"][0]["name"])
         self.assertTrue(message.to_ai)
+
+    async def test_qq_message_uses_onebot_quote_and_at_contract(self) -> None:
+        channel = QQChannel(
+            {
+                "ws_url": "ws://127.0.0.1",
+                "http_url": "http://127.0.0.1",
+                "uin": "10000",
+                "account_id": "qq-main",
+                "message_timeout_sec": 1,
+                "forward_timeout_sec": 1,
+                "content_strategies": ["quote", "forward", "voice", "image", "file", "at", "text"],
+            },
+            http_client=object(),
+        )
+
+        message = channel._to_message(
+            NapCatMessageEvent.model_validate(
+                {
+                    "post_type": "message",
+                    "message_type": "group",
+                    "group_id": 123,
+                    "group_name": "测试群",
+                    "user_id": 20000,
+                    "message_id": 999,
+                    "time": 1,
+                    "sender": {"nickname": "发送者", "card": "发送者", "role": "member"},
+                    "message": [
+                        {"type": "reply", "data": {"id": "888"}},
+                        {"type": "at", "data": {"qq": "30000"}},
+                        {"type": "text", "data": {"text": " 你好"}},
+                    ],
+                }
+            )
+        )
+
+        self.assertIsNotNone(message)
+        self.assertEqual(["30000"], message.meta["at_user_ids"])
+        self.assertNotIn("at_mentions", message.meta)
+        self.assertEqual("quote", message.type.value)
+        self.assertEqual("888", message.meta["reply_message_id"])
+
+    async def test_qq_reply_target_is_resolved_through_get_msg(self) -> None:
+        http = _NapCatHTTP(
+            {
+                "post_type": "message",
+                "message_type": "group",
+                "group_id": 123,
+                "group_name": "测试群",
+                "user_id": 10000,
+                "message_id": 888,
+                "time": 1,
+                "sender": {"nickname": "机器人", "card": "机器人", "role": "member"},
+                "message": [{"type": "text", "data": {"text": "原消息"}}],
+            }
+        )
+        channel = QQChannel(
+            {
+                "ws_url": "ws://127.0.0.1",
+                "http_url": "http://127.0.0.1",
+                "uin": "10000",
+                "account_id": "qq-main",
+                "message_timeout_sec": 1,
+                "forward_timeout_sec": 1,
+                "content_strategies": ["quote", "forward", "voice", "image", "file", "at", "text"],
+            },
+            http_client=http,
+        )
+        message = channel._to_message(
+            NapCatMessageEvent.model_validate(
+                {
+                    "post_type": "message",
+                    "message_type": "group",
+                    "group_id": 123,
+                    "group_name": "测试群",
+                    "user_id": 20000,
+                    "message_id": 999,
+                    "time": 2,
+                    "sender": {"nickname": "发送者", "card": "发送者", "role": "member"},
+                    "message": [
+                        {"type": "reply", "data": {"id": "888"}},
+                        {"type": "text", "data": {"text": "回复机器人"}},
+                    ],
+                }
+            )
+        )
+
+        self.assertFalse(message.to_ai)
+        hydrated = await channel.hydrate_message(message)
+
+        self.assertTrue(hydrated.to_ai)
+        self.assertEqual("10000", hydrated.quote_ref.sender.user_id)
+        self.assertEqual({"message_id": 888}, http.requests[0][1])
+
+    async def test_qq_message_handler_failure_does_not_escape_channel_task(self) -> None:
+        channel = QQChannel(
+            {
+                "ws_url": "ws://127.0.0.1",
+                "http_url": "http://127.0.0.1",
+                "uin": "10000",
+                "account_id": "qq-main",
+                "message_timeout_sec": 1,
+                "forward_timeout_sec": 1,
+                "content_strategies": ["quote", "forward", "voice", "image", "file", "at", "text"],
+            },
+            http_client=object(),
+        )
+        message = channel._to_message(
+            NapCatMessageEvent.model_validate(
+                {
+                    "post_type": "message",
+                    "message_type": "private",
+                    "user_id": 20000,
+                    "message_id": 999,
+                    "time": 1,
+                    "sender": {"nickname": "发送者"},
+                    "message": [{"type": "text", "data": {"text": "你好"}}],
+                }
+            )
+        )
+
+        async def failing_handler(_message) -> None:
+            raise RuntimeError("下游失败")
+
+        channel.set_message_handler(failing_handler)
+        with self.assertLogs("ailove.gateway.qq", level="ERROR"):
+            await channel._handle_message(message)
 
 
 if __name__ == "__main__":

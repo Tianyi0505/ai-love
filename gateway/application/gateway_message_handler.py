@@ -66,7 +66,7 @@ class GatewayMessageHandler:
         message.meta["ai_id"] = turn.ai_id
         if message.chat.chat_type == ChatType.GROUP:
             await self._group_members.sync(message)
-            message.meta["entity_context"] = await self._grounding.ground_message(message, turn.ai_id)
+        message.meta["entity_context"] = await self._grounding.ground_message(message, turn.ai_id)
         await self._conversations.record_inbound(message, turn.ai_id)
         await self._bus.publish_model(SUBJ_SOCIAL_CHAT.format(ai_id=turn.ai_id), message)
 

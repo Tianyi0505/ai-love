@@ -75,14 +75,9 @@ class GroundingRequestHandler:
         message: SocialMessage,
         context: ToolExecutionContext,
     ) -> None:
-        for mention in message.meta["at_mentions"]:
-            name = str(mention["name"]).strip()
-            user_id = str(mention["user_id"])
-            if (
-                not name
-                or name in self._settings.ignored_mention_names
-                or (message.to_ai and user_id == message.at_user_id)
-            ):
+        for target in message.meta.get("at_user_ids", []):
+            user_id = str(target)
+            if message.to_ai and user_id == message.at_user_id:
                 continue
             result = await self._grounding.resolve_people(
                 context,
@@ -90,6 +85,9 @@ class GroundingRequestHandler:
                 self._settings.primary_candidate_limit,
             )
             if not result.candidates:
+                continue
+            name = result.candidates[0].display_name.strip()
+            if not name or name in self._settings.ignored_mention_names:
                 continue
             await self._grounding.record_mention_evidence(
                 mention_text=name,
