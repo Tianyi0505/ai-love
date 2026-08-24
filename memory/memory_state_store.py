@@ -33,7 +33,8 @@ class ActivityState(BaseModel):
 
 
 class PendingState(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # 兼容重构前已写入 NATS KV 的派生计数字段。
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
     ai_id: str
     owner_type: Literal["person", "self"]

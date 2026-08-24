@@ -7,7 +7,7 @@ from argon2.exceptions import VerifyMismatchError
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from shared.infrastructure import models as m
+from shared.persistence import database_models as m
 
 from .session import RedisSessionStore
 

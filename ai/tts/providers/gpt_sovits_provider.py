@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import httpx
 
-from ai.gptsovits.synthesis_api import SynthesizeResponse
 from ai.tts.tts_provider import TTSProvider
+from shared.contracts.tts import SynthesizeResponse
 
 
 # 提供GPT-SoVITS引擎服务合成能力

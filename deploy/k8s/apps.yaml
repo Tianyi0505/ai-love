@@ -41,6 +41,8 @@ spec:
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
               value: "true"
+            - name: OTEL_SDK_DISABLED
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
             - name: AILOVE_DATABASE_POOL_MIN_SIZE
@@ -106,6 +108,8 @@ spec:
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
               value: "true"
+            - name: OTEL_SDK_DISABLED
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
@@ -148,7 +152,7 @@ spec:
                 name: ailove-secrets
           env:
             - name: AILOVE_REDIS_URL
-              value: redis://redis:6379/0
+              value: redis://127.0.0.1:16379/0
             - name: AILOVE_NACOS_ADDRS
               value: 127.0.0.1:18848
             - name: AILOVE_NACOS_GROUP
@@ -164,6 +168,8 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: OTEL_SDK_DISABLED
               value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
@@ -231,6 +237,8 @@ spec:
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
               value: "true"
+            - name: OTEL_SDK_DISABLED
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://nats:4222
           resources:
@@ -287,6 +295,8 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: OTEL_SDK_DISABLED
               value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
@@ -348,6 +358,8 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: OTEL_SDK_DISABLED
               value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
@@ -449,6 +461,8 @@ spec:
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
               value: "true"
+            - name: OTEL_SDK_DISABLED
+              value: "true"
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
@@ -496,6 +510,8 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://jaeger:4317
             - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: OTEL_SDK_DISABLED
               value: "true"
             - name: AILOVE_BUS_URL
               value: nats://nats:4222

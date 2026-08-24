@@ -6,7 +6,7 @@ import random
 from string import Template
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from gateway.qzone_api import QZoneAPI
 from gateway.qzone_commented_feed_repository import QZoneCommentedFeedRepository
@@ -38,15 +38,20 @@ class QZoneComment(QZoneModel):
 class QZoneFeed(QZoneModel):
     tid: str
     uin: str | int
-    timestamp: int
+    timestamp: int = Field(validation_alias=AliasChoices("timestamp", "created_time"))
     content: str | None = None
     text: str | None = None
     name: str | None = None
     nickname: str | None = None
     pic: Any | None = None
     pics: Any | None = None
-    commentlist: list[QZoneComment]
+    commentlist: list[QZoneComment] = Field(default_factory=list)
     reply_context: str | None = None
+
+    @field_validator("commentlist", mode="before")
+    @classmethod
+    def normalize_commentlist(cls, value):
+        return [] if value is None else value
 
     @property
     def author_name(self) -> str:
@@ -207,9 +212,31 @@ class QZoneService:
                 urls.append(url)
         return urls
 
+    # 处理单条空间动态，单条失败不阻断本轮其他好友动态
+    async def _process_feed(self, feed: QZoneFeed, stats: dict) -> None:
+        author_id = str(feed.uin)
+        if await self._commented.has(feed.tid):
+            await self._reply_if_replied(feed)
+            return
+        relationship = await self._relationship(author_id)
+        like_prob, comment_prob = self._action_probabilities(relationship)
+        if random.random() < like_prob:
+            ok = await self._api.like(feed.tid, owner_uin=author_id, abstime=feed.timestamp)
+            if ok:
+                stats["liked"] += 1
+            await asyncio.sleep(self._settings.qzone_action_delay_sec)
+        if random.random() < comment_prob:
+            text = await self._comment_text(feed)
+            ok = await self._api.comment(feed.tid, text, owner_uin=author_id)
+            if ok:
+                stats["commented"] += 1
+                await self._commented.add(feed.tid)
+            await asyncio.sleep(self._settings.qzone_action_delay_sec)
+        await self._commented.add(feed.tid)
+
     # 执行一次任务
     async def run_once(self) -> dict:
-        stats = {"scanned": 0, "liked": 0, "commented": 0, "skipped": False}
+        stats = {"scanned": 0, "liked": 0, "commented": 0, "failed": 0, "skipped": False}
         if not self._proactive_allowed():
             stats.update({"skipped": True, "reason": "outside_work_hours"})
             return stats
@@ -232,24 +259,10 @@ class QZoneService:
             await asyncio.sleep(self._settings.qzone_friend_scan_delay_sec)
         stats["scanned"] = len(feeds)
         for feed in feeds:
-            author_id = str(feed.uin)
-            if await self._commented.has(feed.tid):
-                await self._reply_if_replied(feed)
-                continue
-            relationship = await self._relationship(author_id)
-            like_prob, comment_prob = self._action_probabilities(relationship)
-            if random.random() < like_prob:
-                ok = await self._api.like(feed.tid, owner_uin=author_id, abstime=feed.timestamp)
-                if ok:
-                    stats["liked"] += 1
-                await asyncio.sleep(self._settings.qzone_action_delay_sec)
-            if random.random() < comment_prob:
-                text = await self._comment_text(feed)
-                ok = await self._api.comment(feed.tid, text, owner_uin=author_id)
-                if ok:
-                    stats["commented"] += 1
-                    await self._commented.add(feed.tid)
-                await asyncio.sleep(self._settings.qzone_action_delay_sec)
-            await self._commented.add(feed.tid)
+            try:
+                await self._process_feed(feed, stats)
+            except Exception as exc:
+                stats["failed"] += 1
+                logger.warning("[qzone] 单条动态处理失败: %s: %s", feed.tid, exc)
         logger.info("[qzone] 完成一轮: %s", stats)
         return stats

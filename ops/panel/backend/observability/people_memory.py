@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, cast, func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 
-from shared.infrastructure import models as m
-from shared.infrastructure.snowflake import is_snowflake_id
+from shared.infrastructure.snowflake_id_generator import is_snowflake_id
+from shared.persistence import database_models as m
 
 from .schemas import (
     MemoryDocumentResponse,
@@ -16,8 +16,9 @@ from .schemas import (
 class PeopleMemoryReader:
     """只负责读取带 QQ 身份的人物长期记忆。"""
 
-    def __init__(self, database) -> None:
+    def __init__(self, database, list_limit: int) -> None:
         self._database = database
+        self._list_limit = list_limit
 
     @staticmethod
     def _qq_identity():
@@ -47,7 +48,7 @@ class PeopleMemoryReader:
             .select_from(m.MemoryDocument)
             .join(
                 m.Person,
-                m.Person.person_id == cast(m.MemoryDocument.owner_id, BigInteger),
+                cast(m.Person.person_id, String) == m.MemoryDocument.owner_id,
             )
             .where(
                 m.MemoryDocument.ai_id == ai_id,
@@ -55,7 +56,7 @@ class PeopleMemoryReader:
                 qq.is_not(None),
             )
             .order_by(m.MemoryDocument.updated_at.desc())
-            .limit(300)
+            .limit(self._list_limit)
         )
         if query:
             pattern = f"%{query}%"
@@ -93,7 +94,7 @@ class PeopleMemoryReader:
                 .select_from(m.MemoryDocument)
                 .join(
                     m.Person,
-                    m.Person.person_id == cast(m.MemoryDocument.owner_id, BigInteger),
+                    cast(m.Person.person_id, String) == m.MemoryDocument.owner_id,
                 )
                 .where(
                     m.MemoryDocument.ai_id == ai_id,

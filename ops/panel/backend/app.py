@@ -1,25 +1,24 @@
 from __future__ import annotations
 
 import logging
-import os
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from pathlib import Path
 
 from argon2 import PasswordHasher
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 from v2.nacos import NacosException
 
 from shared.contracts.agent import AgentDefinitionError
-from shared.infrastructure.agent_store import NacosAgentDefinitionStore
-from shared.infrastructure.config import NacosConfigProvider
 from shared.infrastructure.database import Database
-from shared.infrastructure.runtime_config import required_value
+from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.infrastructure.service_config import NacosConfigProvider
 
 from .auth.credentials import CredentialRepository, CredentialService
 from .auth.login import LoginService
@@ -30,56 +29,38 @@ from .observability.personality import PersonalityReader
 from .observability.router import router as observability_router
 from .observability.self_memory import SelfMemoryReader
 
-
 logger = logging.getLogger("ailove.panel")
 
 
-@dataclass(frozen=True)
-class PanelConfig:
+class PanelConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PANEL_", extra="ignore", frozen=True)
+
+    port: int
     ai_id: str
-    redis_url: str
-    redis_password: str
+    people_memory_limit: int
     initial_username: str
     initial_password: str
     napcat_token: str
+    nacos_auth_token: str = Field(validation_alias="NACOS_AUTH_TOKEN")
     nacos_url: str
+    nacos_sso_username: str = "nacos"
     napcat_url: str
     k8s_url: str
-
-    @classmethod
-    def load(cls) -> "PanelConfig":
-        return cls(
-            ai_id=required_value(os.environ.get("PANEL_AI_ID"), "PANEL_AI_ID"),
-            redis_url=required_value(os.environ.get("AILOVE_REDIS_URL"), "AILOVE_REDIS_URL"),
-            redis_password=required_value(
-                os.environ.get("AILOVE_REDIS_PASSWORD"),
-                "AILOVE_REDIS_PASSWORD",
-            ),
-            initial_username=required_value(
-                os.environ.get("PANEL_INITIAL_USERNAME"),
-                "PANEL_INITIAL_USERNAME",
-            ),
-            initial_password=required_value(
-                os.environ.get("PANEL_INITIAL_PASSWORD"),
-                "PANEL_INITIAL_PASSWORD",
-            ),
-            napcat_token=required_value(
-                os.environ.get("PANEL_NAPCAT_TOKEN"),
-                "PANEL_NAPCAT_TOKEN",
-            ),
-            nacos_url=required_value(os.environ.get("PANEL_NACOS_URL"), "PANEL_NACOS_URL"),
-            napcat_url=required_value(
-                os.environ.get("PANEL_NAPCAT_URL"),
-                "PANEL_NAPCAT_URL",
-            ),
-            k8s_url=required_value(os.environ.get("PANEL_K8S_URL"), "PANEL_K8S_URL"),
-        )
+    k8s_internal_url: str = "https://127.0.0.1:30443"
+    k8s_service_account_token_path: Path = Path(
+        "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    )
+    redis_url: str = Field(validation_alias="AILOVE_REDIS_URL")
+    redis_password: str = Field(validation_alias="AILOVE_REDIS_PASSWORD")
 
 
-def create_app(static_directory: Path | None = None) -> FastAPI:
+def create_app(
+    static_directory: Path | None = None,
+    panel_config: PanelConfig | None = None,
+) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        config = PanelConfig.load()
+        config = panel_config or PanelConfig()
         database = Database()
         redis = Redis.from_url(
             config.redis_url,
@@ -118,7 +99,10 @@ def create_app(static_directory: Path | None = None) -> FastAPI:
             )
             app.state.personality_reader = PersonalityReader(agent_store)
             app.state.self_memory_reader = SelfMemoryReader(database)
-            app.state.people_memory_reader = PeopleMemoryReader(database)
+            app.state.people_memory_reader = PeopleMemoryReader(
+                database,
+                config.people_memory_limit,
+            )
             logger.info("[panel] ai-love 已就绪，当前 AI: %s", config.ai_id)
             yield
         finally:

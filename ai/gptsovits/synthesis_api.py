@@ -1,23 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI
-from pydantic import BaseModel, ConfigDict
 
 from ai.gptsovits.synthesis_service import SynthesisService
-
-
-class SynthesizeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    ai_id: str
-    text: str
-
-
-class SynthesizeResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    audio_path: str
-    duration_sec: float
+from shared.contracts.tts import SynthesizeRequest, SynthesizeResponse
 
 
 def create_app(service: SynthesisService) -> FastAPI:
