@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Callable
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from shared.configuration.global_settings import RelationshipStorageSettings
@@ -19,11 +20,11 @@ class RelationshipRepository:
 
     def _new_person(self) -> PersonRelationship:
         score = self._settings.initial_score
-        return PersonRelationship(score, score, score, score)
+        return PersonRelationship(score, score, score, score, {})
 
     def _new_group(self) -> GroupRelationship:
         score = self._settings.initial_score
-        return GroupRelationship(score, score, score, score)
+        return GroupRelationship(score, score, score, score, {})
 
     async def get_person(self, ai_id: str, person_id: str) -> PersonRelationship:
         async with self._db.session() as session:
@@ -34,6 +35,8 @@ class RelationshipRepository:
                         m.PersonRelationship.affinity,
                         m.PersonRelationship.trust,
                         m.PersonRelationship.importance,
+                        m.PersonRelationship.lfu_state,
+                        m.PersonRelationship.ceiling_policy,
                     ).where(
                         m.PersonRelationship.ai_id == ai_id,
                         m.PersonRelationship.person_id == int(person_id),
@@ -60,6 +63,7 @@ class RelationshipRepository:
                     affinity=relationship.affinity,
                     trust=relationship.trust,
                     importance=relationship.importance,
+                    lfu_state=relationship.lfu_state,
                     ceiling_policy=ceiling_policy,
                     last_interaction_at=datetime.now(timezone.utc),
                 )
@@ -70,6 +74,7 @@ class RelationshipRepository:
                         "affinity": relationship.affinity,
                         "trust": relationship.trust,
                         "importance": relationship.importance,
+                        "lfu_state": relationship.lfu_state,
                         "ceiling_policy": ceiling_policy,
                         "last_interaction_at": datetime.now(timezone.utc),
                     },
@@ -91,6 +96,7 @@ class RelationshipRepository:
                     affinity=initial,
                     trust=initial,
                     importance=initial,
+                    lfu_state={},
                     ceiling_policy=ceiling_policy,
                 )
                 .on_conflict_do_update(
@@ -110,6 +116,7 @@ class RelationshipRepository:
                         m.GroupRelationship.belonging,
                         m.GroupRelationship.affinity,
                         m.GroupRelationship.activity_willingness,
+                        m.GroupRelationship.lfu_state,
                     ).where(
                         m.GroupRelationship.ai_id == ai_id,
                         m.GroupRelationship.account_id == account_id,
@@ -139,6 +146,7 @@ class RelationshipRepository:
                     belonging=relationship.belonging,
                     affinity=relationship.affinity,
                     activity_willingness=relationship.activity_willingness,
+                    lfu_state=relationship.lfu_state,
                     ceiling_policy=policy,
                     last_interaction_at=datetime.now(timezone.utc),
                 )
@@ -153,6 +161,7 @@ class RelationshipRepository:
                         "belonging": relationship.belonging,
                         "affinity": relationship.affinity,
                         "activity_willingness": relationship.activity_willingness,
+                        "lfu_state": relationship.lfu_state,
                         "ceiling_policy": policy,
                         "last_interaction_at": datetime.now(timezone.utc),
                     },
@@ -187,6 +196,8 @@ class RelationshipRepository:
                     m.PersonRelationship.affinity,
                     m.PersonRelationship.trust,
                     m.PersonRelationship.importance,
+                    m.PersonRelationship.lfu_state,
+                    m.PersonRelationship.ceiling_policy,
                     m.PersonRelationship.last_interaction_at,
                 )
                 .select_from(m.PersonRelationship)
@@ -204,7 +215,141 @@ class RelationshipRepository:
                     "affinity": float(row.affinity),
                     "trust": float(row.trust),
                     "importance": float(row.importance),
+                    "lfu_state": dict(row.lfu_state or {}),
+                    "ceiling_policy": row.ceiling_policy,
                     "last_interaction_at": row.last_interaction_at,
                 }
                 for row in rows
             ]
+
+    async def update_person(
+        self,
+        ai_id: str,
+        person_id: str,
+        ceiling_policy: str,
+        updater: Callable[[PersonRelationship], PersonRelationship],
+    ) -> PersonRelationship:
+        initial = self._settings.initial_score
+        now = datetime.now(timezone.utc)
+        async with self._db.session() as session:
+            async with session.begin():
+                await session.execute(
+                    pg_insert(m.PersonRelationship)
+                    .values(
+                        person_relationship_id=snowflake_ids().next_id(),
+                        ai_id=ai_id,
+                        person_id=int(person_id),
+                        familiarity=initial,
+                        affinity=initial,
+                        trust=initial,
+                        importance=initial,
+                        lfu_state={},
+                        ceiling_policy=ceiling_policy,
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=[m.PersonRelationship.ai_id, m.PersonRelationship.person_id]
+                    )
+                )
+                row = (
+                    await session.execute(
+                        select(m.PersonRelationship)
+                        .where(
+                            m.PersonRelationship.ai_id == ai_id,
+                            m.PersonRelationship.person_id == int(person_id),
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one()
+                updated = updater(
+                    PersonRelationship(
+                        familiarity=float(row.familiarity),
+                        affinity=float(row.affinity),
+                        trust=float(row.trust),
+                        importance=float(row.importance),
+                        lfu_state=dict(row.lfu_state or {}),
+                        ceiling_policy=row.ceiling_policy,
+                    )
+                )
+                await session.execute(
+                    update(m.PersonRelationship)
+                    .where(m.PersonRelationship.person_relationship_id == row.person_relationship_id)
+                    .values(
+                        familiarity=updated.familiarity,
+                        affinity=updated.affinity,
+                        trust=updated.trust,
+                        importance=updated.importance,
+                        lfu_state=updated.lfu_state,
+                        ceiling_policy=ceiling_policy,
+                        last_interaction_at=now,
+                    )
+                )
+        return updated
+
+    async def update_group(
+        self,
+        ai_id: str,
+        account_id: str,
+        group_id: str,
+        updater: Callable[[GroupRelationship], GroupRelationship],
+    ) -> GroupRelationship:
+        initial = self._settings.initial_score
+        policy = self._settings.default_ceiling_policy
+        now = datetime.now(timezone.utc)
+        async with self._db.session() as session:
+            async with session.begin():
+                await session.execute(
+                    pg_insert(m.GroupRelationship)
+                    .values(
+                        group_relationship_id=snowflake_ids().next_id(),
+                        ai_id=ai_id,
+                        account_id=account_id,
+                        platform_group_id=group_id,
+                        familiarity=initial,
+                        belonging=initial,
+                        affinity=initial,
+                        activity_willingness=initial,
+                        lfu_state={},
+                        ceiling_policy=policy,
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            m.GroupRelationship.ai_id,
+                            m.GroupRelationship.account_id,
+                            m.GroupRelationship.platform_group_id,
+                        ]
+                    )
+                )
+                row = (
+                    await session.execute(
+                        select(m.GroupRelationship)
+                        .where(
+                            m.GroupRelationship.ai_id == ai_id,
+                            m.GroupRelationship.account_id == account_id,
+                            m.GroupRelationship.platform_group_id == group_id,
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one()
+                updated = updater(
+                    GroupRelationship(
+                        familiarity=float(row.familiarity),
+                        belonging=float(row.belonging),
+                        affinity=float(row.affinity),
+                        activity_willingness=float(row.activity_willingness),
+                        lfu_state=dict(row.lfu_state or {}),
+                    )
+                )
+                await session.execute(
+                    update(m.GroupRelationship)
+                    .where(m.GroupRelationship.group_relationship_id == row.group_relationship_id)
+                    .values(
+                        familiarity=updated.familiarity,
+                        belonging=updated.belonging,
+                        affinity=updated.affinity,
+                        activity_willingness=updated.activity_willingness,
+                        lfu_state=updated.lfu_state,
+                        ceiling_policy=policy,
+                        last_interaction_at=now,
+                    )
+                )
+        return updated

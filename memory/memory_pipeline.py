@@ -33,6 +33,7 @@ class MemoryPipeline:
         config: MemorySettings,
         output_policy: MemoryOutputPolicy,
         document_policy: MemoryDocumentPolicy,
+        eviction=None,
     ) -> None:
         self._repo = repo
         self._state = state
@@ -43,6 +44,7 @@ class MemoryPipeline:
         self._token_estimation = config.token_estimation
         self._output_policy = output_policy
         self._document_policy = document_policy
+        self._eviction = eviction
         self._semaphore = asyncio.Semaphore(config.worker_concurrency)
 
     # 处理当前到期活动
@@ -142,6 +144,8 @@ class MemoryPipeline:
                 atom_ids,
                 owner_tokens,
             )
+        if self._eviction is not None:
+            await self._eviction.evict_atoms_for_ids(all_atom_ids)
         await self._state.finish_activity(claim)
         logger.info(
             "[memory] Episode 已提取: ai=%s person=%s messages=%s atoms=%s",
@@ -208,6 +212,9 @@ class MemoryPipeline:
                 markdown,
                 document.version,
             )
+        await self._repo.mark_atoms_consolidated(list(data.atom_ids))
+        if self._eviction is not None:
+            await self._eviction.evict_atoms_for_ids(list(data.atom_ids))
         await self._state.complete_pending(claim)
         logger.info(
             "[memory] Markdown 合并完成: ai=%s owner=%s:%s changed=%s version=%s atoms=%s",

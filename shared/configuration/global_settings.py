@@ -233,6 +233,21 @@ class MemoryRetrievalWeights(SettingsModel):
     emotion_intensity: float
 
 
+class LFUDomainSettings(SettingsModel):
+    decay_interval_sec: float
+    log_factor: float
+    log_offset: int
+    max_counter: int
+    score_counter_ceiling: int
+    initial_counter: int
+
+
+class LFUSettings(SettingsModel):
+    relationship: LFUDomainSettings
+    memory: LFUDomainSettings
+    evidence: LFUDomainSettings
+
+
 class MemorySettings(SettingsModel):
     data_dir: str
     cleanup_interval_sec: float
@@ -248,6 +263,8 @@ class MemorySettings(SettingsModel):
     consolidation: MemoryConsolidationSettings
     search_top_k: int
     database_candidate_limit: int
+    record_capacity_per_owner: int
+    atom_capacity_per_owner: int
     empty_query_relevance: float
     half_life_sec: float
     dormant_threshold: float
@@ -307,6 +324,7 @@ class GlobalSettings(SettingsModel):
     llm: LLMSettings
     tts: TTSSettings
     image: ImageSettings
+    lfu: LFUSettings
     memory: MemorySettings
     relationship_storage: RelationshipStorageSettings
     timeouts: TimeoutSettings

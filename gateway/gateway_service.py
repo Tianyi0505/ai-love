@@ -39,6 +39,7 @@ from shared.persistence.repositories.account_ownership_repository import Account
 from shared.persistence.repositories.conversation_repository import ConversationRepository
 from shared.persistence.repositories.identity_repository import IdentityRepository
 from shared.persistence.repositories.relationship_repository import RelationshipRepository
+from shared.utils.lfu import LazyLFU, LFUConfig
 
 logger = logging.getLogger("ailove.gateway")
 
@@ -57,7 +58,11 @@ class GatewayService(BaseService):
         identities = IdentityRepository(self._db)
         relationships = RelationshipRepository(self._db, settings.relationship_storage)
         conversations = ConversationRepository(self._db, settings.social.message_retention_days)
-        grounding = EntityGroundingFacade(self._db, settings.grounding)
+        grounding = EntityGroundingFacade(
+            self._db,
+            settings.grounding,
+            LazyLFU(LFUConfig(**settings.lfu.evidence.model_dump())),
+        )
         priority_user_ids = frozenset(str(user_id) for user_id in settings.qq.whitelist)
 
         self._channels: dict[str, Channel] = {}

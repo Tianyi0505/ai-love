@@ -9,11 +9,17 @@ from shared.domain.person_resolver import PersonResolver
 from shared.infrastructure.database import Database
 from shared.persistence.repositories.conversation_context_repository import ConversationContextRepository
 from shared.persistence.repositories.group_member_repository import GroupMemberRepository
+from shared.utils.lfu import LazyLFU
 
 
 class EntityGroundingFacade:
-    def __init__(self, db: Database, settings: GroundingSettings) -> None:
-        self._resolver = PersonResolver(db, settings)
+    def __init__(
+        self,
+        db: Database,
+        settings: GroundingSettings,
+        evidence_lfu: LazyLFU,
+    ) -> None:
+        self._resolver = PersonResolver(db, settings, evidence_lfu)
         self._group_members = GroupMemberRepository(db, settings)
         self._conversations = ConversationContextRepository(db)
         self._grounder = EntityGrounder(

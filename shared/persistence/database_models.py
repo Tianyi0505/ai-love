@@ -135,6 +135,22 @@ class PersonMention(Base):
     )
 
 
+# 表示称呼与人物之间的聚合 LFU 频率
+class PersonMentionFrequency(Base):
+    __tablename__ = "person_mention_frequencies"
+    person_mention_frequency_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    normalized_mention: Mapped[str] = mapped_column(Text, nullable=False)
+    person_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    scope_type: Mapped[str] = mapped_column(Text, nullable=False)
+    scope_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    lfu_state: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    __table_args__ = (
+        UniqueConstraint("normalized_mention", "person_id", "scope_type", "scope_id"),
+        Index("idx_person_mention_frequencies_lookup", "normalized_mention", "scope_type", "scope_id"),
+    )
+
+
 # 表示会话
 class Conversation(Base):
     __tablename__ = "conversations"
@@ -196,6 +212,7 @@ class PersonRelationship(Base):
     affinity: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     trust: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     importance: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
+    lfu_state: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     ceiling_policy: Mapped[str] = mapped_column(Text, nullable=False)
     last_interaction_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (UniqueConstraint("ai_id", "person_id"),)
@@ -212,6 +229,7 @@ class GroupRelationship(Base):
     belonging: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     affinity: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     activity_willingness: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
+    lfu_state: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     ceiling_policy: Mapped[str] = mapped_column(Text, nullable=False)
     last_interaction_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (UniqueConstraint("ai_id", "account_id", "platform_group_id"),)
@@ -244,6 +262,7 @@ class Memory(Base):
     )
     last_recalled_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recall_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    lfu_state: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
 
 
 # 表示记忆修订
@@ -295,6 +314,8 @@ class MemoryAtom(Base):
         ARRAY(BigInteger), nullable=False, server_default=text("'{}'")
     )
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    consolidated_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lfu_state: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     __table_args__ = (Index("idx_memory_atoms_owner", "ai_id", "owner_type", "owner_id", text("created_at DESC")),)
 
 
@@ -307,6 +328,7 @@ class MemoryDocument(Base):
     owner_id: Mapped[str] = mapped_column(Text, nullable=False)
     markdown_content: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    lfu_state: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     __table_args__ = (UniqueConstraint("ai_id", "owner_type", "owner_id"),)
 

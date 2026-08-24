@@ -89,7 +89,14 @@ class PostgresMemoryRepository:
         async with self._db.session() as session:
             async with session.begin():
                 for score, memory, memory_person_id in selected:
-                    recalled = self._policy.recall(memory)
+                    locked_row = (
+                        await session.execute(
+                            select(m.Memory)
+                            .where(m.Memory.memory_id == int(memory.memory_id))
+                            .with_for_update()
+                        )
+                    ).scalar_one()
+                    recalled = self._policy.recall(self._record(locked_row))
                     await session.execute(
                         update(m.Memory)
                         .where(m.Memory.memory_id == int(memory.memory_id))
@@ -104,6 +111,7 @@ class PostgresMemoryRepository:
                                 tz=timezone.utc,
                             ),
                             recall_count=recalled.recall_count,
+                            lfu_state=recalled.lfu_state,
                         )
                     )
                     results.append(
@@ -162,6 +170,7 @@ class PostgresMemoryRepository:
             last_strength_at=float(row.last_strength_at.timestamp()),
             last_recalled_at=float(row.last_recalled_at.timestamp()) if row.last_recalled_at else None,
             recall_count=int(row.recall_count),
+            lfu_state=dict(row.lfu_state or {}),
         )
 
     # 计算记忆相关度

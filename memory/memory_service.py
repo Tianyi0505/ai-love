@@ -15,6 +15,7 @@ from memory.generation.memory_output_policy import (
     MemoryOutputLimits,
     MemoryOutputPolicy,
 )
+from memory.memory_eviction_service import MemoryEvictionService
 from memory.memory_pipeline import MemoryPipeline
 from memory.memory_policy import MemoryPolicy
 from memory.memory_state_store import MemoryStateStore
@@ -54,6 +55,7 @@ from shared.infrastructure.database import Database
 from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.infrastructure.service_config import ServiceConfig
 from shared.persistence.repositories.relationship_repository import RelationshipRepository
+from shared.utils.lfu import LazyLFU, LFUConfig
 
 
 # 提供记忆服务能力
@@ -73,6 +75,7 @@ class MemoryService(BaseService):
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
         self._db = Database()
         await self._db.connect()
+        self._memory_lfu = LazyLFU(LFUConfig(**self._settings.lfu.memory.model_dump()))
         self._sticker_svc = StickerService(
             StickerRepository(self._db),
             self._settings.sticker,
@@ -80,15 +83,13 @@ class MemoryService(BaseService):
         self._memory_repo = PostgresMemoryRepository(
             self._db,
             MemoryPolicy(
-                half_life_sec=self._memory_config.half_life_sec,
                 dormant_threshold=self._memory_config.dormant_threshold,
                 delete_threshold=self._memory_config.delete_threshold,
-                recall_boost=self._memory_config.recall_boost,
                 strength_max=self._memory_config.strength_max,
-                elapsed_floor_sec=self._memory_config.elapsed_floor_sec,
                 deletable_reference_count=self._memory_config.deletable_reference_count,
                 recall_count_increment=self._memory_config.recall_count_increment,
                 retrieval_weights=self._memory_config.retrieval_weights.model_dump(),
+                lfu=self._memory_lfu,
             ),
             self._memory_config,
         )
@@ -99,6 +100,14 @@ class MemoryService(BaseService):
         self._episode_repo = EpisodeMemoryRepository(
             self._db,
             self._memory_config,
+            self._memory_lfu,
+        )
+        self._memory_eviction = MemoryEvictionService(
+            self._db,
+            self._memory_lfu,
+            record_capacity_per_owner=self._memory_config.record_capacity_per_owner,
+            atom_capacity_per_owner=self._memory_config.atom_capacity_per_owner,
+            deletable_reference_count=self._memory_config.deletable_reference_count,
         )
         self._memory_queries = MemoryQueryHandler(
             self._memory_repo,
@@ -197,6 +206,7 @@ class MemoryService(BaseService):
             document_policy=MemoryDocumentPolicy(
                 MemoryDocumentSchemas.model_validate(self._memory_config.document_schemas)
             ),
+            eviction=self._memory_eviction,
         )
         self._memory_activity_sub = await self.bus.subscribe_durable_model(
             "memory.activity",

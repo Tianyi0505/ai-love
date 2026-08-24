@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from shared.configuration.global_settings import GlobalSettings
-from shared.contracts.relationship import RelationshipCeilings, RelationshipPolicy
+from shared.contracts.relationship import PersonRelationship, RelationshipCeilings, RelationshipPolicy
 from shared.contracts.rpc.relationship import (
     GroupRelationshipRequest,
     GroupRelationshipResponse,
@@ -13,6 +13,7 @@ from shared.contracts.rpc.relationship import (
 )
 from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.persistence.repositories.relationship_repository import RelationshipRepository
+from shared.utils.lfu import LazyLFU, LFUConfig
 
 
 class RelationshipHandler:
@@ -25,29 +26,57 @@ class RelationshipHandler:
         self._repository = repository
         self._definitions = definitions
         self._settings = settings
+        self._lfu = LazyLFU(LFUConfig(**settings.lfu.relationship.model_dump()))
 
     async def chat(self, request: RelationshipChatRequest) -> RelationshipSummaryResponse:
         policy = await self._policy(request.ai_id)
-        current = await self._repository.get_person(request.ai_id, request.person_id)
-        updated = policy.on_conversation(request.platform_user_id, current, request.quality)
         ceiling_policy = "whitelist" if self._is_priority_user(request.platform_user_id) else "default"
-        await self._repository.save_person(request.ai_id, request.person_id, updated, ceiling_policy)
+        updated = await self._repository.update_person(
+            request.ai_id,
+            request.person_id,
+            ceiling_policy,
+            lambda current: policy.on_conversation(request.platform_user_id, current, request.quality),
+        )
         if request.chat_type == "group":
-            group = await self._repository.get_group(request.ai_id, request.account_id, request.group_id)
-            group = policy.on_group_conversation(request.group_id, group, request.quality)
-            await self._repository.save_group(request.ai_id, request.account_id, request.group_id, group)
+            await self._repository.update_group(
+                request.ai_id,
+                request.account_id,
+                request.group_id,
+                lambda current: policy.on_group_conversation(request.group_id, current, request.quality),
+            )
         return RelationshipSummaryResponse(summary=policy.summarize_person(updated))
 
     async def summary(self, request: RelationshipSummaryRequest) -> RelationshipSummaryResponse:
         relationship = await self._repository.get_person(request.ai_id, request.person_id)
-        summary = (await self._policy(request.ai_id)).summarize_person(relationship)
+        policy = await self._policy(request.ai_id)
+        relationship = policy.project_person(request.person_id, relationship)
+        summary = policy.summarize_person(relationship)
         return RelationshipSummaryResponse(summary=summary)
 
     async def list_people(self, request: RelationshipListRequest) -> RelationshipListResponse:
         relationships = await self._repository.list_people(request.ai_id)
+        policy = await self._policy(request.ai_id)
         priority_user_ids = {str(item) for item in self._settings.qq.whitelist}
         for relationship in relationships:
             relationship["priority_contact"] = relationship["user_id"] in priority_user_ids
+            projected = policy.project_person(
+                relationship["user_id"],
+                PersonRelationship(
+                    familiarity=relationship["familiarity"],
+                    affinity=relationship["affinity"],
+                    trust=relationship["trust"],
+                    importance=relationship["importance"],
+                    lfu_state=relationship.pop("lfu_state"),
+                    ceiling_policy=relationship["ceiling_policy"],
+                ),
+            )
+            relationship.update(
+                familiarity=projected.familiarity,
+                affinity=projected.affinity,
+                trust=projected.trust,
+                importance=projected.importance,
+            )
+            relationship.pop("ceiling_policy", None)
         return RelationshipListResponse.model_validate({"relationships": relationships})
 
     async def group(self, request: GroupRelationshipRequest) -> GroupRelationshipResponse:
@@ -56,7 +85,17 @@ class RelationshipHandler:
             request.account_id,
             request.group_id,
         )
-        return GroupRelationshipResponse.model_validate({"relationship": relationship.__dict__})
+        relationship = (await self._policy(request.ai_id)).project_group(request.group_id, relationship)
+        return GroupRelationshipResponse.model_validate(
+            {
+                "relationship": {
+                    "familiarity": relationship.familiarity,
+                    "belonging": relationship.belonging,
+                    "affinity": relationship.affinity,
+                    "activity_willingness": relationship.activity_willingness,
+                }
+            }
+        )
 
     async def _policy(self, ai_id: str) -> RelationshipPolicy:
         raw = (await self._definitions.load(ai_id)).relationship_policy
@@ -69,7 +108,7 @@ class RelationshipHandler:
             person_whitelist=frozenset(person_whitelist),
             group_whitelist=frozenset(str(item) for item in raw.group_ceiling_whitelist),
         )
-        return RelationshipPolicy(ceilings, raw)
+        return RelationshipPolicy(ceilings, raw, self._lfu)
 
     def _is_priority_user(self, platform_user_id: str) -> bool:
         return platform_user_id in {str(item) for item in self._settings.qq.whitelist}

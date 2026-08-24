@@ -27,6 +27,7 @@ from memory.repositories.episode_memory_repository import EpisodeMemoryRepositor
 from shared.configuration.global_settings import GlobalSettings
 from shared.contracts.tools import ToolExecutionContext
 from shared.domain.entity_grounding_facade import EntityGroundingFacade
+from shared.utils.lfu import LazyLFU, LFUConfig
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -169,7 +170,12 @@ class _RoleSession:
 class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
     async def test_group_owner_is_resolved_from_live_group_members(self) -> None:
         db = _RoleDB()
-        repo = EntityGroundingFacade(db, global_settings().grounding)
+        settings = global_settings()
+        repo = EntityGroundingFacade(
+            db,
+            settings.grounding,
+            LazyLFU(LFUConfig(**settings.lfu.evidence.model_dump())),
+        )
         context = ToolExecutionContext(
             platform="qq",
             account_id="account",

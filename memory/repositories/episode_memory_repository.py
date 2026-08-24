@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -11,6 +12,7 @@ from shared.configuration.global_settings import MemorySettings
 from shared.contracts.tools import ToolExecutionContext
 from shared.infrastructure.snowflake_id_generator import snowflake_ids
 from shared.persistence import database_models as m
+from shared.utils.lfu import LazyLFU
 
 
 # 表示会话片段消息数据
@@ -43,9 +45,19 @@ class EpisodeMemoryRepository:
     """持久化会话片段、原子记忆和长期 Markdown"""
 
     # 初始化当前实例
-    def __init__(self, db, settings: MemorySettings) -> None:
+    def __init__(self, db, settings: MemorySettings, lfu: LazyLFU | None = None) -> None:
         self._db = db
         self._settings = settings
+        self._lfu = lfu
+
+    def _initial_lfu_state(self) -> dict[str, int | float]:
+        return self._lfu.initial(time.time()).as_dict() if self._lfu is not None else {}
+
+    def _access_lfu_state(self, value: dict | None, now: float) -> dict[str, int | float]:
+        if self._lfu is None:
+            return dict(value or {})
+        state = self._lfu.state_from_mapping(value, now)
+        return self._lfu.access(state, now).as_dict()
 
     # 加载会话片段消息列表
     async def load_episode_messages(
@@ -164,6 +176,7 @@ class EpisodeMemoryRepository:
                         content=atom["content"],
                         importance=atom["importance"],
                         confidence=atom["confidence"],
+                        lfu_state=self._initial_lfu_state(),
                         source_message_ids=[int(item.message_id) for item in messages],
                     )
                     session.add(memory_atom)
@@ -221,22 +234,32 @@ class EpisodeMemoryRepository:
         async with self._db.session() as session:
             self_row = (
                 await session.execute(
-                    select(m.MemoryDocument.markdown_content, m.MemoryDocument.version).where(
+                    select(
+                        m.MemoryDocument.memory_document_id,
+                        m.MemoryDocument.markdown_content,
+                        m.MemoryDocument.version,
+                        m.MemoryDocument.lfu_state,
+                    ).where(
                         m.MemoryDocument.ai_id == ai_id,
                         m.MemoryDocument.owner_type == "self",
                         m.MemoryDocument.owner_id == ai_id,
-                    )
+                    ).with_for_update()
                 )
             ).first()
             person_row = None
             if person_id:
                 person_row = (
                     await session.execute(
-                        select(m.MemoryDocument.markdown_content, m.MemoryDocument.version).where(
+                        select(
+                            m.MemoryDocument.memory_document_id,
+                            m.MemoryDocument.markdown_content,
+                            m.MemoryDocument.version,
+                            m.MemoryDocument.lfu_state,
+                        ).where(
                             m.MemoryDocument.ai_id == ai_id,
                             m.MemoryDocument.owner_type == "person",
                             m.MemoryDocument.owner_id == person_id,
-                        )
+                        ).with_for_update()
                     )
                 ).first()
             summary_row = None
@@ -249,6 +272,16 @@ class EpisodeMemoryRepository:
                         )
                     )
                 ).first()
+            if self._lfu is not None:
+                now = time.time()
+                for row in (self_row, person_row):
+                    if row is not None:
+                        await session.execute(
+                            update(m.MemoryDocument)
+                            .where(m.MemoryDocument.memory_document_id == row.memory_document_id)
+                            .values(lfu_state=self._access_lfu_state(row.lfu_state, now))
+                        )
+                await session.commit()
             return {
                 "self_markdown": self_row.markdown_content if self_row else "",
                 "person_markdown": person_row.markdown_content if person_row else "",
@@ -316,14 +349,17 @@ class EpisodeMemoryRepository:
             else:
                 return None
 
-            rows = await session.execute(
-                select(
-                    m.MemoryAtom.content,
-                    m.MemoryAtom.memory_type,
-                    m.MemoryAtom.importance,
-                    m.MemoryAtom.confidence,
-                    m.MemoryAtom.created_at,
-                )
+            atom_columns = (
+                m.MemoryAtom.content,
+                m.MemoryAtom.memory_type,
+                m.MemoryAtom.importance,
+                m.MemoryAtom.confidence,
+                m.MemoryAtom.created_at,
+                m.MemoryAtom.atom_id,
+                m.MemoryAtom.lfu_state,
+            )
+            atom_query = (
+                select(*atom_columns)
                 .select_from(m.MemoryAtom)
                 .join(
                     m.ConversationEpisode,
@@ -335,13 +371,18 @@ class EpisodeMemoryRepository:
                     m.MemoryAtom.owner_id == person_id,
                     m.ConversationEpisode.conversation_id == int(context.conversation_id),
                 )
-                .order_by(
-                    m.MemoryAtom.importance.desc(),
-                    m.MemoryAtom.confidence.desc(),
-                    m.MemoryAtom.created_at.desc(),
-                )
-                .limit(int(fact_limit))
             )
+            if self._lfu is None:
+                atom_query = (
+                    atom_query.order_by(
+                        m.MemoryAtom.importance.desc(),
+                        m.MemoryAtom.confidence.desc(),
+                        m.MemoryAtom.created_at.desc(),
+                    )
+                    .limit(int(fact_limit))
+                    .with_for_update(of=m.MemoryAtom)
+                )
+            rows = list(await session.execute(atom_query))
             summary = (
                 await session.execute(
                     select(m.ConversationSummary.summary).where(
@@ -350,6 +391,33 @@ class EpisodeMemoryRepository:
                     )
                 )
             ).first()
+            if self._lfu is not None and rows:
+                now = time.time()
+                rows.sort(
+                    key=lambda row: (
+                        self._lfu.score(self._lfu.state_from_mapping(row.lfu_state, now), now),
+                        float(row.importance),
+                        float(row.confidence),
+                        row.created_at,
+                        row.atom_id,
+                    ),
+                    reverse=True,
+                )
+                selected_ids = [row.atom_id for row in rows[: int(fact_limit)]]
+                locked_rows = await session.execute(
+                    select(*atom_columns)
+                    .where(m.MemoryAtom.atom_id.in_(selected_ids))
+                    .with_for_update(of=m.MemoryAtom)
+                )
+                locked_by_id = {row.atom_id: row for row in locked_rows}
+                rows = [locked_by_id[atom_id] for atom_id in selected_ids if atom_id in locked_by_id]
+                for row in rows:
+                    await session.execute(
+                        update(m.MemoryAtom)
+                        .where(m.MemoryAtom.atom_id == row.atom_id)
+                        .values(lfu_state=self._access_lfu_state(row.lfu_state, now))
+                    )
+                await session.commit()
             return {
                 "person_id": person_id,
                 "scene": context.chat_type,
@@ -445,6 +513,7 @@ class EpisodeMemoryRepository:
                         owner_id=owner_id,
                         markdown_content=markdown,
                         version=self._settings.initial_document_version,
+                        lfu_state=self._initial_lfu_state(),
                     )
                     .on_conflict_do_nothing(
                         index_elements=[
@@ -478,3 +547,14 @@ class EpisodeMemoryRepository:
         if row is None:
             raise RuntimeError("长期记忆文档版本冲突")
         return int(row.version)
+
+    async def mark_atoms_consolidated(self, atom_ids: list[str]) -> None:
+        if not atom_ids:
+            return
+        async with self._db.session() as session:
+            await session.execute(
+                update(m.MemoryAtom)
+                .where(m.MemoryAtom.atom_id.in_([int(item) for item in atom_ids]))
+                .values(consolidated_at=func.now())
+            )
+            await session.commit()

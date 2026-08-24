@@ -100,6 +100,29 @@ grounding:
     管理员: [admin]
     群管理员: [admin]
 
+lfu:
+  relationship:
+    decay_interval_sec: 604800
+    log_factor: 10.0
+    log_offset: 5
+    max_counter: 255
+    score_counter_ceiling: 20
+    initial_counter: 0
+  memory:
+    decay_interval_sec: 259200
+    log_factor: 10.0
+    log_offset: 5
+    max_counter: 255
+    score_counter_ceiling: 20
+    initial_counter: 10
+  evidence:
+    decay_interval_sec: 604800
+    log_factor: 10.0
+    log_offset: 5
+    max_counter: 255
+    score_counter_ceiling: 8
+    initial_counter: 0
+
 llm:
   timeout_ms: 60000
   health_fail_threshold: 3
@@ -219,6 +242,8 @@ memory:
       max_wait_sec: 86400
   search_top_k: 5
   database_candidate_limit: 100
+  record_capacity_per_owner: 1000
+  atom_capacity_per_owner: 500
   empty_query_relevance: 0.5
   half_life_sec: 2592000
   dormant_threshold: 0.2

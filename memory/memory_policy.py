@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import math
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
+
+from shared.utils.lfu import LazyLFU, LFUState
 
 
 # 定义记忆作用域枚举
@@ -47,6 +48,7 @@ class MemoryRecord:
     last_strength_at: float
     last_recalled_at: float | None
     recall_count: int
+    lfu_state: dict[str, int | float] = field(default_factory=dict)
 
 
 # 描述记忆访问上下文
@@ -62,34 +64,34 @@ class MemoryPolicy:
     # 初始化当前实例
     def __init__(
         self,
-        half_life_sec: float,
         dormant_threshold: float,
         delete_threshold: float,
-        recall_boost: float,
         strength_max: float,
-        elapsed_floor_sec: float,
         deletable_reference_count: int,
         recall_count_increment: int,
         retrieval_weights: dict,
+        lfu: LazyLFU,
     ) -> None:
-        self._half_life = half_life_sec
         self._dormant_threshold = dormant_threshold
         self._delete_threshold = delete_threshold
-        self._recall_boost = recall_boost
         self._strength_max = strength_max
-        self._elapsed_floor_sec = elapsed_floor_sec
         self._deletable_reference_count = deletable_reference_count
         self._recall_count_increment = recall_count_increment
         self._retrieval_weights = retrieval_weights
+        self._lfu = lfu
+
+    def _state(self, memory: MemoryRecord) -> LFUState:
+        if memory.lfu_state:
+            return LFUState.from_mapping(memory.lfu_state)
+        return LFUState(
+            counter=self._lfu.counter_for_score(memory.strength),
+            last_decay_at=memory.last_strength_at,
+        )
 
     # 计算当前记忆强度
     def current_strength(self, memory: MemoryRecord, now: float | None = None) -> float:
-        if memory.protected or memory.memory_type in PROTECTED_TYPES:
-            return memory.strength
         moment = time.time() if now is None else now
-        anchor = memory.last_strength_at
-        elapsed = max(self._elapsed_floor_sec, moment - anchor)
-        return memory.strength * math.exp2(-elapsed / self._half_life)
+        return self._lfu.score(self._state(memory), moment)
 
     # 判断是否可以读取
     def can_read(self, memory: MemoryRecord, context: MemoryAccessContext) -> bool:
@@ -120,16 +122,15 @@ class MemoryPolicy:
     # 召回相关记忆
     def recall(self, memory: MemoryRecord, now: float | None = None) -> MemoryRecord:
         moment = time.time() if now is None else now
-        strength = min(
-            self._strength_max,
-            self.current_strength(memory, moment) + self._recall_boost,
-        )
+        state = self._lfu.access(self._state(memory), moment)
+        strength = min(self._strength_max, self._lfu.score(state, moment))
         return replace(
             memory,
             strength=strength,
             last_strength_at=moment,
             last_recalled_at=moment,
             recall_count=memory.recall_count + self._recall_count_increment,
+            lfu_state=state.as_dict(),
         )
 
     # 计算记忆检索分数
