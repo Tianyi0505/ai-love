@@ -90,7 +90,7 @@ class GPTSoVITSSettings(ServiceSettings):
     output: GPTSoVITSOutputSettings
 
 
-class StreamSettings(ServiceSettings):
+class LiveEdgeSettings(ServiceSettings):
     obs_ws_url: str
     stream_key: str
 

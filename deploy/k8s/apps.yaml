@@ -256,25 +256,25 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: avatar
+  name: live-edge
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: avatar
+      app: live-edge
   template:
     metadata:
       labels:
-        app: avatar
+        app: live-edge
     spec:
       hostNetwork: true
       nodeSelector:
         ailove.role: edge
       containers:
-        - name: avatar
-          image: ailove/avatar:latest
+        - name: live-edge
+          image: ailove/live-edge:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -301,71 +301,12 @@ spec:
             - name: AILOVE_BUS_URL
               value: nats://127.0.0.1:14222
           resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 300m, memory: 192Mi}
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
           ports:
             - name: avatar
               containerPort: 8081
               hostPort: 8081
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
-        - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: stream
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: stream
-  template:
-    metadata:
-      labels:
-        app: stream
-    spec:
-      hostNetwork: true
-      nodeSelector:
-        ailove.role: edge
-      containers:
-        - name: stream
-          image: ailove/stream:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "6"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 300m, memory: 192Mi}
           volumeMounts:
             - name: data
               mountPath: /app/data

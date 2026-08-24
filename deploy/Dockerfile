@@ -29,15 +29,9 @@ COPY ai/gptsovits/ ./ai/gptsovits/
 COPY ai/__init__.py ./ai/__init__.py
 CMD ["python", "-m", "ai.gptsovits.gpt_sovits_service"]
 
-FROM base AS avatar
-COPY live/avatar/ ./live/avatar/
-COPY live/__init__.py ./live/__init__.py
-CMD ["python", "-m", "live.avatar.avatar_service"]
-
-FROM base AS stream
-COPY live/stream/ ./live/stream/
-COPY live/__init__.py ./live/__init__.py
-CMD ["python", "-m", "live.stream.stream_service"]
+FROM base AS live-edge
+COPY live/ ./live/
+CMD ["python", "-m", "live.edge_service"]
 
 FROM base AS extension-host
 COPY extensions/host/ ./extensions/host/

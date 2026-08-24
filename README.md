@@ -63,8 +63,9 @@ extensions/
     └── web_search/         # 网络搜索工具
 live/
 ├── director/               # 直播阵容和发言调度
-├── avatar/                 # 形象与舞台事件输出
-└── stream/                 # OBS 与推流控制
+├── avatar/                 # 形象与舞台事件模块
+├── stream/                 # OBS 与推流控制模块
+└── edge_service.py         # edge 侧统一进程入口
 shared/
 ├── contracts/              # 跨进程消息和领域契约
 └── infrastructure/         # NATS、Nacos、数据库与服务生命周期
@@ -82,7 +83,8 @@ shared/
 - `memory`：包含 `memory` 的 controller、service、repository 等多个内部包。
 - `extension-host`：包含 `extensions.host`。
 - `mcp`：唯一 MCP 部署，同时加载天气、音乐和网络搜索能力，新增 MCP 能力不新增部署。
-- `director`、`avatar`、`stream`：分别承载 `live` 下的三个直播能力包。
+- `director`：承载直播阵容和发言调度。
+- `live-edge`：合并承载 avatar 与 stream 两个 edge 侧直播模块。
 
 音乐能力目前保持原实现范围：MCP 工具负责接收并记录控制指令，实际播放器适配器仍待接入。
 

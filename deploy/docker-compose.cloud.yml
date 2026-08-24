@@ -184,10 +184,10 @@ services:
     restart: unless-stopped
     networks: [ailove]
 
-  avatar:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: avatar }
-    image: ailove/avatar
-    container_name: ailove-avatar
+  live-edge:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: live-edge }
+    image: ailove/live-edge
+    container_name: ailove-live-edge
     volumes:
       - /opt/ailove/data:/app/data
     environment:
@@ -203,29 +203,8 @@ services:
       - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
       - AILOVE_BUS_URL=nats://nats:4222
       - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
-    depends_on: [nacos, nats]
-    restart: unless-stopped
-    networks: [ailove]
-
-  stream:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: stream }
-    image: ailove/stream
-    container_name: ailove-stream
-    volumes:
-      - /opt/ailove/data:/app/data
-    environment:
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=6
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
-      - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
+    ports:
+      - "8081:8081"
     depends_on: [nacos, nats]
     restart: unless-stopped
     networks: [ailove]

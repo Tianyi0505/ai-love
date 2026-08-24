@@ -1,9 +1,9 @@
 # 部署本地直播服务
 
 services:
-  avatar:
-    image: ailove/avatar
-    container_name: ailove-avatar-local
+  live-edge:
+    image: ailove/live-edge
+    container_name: ailove-live-edge-local
     environment:
       - AILOVE_NACOS_ADDRS=${AILOVE_NACOS_ADDRS:?}
       - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
