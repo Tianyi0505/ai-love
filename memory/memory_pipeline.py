@@ -98,7 +98,10 @@ class MemoryPipeline:
         )
         prompt = Template(definition.prompts["memory-extraction"]).substitute(
             ai_name=definition.name,
-            person_name=next(item.speaker for item in messages if item.role == "user"),
+            person_name=next(
+                (item.speaker for item in messages if item.role == "user"),
+                "联系人",
+            ),
             conversation=conversation,
         )
         output = self._output_policy.validate_extraction(

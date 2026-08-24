@@ -163,6 +163,50 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["atom-2"], value["atom_ids"])
         self.assertEqual(["episode-2"], value["episode_ids"])
 
+    # 验证重构前写入的派生计数字段不阻断待合并任务恢复
+    async def test_legacy_pending_counters_are_ignored(self) -> None:
+        await self.pending.create(
+            "pending.legacy",
+            json.dumps(
+                {
+                    "ai_id": "ai",
+                    "owner_type": "person",
+                    "owner_id": "person",
+                    "episode_ids": ["episode-1"],
+                    "atom_ids": ["atom-1"],
+                    "episode_tokens": {"episode-1": 10},
+                    "episode_count": 1,
+                    "atom_count": 1,
+                    "estimated_tokens": 10,
+                    "first_pending_at": 1,
+                    "status": "active",
+                    "lease_until": 0,
+                    "claim_id": "",
+                }
+            ).encode(),
+        )
+        ready = await self.state.ready_pending(
+            MemoryConsolidationSettings.model_validate(
+                {
+                    "scheduler_poll_sec": 1,
+                    "person": {
+                        "min_episode_count": 1,
+                        "min_atom_count": 10,
+                        "token_threshold": 100,
+                        "max_wait_sec": 100,
+                    },
+                    "self": {
+                        "min_episode_count": 10,
+                        "min_atom_count": 10,
+                        "token_threshold": 100,
+                        "max_wait_sec": 100,
+                    },
+                }
+            ),
+            now=2,
+        )
+        self.assertEqual("pending.legacy", ready[0].key)
+
     # 验证记忆客户端只发布轻量活动
     async def test_agent_memory_client_only_publishes_lightweight_activity(self) -> None:
         bus = FakeBus()

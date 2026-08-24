@@ -20,6 +20,12 @@ class SnowflakeIdGenerator:
         return next(self._generator)
 
 
+def is_snowflake_id(value: object) -> bool:
+    if not isinstance(value, str) or not value.isdigit():
+        return False
+    return 0 < int(value) <= (1 << 63) - 1
+
+
 @cache
 def snowflake_ids() -> SnowflakeIdGenerator:
     return SnowflakeIdGenerator(SnowflakeSettings().worker_id)

@@ -1,31 +1,42 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
+import os
+import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-import unittest
+from unittest.mock import AsyncMock, patch
 
+import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
-import yaml
 
+from ops.panel.backend.app import PanelConfig
 from ops.panel.backend.observability.people_memory import PeopleMemoryReader
 from ops.panel.backend.observability.personality import PersonalityReader
 from ops.panel.backend.observability.router import router
 from ops.panel.backend.observability.schemas import (
     MemoryDocumentResponse,
     PeopleResponse,
-    PersonMemoryResponse,
     PersonalityResponse,
+    PersonMemoryResponse,
     PersonSummary,
     SelfMemoryResponse,
 )
-from shared.infrastructure.agent_store import NacosAgentDefinitionStore
-
+from ops.panel.backend.observability.sso import create_nacos_access_token
+from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 8, 20, 9, 30, tzinfo=timezone.utc)
+
+
+def _decode_segment(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
 class FileConfigProvider:
@@ -141,9 +152,13 @@ def create_observability_app(personality_reader: FixedPersonalityReader) -> Fast
     app.state.config = SimpleNamespace(
         ai_id="ai_luoyu",
         nacos_url="/nacos/",
+        nacos_auth_token=base64.b64encode(b"n" * 48).decode(),
+        nacos_sso_username="nacos",
         napcat_url="/webui/",
         napcat_token="secret token",
         k8s_url="/dashboard/",
+        k8s_internal_url="https://127.0.0.1:30443",
+        k8s_service_account_token_path=Path("/unused/token"),
     )
     app.state.session_store = AlwaysValidSessionStore()
     app.state.personality_reader = personality_reader
@@ -178,6 +193,80 @@ class ObservabilityRouteTests(unittest.TestCase):
             napcat = next(item for item in payload["entries"] if item["key"] == "napcat")
             self.assertEqual("/webui/?token=secret+token", napcat["url"])
             self.assertNotIn("token", payload)
+            self.assertEqual(
+                "/ai-love-api/sso/nacos",
+                next(item for item in payload["entries"] if item["key"] == "nacos")["url"],
+            )
+            self.assertEqual(
+                "/ai-love-api/sso/dashboard",
+                next(item for item in payload["entries"] if item["key"] == "k8s")["url"],
+            )
+
+    def test_nacos_sso_writes_short_lived_token_and_redirects(self) -> None:
+        with TestClient(create_observability_app(FixedPersonalityReader())) as client:
+            client.cookies.set("ai_love_session", "valid-session")
+            response = client.get("/ai-love-api/sso/nacos")
+
+        self.assertEqual(200, response.status_code)
+        self.assertIn("localStorage.setItem('token'", response.text)
+        self.assertIn("location.replace(\"/nacos/\")", response.text)
+        self.assertEqual("no-store", response.headers["cache-control"])
+
+    @patch(
+        "ops.panel.backend.observability.router.create_dashboard_session",
+        new_callable=AsyncMock,
+        return_value="dashboard-session",
+    )
+    def test_dashboard_sso_sets_dashboard_cookie_and_redirects(self, exchange: AsyncMock) -> None:
+        with TestClient(create_observability_app(FixedPersonalityReader())) as client:
+            client.cookies.set("ai_love_session", "valid-session")
+            response = client.get("/ai-love-api/sso/dashboard", follow_redirects=False)
+
+        self.assertEqual(303, response.status_code)
+        self.assertEqual("/dashboard/", response.headers["location"])
+        self.assertIn("token=dashboard-session", response.headers["set-cookie"])
+        self.assertIn("Path=/dashboard/", response.headers["set-cookie"])
+        exchange.assert_awaited_once()
+
+    def test_nacos_token_matches_selected_algorithm(self) -> None:
+        secret_bytes = b"n" * 48
+        token = create_nacos_access_token(
+            base64.b64encode(secret_bytes).decode(),
+            "nacos",
+            expires_in_seconds=60,
+            now=1000,
+        )
+        header, payload, signature = token.split(".")
+
+        self.assertEqual({"alg": "HS384"}, json.loads(_decode_segment(header)))
+        self.assertEqual({"sub": "nacos", "exp": 1060}, json.loads(_decode_segment(payload)))
+        expected = hmac.new(secret_bytes, f"{header}.{payload}".encode(), hashlib.sha384).digest()
+        self.assertEqual(expected, _decode_segment(signature))
+
+
+class PanelConfigTests(unittest.TestCase):
+    @patch.dict(
+        os.environ,
+        {
+            "PANEL_PORT": "8090",
+            "PANEL_AI_ID": "ai_luoyu",
+            "PANEL_PEOPLE_MEMORY_LIMIT": "25",
+            "AILOVE_REDIS_URL": "redis://redis:6379/0",
+            "AILOVE_REDIS_PASSWORD": "redis-password",
+            "PANEL_INITIAL_USERNAME": "admin",
+            "PANEL_INITIAL_PASSWORD": "panel-password",
+            "PANEL_NAPCAT_TOKEN": "napcat-token",
+            "NACOS_AUTH_TOKEN": base64.b64encode(b"n" * 48).decode(),
+            "PANEL_NACOS_URL": "/nacos/",
+            "PANEL_NAPCAT_URL": "/webui/",
+            "PANEL_K8S_URL": "/dashboard/",
+        },
+        clear=True,
+    )
+    def test_people_memory_limit_comes_from_panel_config(self) -> None:
+        config = PanelConfig()
+
+        self.assertEqual(25, config.people_memory_limit)
 
 
 class ObservabilityReaderTests(unittest.IsolatedAsyncioTestCase):
@@ -203,7 +292,7 @@ class ObservabilityReaderTests(unittest.IsolatedAsyncioTestCase):
                 )
             ]
         )
-        reader = PeopleMemoryReader(database)
+        reader = PeopleMemoryReader(database, 25)
 
         result = await reader.list("ai_luoyu", "小明")
 
@@ -215,6 +304,9 @@ class ObservabilityReaderTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("ILIKE", statement)
         self.assertIn("memory_documents.owner_type = 'person'", statement)
+        self.assertIn("CAST(persons.person_id AS VARCHAR) = memory_documents.owner_id", statement)
+        self.assertNotIn("CAST(memory_documents.owner_id AS BIGINT)", statement)
+        self.assertIn("LIMIT 25", statement)
         self.assertEqual("10001", result.people[0].qq)
 
 

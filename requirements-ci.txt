@@ -1,2 +1,0 @@
-# Semgrep 必须安装在独立 CI 工具环境，避免污染应用的 OpenTelemetry 依赖图。
-semgrep==1.173.0

@@ -31,7 +31,7 @@ spec:
         ailove.role: core
       containers:
         - name: redis
-          image: redis:8.2-alpine
+          image: redis:7-alpine
           imagePullPolicy: IfNotPresent
           args: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "$(AILOVE_REDIS_PASSWORD)"]
           env:
@@ -43,6 +43,8 @@ spec:
           ports:
             - name: redis
               containerPort: 6379
+              hostPort: 16379
+              hostIP: 127.0.0.1
           readinessProbe:
             tcpSocket:
               port: 6379
