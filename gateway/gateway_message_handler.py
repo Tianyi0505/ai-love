@@ -70,9 +70,20 @@ class GatewayMessageHandler:
         await self._conversations.record_inbound(message, turn.ai_id)
         await self._bus.publish_model(SUBJ_SOCIAL_CHAT.format(ai_id=turn.ai_id), message)
 
+    # 解析直播事件类型，未声明的类型返回 None 表示不接收
+    @staticmethod
+    def _interaction_type(raw: object) -> InteractionType | None:
+        try:
+            return InteractionType(raw)
+        except ValueError:
+            return None
+
     async def _publish_live_interaction(self, message: SocialMessage) -> None:
+        interaction_type = self._interaction_type(message.meta.get("bili_type"))
+        if interaction_type is None:
+            return
         event = InteractionEvent(
-            type=InteractionType(message.meta["bili_type"]),
+            type=interaction_type,
             actor=Viewer(uid=int(message.sender.user_id), name=message.sender.name),
             importance=self._live_settings.default_importance,
             content=message.text,

@@ -181,35 +181,6 @@ class RelationshipPolicy:
             now,
         )
 
-    # 处理礼物
-    def on_gift(
-        self,
-        person_id: str,
-        current: PersonRelationship,
-        amount: float,
-    ) -> PersonRelationship:
-
-        now = self._now_value()
-        config = self._config.gift
-        normalized_amount = max(self._config.bounds.gift_amount_min, amount)
-        familiarity_hits = max(1, min(8, round(normalized_amount / config.familiarity_amount_divisor)))
-        importance_hits = max(1, min(8, round(normalized_amount / config.importance_amount_divisor)))
-        states = self._person_states(current, now)
-        states["familiarity"] = self._lfu.access(states["familiarity"], now, familiarity_hits)
-        states["importance"] = self._lfu.access(states["importance"], now, importance_hits)
-        return self.project_person(
-            person_id,
-            PersonRelationship(
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                self._stored(states),
-                current.ceiling_policy,
-            ),
-            now,
-        )
-
     # 处理信任事件
     def on_trust_event(
         self,

@@ -11,7 +11,6 @@ from shared.snowflake_id_generator import snowflake_ids
 
 class InteractionType(str, Enum):
     DANMAKU = "danmaku"
-    GIFT = "gift"
     GUARD = "guard"
     ENTER = "enter"
     FOLLOW = "follow"

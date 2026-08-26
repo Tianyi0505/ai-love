@@ -11,20 +11,12 @@ class RelationshipBounds(RelationshipConfigModel):
     quality_min: float
     quality_max: float
     score_min: float
-    gift_amount_min: float
     neutral_quality: float
 
 
 class ConversationRelationshipConfig(RelationshipConfigModel):
     familiarity_delta: float
     affinity_quality_multiplier: float
-
-
-class GiftRelationshipConfig(RelationshipConfigModel):
-    familiarity_max_delta: float
-    familiarity_amount_divisor: float
-    importance_max_delta: float
-    importance_amount_divisor: float
 
 
 class TrustRelationshipConfig(RelationshipConfigModel):
@@ -68,7 +60,6 @@ class RelationshipPolicyConfig(RelationshipConfigModel):
     group_ceiling_whitelist: tuple[str | int, ...]
     bounds: RelationshipBounds
     conversation: ConversationRelationshipConfig
-    gift: GiftRelationshipConfig
     trust: TrustRelationshipConfig
     group_conversation: GroupConversationRelationshipConfig
     summary: RelationshipSummaryConfig

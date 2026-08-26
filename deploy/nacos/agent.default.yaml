@@ -17,16 +17,10 @@ relationship_policy:
     quality_min: -1.0
     quality_max: 1.0
     score_min: 0.0
-    gift_amount_min: 0.0
     neutral_quality: 0.0
   conversation:
     familiarity_delta: 0.02
     affinity_quality_multiplier: 0.02
-  gift:
-    familiarity_max_delta: 0.03
-    familiarity_amount_divisor: 10000.0
-    importance_max_delta: 0.05
-    importance_amount_divisor: 5000.0
   trust:
     positive_delta: 0.02
     negative_delta: -0.08
