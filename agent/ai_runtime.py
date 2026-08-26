@@ -8,36 +8,36 @@ import httpx
 from stevedore.driver import DriverManager
 from stevedore.extension import error_on_conflict
 
-from agent.application.group_participation_service import GroupParticipationService
-from agent.application.live_event_handler import handle_live
-from agent.application.qzone_comment_generator import QZoneCommentGenerator
-from agent.application.social_message_handler import handle_social
-from agent.application.sticker_collector import StickerCollector
-from agent.application.turn_coordinator import TurnCoordinator
-from agent.clients.extension_toolset_loader import load_toolset
-from agent.clients.memory_client import MemoryClient
-from agent.clients.sticker_client import StickerClient
-from agent.context.conversation_context import ConversationContext
-from agent.context.message_understanding import MessageUnderstanding
-from agent.context.session_manager import SessionManager
-from agent.generation.chat_agent import ChatAgent
-from agent.generation.prompt_assembler import PromptAssembler
-from agent.generation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
-from agent.persona.persona import Persona
-from ai.vision.image_describer import ImageDescriber
-from ai.vision.image_fetcher import ImageFetcher
-from ai.vision.vision_output_policy import VisionOutputLimits, VisionOutputPolicy
-from shared.configuration.global_settings_store import GlobalSettingsStore
+from agent.chat_agent import ChatAgent
+from agent.conversation_context import ConversationContext
+from agent.extension_toolset_loader import load_toolset
+from agent.group_participation_service import GroupParticipationService
+from agent.image_describer import ImageDescriber
+from agent.image_fetcher import ImageFetcher
+from agent.live_event_handler import handle_live
+from agent.memory_client import MemoryClient
+from agent.message_understanding import MessageUnderstanding
+from agent.persona import Persona
+from agent.prompt_assembler import PromptAssembler
+from agent.qzone_comment_generator import QZoneCommentGenerator
+from agent.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
+from agent.session_manager import SessionManager
+from agent.social_message_handler import handle_social
+from agent.sticker_client import StickerClient
+from agent.sticker_collector import StickerCollector
+from agent.turn_coordinator import TurnCoordinator
+from agent.vision_output_policy import VisionOutputLimits, VisionOutputPolicy
+from shared.chat_model_factory import (
+    create_chat_model,
+    create_openai_compatible_chat_model,
+)
 from shared.contracts.agent import AgentDefinition
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.events import TurnRequest
 from shared.contracts.rpc.social import CommentRequest, CommentResponse, SocialSendResponse
 from shared.contracts.social import SocialMessage
 from shared.contracts.turn import ResponseCommand
-from shared.infrastructure.chat_model_factory import (
-    create_chat_model,
-    create_openai_compatible_chat_model,
-)
+from shared.global_settings_store import GlobalSettingsStore
 
 logger = logging.getLogger("ailove.ai-agent")
 

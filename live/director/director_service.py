@@ -6,10 +6,10 @@ import logging
 from datetime import datetime, timezone
 
 from live.director.deterministic_director_policy import DeterministicDirectorPolicy
-from shared.configuration.service_settings import DirectorSessionSettings, DirectorSettings
+from shared.base_service import BaseService
 from shared.contracts.live import InteractionEvent
-from shared.infrastructure.base_service import BaseService
-from shared.infrastructure.service_config import ServiceConfig
+from shared.service_config import ServiceConfig
+from shared.service_settings import DirectorSessionSettings, DirectorSettings
 
 logger = logging.getLogger("ailove.director")
 

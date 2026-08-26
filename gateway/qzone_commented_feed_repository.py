@@ -3,9 +3,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from shared.infrastructure.database import Database
-from shared.infrastructure.snowflake_id_generator import snowflake_ids
-from shared.persistence import database_models as m
+from shared import database_models as m
+from shared.database import Database
+from shared.snowflake_id_generator import snowflake_ids
 
 
 class QZoneCommentedFeedRepository:

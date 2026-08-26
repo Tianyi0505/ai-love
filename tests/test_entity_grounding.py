@@ -19,14 +19,14 @@ try:
 except ModuleNotFoundError:
     sys.modules["asyncpg"] = SimpleNamespace()
 
-from agent.clients.extension_toolset_loader import load_toolset
-from gateway.channels.napcat_message_event import NapCatMessageEvent
-from gateway.channels.qq_channel import QQChannel
-from memory.repositories.episode_memory_repository import EpisodeMemoryRepository
-from shared.configuration.global_settings import GlobalSettings
+from agent.extension_toolset_loader import load_toolset
+from gateway.napcat_message_event import NapCatMessageEvent
+from gateway.qq_channel import QQChannel
+from memory.episode_memory_repository import EpisodeMemoryRepository
 from shared.contracts.tools import ToolExecutionContext
-from shared.domain.entity_grounding_facade import EntityGroundingFacade
-from shared.utils.lfu import LazyLFU, LFUConfig
+from shared.entity_grounding_facade import EntityGroundingFacade
+from shared.global_settings import GlobalSettings
+from shared.lfu import LazyLFU, LFUConfig
 
 ROOT = Path(__file__).resolve().parents[1]
 

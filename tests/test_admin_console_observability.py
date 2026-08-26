@@ -29,7 +29,7 @@ from admin.console.backend.observability.schemas import (
     SelfMemoryResponse,
 )
 from admin.console.backend.observability.sso import create_nacos_access_token
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 8, 20, 9, 30, tzinfo=timezone.utc)

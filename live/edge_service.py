@@ -4,9 +4,9 @@ import asyncio
 
 from live.avatar.avatar_module import AvatarModule
 from live.stream.stream_module import StreamModule
-from shared.configuration.service_settings import LiveEdgeSettings
-from shared.infrastructure.base_service import BaseService
-from shared.infrastructure.service_config import ServiceConfig
+from shared.base_service import BaseService
+from shared.service_config import ServiceConfig
+from shared.service_settings import LiveEdgeSettings
 
 
 class LiveEdgeService(BaseService):

@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field, replace
 from enum import Enum
 
-from shared.utils.lfu import LazyLFU, LFUState
+from shared.lfu import LazyLFU, LFUState
 
 
 # 定义记忆作用域枚举

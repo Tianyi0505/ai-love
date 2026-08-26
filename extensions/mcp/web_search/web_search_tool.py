@@ -10,7 +10,7 @@ from pydantic import Field
 
 from extensions.mcp.mcp_resources import MCPResources
 from extensions.mcp.web_search.web_search_tool_settings import WebSearchToolSettings
-from shared.configuration.yaml_settings_loader import YamlSettingsLoader
+from shared.yaml_settings_loader import YamlSettingsLoader
 
 SEARCH_SETTINGS = YamlSettingsLoader.load_section(
     Path(__file__).with_name("web_search_tool.yaml"),

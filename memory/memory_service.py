@@ -4,26 +4,26 @@ import asyncio
 
 import jieba
 
-from memory.application.memory_cleanup_service import MemoryCleanupService
-from memory.application.memory_query_handler import MemoryQueryHandler
-from memory.application.relationship_handler import RelationshipHandler
-from memory.controllers.sticker_controller import StickerController
-from memory.generation.memory_model_pool import MemoryModelPool
-from memory.generation.memory_output_policy import (
+from memory.episode_memory_repository import EpisodeMemoryRepository
+from memory.memory_cleanup_service import MemoryCleanupService
+from memory.memory_eviction_service import MemoryEvictionService
+from memory.memory_model_pool import MemoryModelPool
+from memory.memory_output_policy import (
     MemoryDocumentPolicy,
     MemoryDocumentSchemas,
     MemoryOutputLimits,
     MemoryOutputPolicy,
 )
-from memory.memory_eviction_service import MemoryEvictionService
 from memory.memory_pipeline import MemoryPipeline
 from memory.memory_policy import MemoryPolicy
+from memory.memory_query_handler import MemoryQueryHandler
 from memory.memory_state_store import MemoryStateStore
-from memory.repositories.episode_memory_repository import EpisodeMemoryRepository
-from memory.repositories.postgres_memory_repository import PostgresMemoryRepository
-from memory.repositories.sticker_repository import StickerRepository
-from memory.services.sticker_service import StickerService
-from shared.configuration.global_settings_store import GlobalSettingsStore
+from memory.postgres_memory_repository import PostgresMemoryRepository
+from memory.relationship_handler import RelationshipHandler
+from memory.sticker_controller import StickerController
+from memory.sticker_repository import StickerRepository
+from memory.sticker_service import StickerService
+from shared.base_service import BaseService
 from shared.contracts.memory import MemoryActivity
 from shared.contracts.rpc.memory import (
     MemoryContextRequest,
@@ -50,12 +50,12 @@ from shared.contracts.rpc.sticker import (
     StickerSearchRequest,
     StickerSearchResponse,
 )
-from shared.infrastructure.base_service import BaseService
-from shared.infrastructure.database import Database
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
-from shared.infrastructure.service_config import ServiceConfig
-from shared.persistence.repositories.relationship_repository import RelationshipRepository
-from shared.utils.lfu import LazyLFU, LFUConfig
+from shared.database import Database
+from shared.global_settings_store import GlobalSettingsStore
+from shared.lfu import LazyLFU, LFUConfig
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.relationship_repository import RelationshipRepository
+from shared.service_config import ServiceConfig
 
 
 # 提供记忆服务能力

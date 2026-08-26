@@ -5,8 +5,8 @@ import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
-from shared.configuration.connection_settings import DatabaseURLSettings
-from shared.persistence import database_models as m
+from shared import database_models as m
+from shared.connection_settings import DatabaseURLSettings
 
 
 # 转换为异步驱动URL

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from shared.persistence import database_models as m
+from shared import database_models as m
 
 from .schemas import MemoryDocumentResponse, SelfMemoryResponse
 

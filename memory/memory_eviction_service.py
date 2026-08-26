@@ -5,8 +5,8 @@ import time
 from sqlalchemy import delete, select
 
 from memory.memory_policy import MemoryType
-from shared.persistence import database_models as m
-from shared.utils.lfu import LazyLFU
+from shared import database_models as m
+from shared.lfu import LazyLFU
 
 
 class MemoryEvictionService:

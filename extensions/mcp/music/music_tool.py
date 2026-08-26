@@ -8,7 +8,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from extensions.mcp.music.music_tool_settings import MusicToolSettings
-from shared.configuration.yaml_settings_loader import YamlSettingsLoader
+from shared.yaml_settings_loader import YamlSettingsLoader
 
 logger = logging.getLogger("ailove.mcp.music")
 

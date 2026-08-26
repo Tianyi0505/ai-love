@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 
-from shared.configuration.service_settings import LiveEdgeSettings
 from shared.contracts.stream_control import StreamControl
-from shared.infrastructure.nats_bus import Bus, Subscription
+from shared.nats_bus import Bus, Subscription
+from shared.service_settings import LiveEdgeSettings
 
 logger = logging.getLogger("ailove.stream")
 

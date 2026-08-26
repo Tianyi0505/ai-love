@@ -8,17 +8,17 @@ from redis.asyncio import Redis
 
 from agent.agent_supervisor import AgentSupervisor
 from agent.ai_runtime import AIRuntime
-from shared.configuration.connection_settings import RedisConnectionSettings
-from shared.configuration.service_settings import AIAgentSettings
+from shared.account_ownership_repository import AccountOwnershipRepository
+from shared.ai_profile_repository import AIProfileRepository
+from shared.base_service import BaseService
+from shared.connection_settings import RedisConnectionSettings
 from shared.contracts.live import InteractionEvent
 from shared.contracts.rpc.social import CommentRequest, CommentResponse
 from shared.contracts.social import SocialMessage
-from shared.infrastructure.base_service import BaseService
-from shared.infrastructure.database import Database
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
-from shared.infrastructure.service_config import ServiceConfig
-from shared.persistence.repositories.account_ownership_repository import AccountOwnershipRepository
-from shared.persistence.repositories.ai_profile_repository import AIProfileRepository
+from shared.database import Database
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.service_config import ServiceConfig
+from shared.service_settings import AIAgentSettings
 
 logger = logging.getLogger("ailove.ai-agent")
 

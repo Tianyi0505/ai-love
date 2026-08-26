@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.infrastructure.snowflake_id_generator import snowflake_ids
+from shared.snowflake_id_generator import snowflake_ids
 
 
 class InteractionType(str, Enum):

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import String, cast, func, or_, select
 
-from shared.infrastructure.snowflake_id_generator import is_snowflake_id
-from shared.persistence import database_models as m
+from shared.snowflake_id_generator import is_snowflake_id
+from shared import database_models as m
 
 from .schemas import (
     MemoryDocumentResponse,

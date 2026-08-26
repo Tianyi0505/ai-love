@@ -6,13 +6,13 @@ from dataclasses import dataclass
 
 from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError, NoKeysError
 
-from agent.clients.memory_client import MemoryClient
-from agent.generation.prompt_assembler import PromptAssembler, PromptContext
-from memory.generation.memory_output_policy import MemoryDocumentPolicy, MemoryDocumentSchemas
+from agent.memory_client import MemoryClient
+from agent.prompt_assembler import PromptAssembler, PromptContext
+from memory.memory_output_policy import MemoryDocumentPolicy, MemoryDocumentSchemas
 from memory.memory_state_store import MemoryStateStore
-from shared.configuration.global_settings import MemoryConsolidationSettings
 from shared.contracts.agent import AgentDefinition, ModelSelectionConfig, PersonalityConfig
 from shared.contracts.memory import MemoryActivity
+from shared.global_settings import MemoryConsolidationSettings
 
 
 # 提供测试用状态条目

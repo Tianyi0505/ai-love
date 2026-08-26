@@ -10,7 +10,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from gateway.qzone_api import QZoneAPI
 from gateway.qzone_commented_feed_repository import QZoneCommentedFeedRepository
-from shared.configuration.global_settings import QQSettings, TimeoutSettings
+from shared.global_settings import QQSettings, TimeoutSettings
 
 logger = logging.getLogger("ailove.qzone")
 

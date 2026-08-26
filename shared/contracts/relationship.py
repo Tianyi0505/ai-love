@@ -6,7 +6,7 @@ from string import Template
 from typing import Callable
 
 from shared.contracts.relationship_policy_config import RelationshipPolicyConfig
-from shared.utils.lfu import LazyLFU, LFUState
+from shared.lfu import LazyLFU, LFUState
 
 
 # 表示联系人关系数据

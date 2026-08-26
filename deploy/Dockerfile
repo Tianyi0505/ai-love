@@ -19,15 +19,11 @@ CMD ["python", "-m", "live.director.director_service"]
 
 FROM base AS ai-agent
 COPY agent/ ./agent/
-COPY ai/__init__.py ./ai/__init__.py
-COPY ai/tts/ ./ai/tts/
-COPY ai/vision/ ./ai/vision/
 CMD ["python", "-m", "agent.ai_agent_service"]
 
 FROM base AS gptsovits
-COPY ai/gptsovits/ ./ai/gptsovits/
-COPY ai/__init__.py ./ai/__init__.py
-CMD ["python", "-m", "ai.gptsovits.gpt_sovits_service"]
+COPY gptsovits/ ./gptsovits/
+CMD ["python", "-m", "gptsovits.gpt_sovits_service"]
 
 FROM base AS live-edge
 COPY live/ ./live/

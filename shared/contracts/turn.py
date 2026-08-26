@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from shared.contracts.rpc.social import SocialSendRequest
 from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure.snowflake_id_generator import snowflake_ids
+from shared.snowflake_id_generator import snowflake_ids
 
 
 # 生成一次执行链路标识

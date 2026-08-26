@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from gateway.application.gateway_message_handler import GatewayMessageHandler
+from gateway.gateway_message_handler import GatewayMessageHandler
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 
 

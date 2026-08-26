@@ -6,14 +6,14 @@ import logging
 from string import Template
 from typing import cast
 
-from memory.generation.memory_generation_output import (
+from memory.memory_generation_output import (
     MemoryConsolidationOutput,
     MemoryExtractionOutput,
     MemoryOwnerType,
 )
-from memory.generation.memory_output_policy import MemoryDocumentPolicy, MemoryOutputPolicy
+from memory.memory_output_policy import MemoryDocumentPolicy, MemoryOutputPolicy
 from memory.memory_state_store import ActivityState, PendingState, StateEntry
-from shared.configuration.global_settings import MemorySettings
+from shared.global_settings import MemorySettings
 
 logger = logging.getLogger("ailove.memory.pipeline")
 

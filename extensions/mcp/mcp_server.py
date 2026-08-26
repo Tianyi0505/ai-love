@@ -14,8 +14,8 @@ from extensions.mcp.weather.qweather_client import QWeatherClient
 from extensions.mcp.weather.weather_tool import CLIENT_SETTINGS, register_weather
 from extensions.mcp.web_search.web_search_client import WebSearchClient
 from extensions.mcp.web_search.web_search_tool import SEARCH_SETTINGS, register_web_search
-from shared.configuration.connection_settings import QWeatherConnectionSettings
-from shared.configuration.yaml_settings_loader import YamlSettingsLoader
+from shared.connection_settings import QWeatherConnectionSettings
+from shared.yaml_settings_loader import YamlSettingsLoader
 
 SERVER_SETTINGS = YamlSettingsLoader.load_section(
     Path(__file__).with_name("mcp_server.yaml"),

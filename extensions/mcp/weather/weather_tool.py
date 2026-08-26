@@ -12,7 +12,7 @@ from extensions.mcp.weather.weather_tool_settings import (
     QWeatherClientSettings,
     WeatherToolSettings,
 )
-from shared.configuration.yaml_settings_loader import YamlSettingsLoader
+from shared.yaml_settings_loader import YamlSettingsLoader
 
 CONFIG_PATH = Path(__file__).with_name("weather_tool.yaml")
 WEATHER_SETTINGS = YamlSettingsLoader.load_section(CONFIG_PATH, "weather", WeatherToolSettings)

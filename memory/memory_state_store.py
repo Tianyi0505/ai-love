@@ -8,9 +8,9 @@ from typing import Generic, Literal, TypeVar
 from nats.js.errors import KeyDeletedError, KeyNotFoundError, KeyWrongLastSequenceError, NoKeysError
 from pydantic import BaseModel, ConfigDict
 
-from shared.configuration.global_settings import MemoryConsolidationSettings
 from shared.contracts.memory import MemoryActivity
-from shared.infrastructure.snowflake_id_generator import snowflake_ids
+from shared.global_settings import MemoryConsolidationSettings
+from shared.snowflake_id_generator import snowflake_ids
 
 StateT = TypeVar("StateT", bound=BaseModel)
 StateStatus = Literal["active", "processing"]

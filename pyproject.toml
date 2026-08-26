@@ -8,23 +8,23 @@ version = "0.1.0"
 requires-python = ">=3.11"
 
 [project.entry-points."ai_love.tts"]
-gptsovits = "ai.tts.providers.gpt_sovits_provider:GPTSoVITSProvider"
+gptsovits = "agent.gpt_sovits_provider:GPTSoVITSProvider"
 
 [project.entry-points."ai_love.gptsovits"]
-gptsovits = "ai.gptsovits.gpt_sovits_engine:GPTSoVITSEngine"
-mimo = "ai.gptsovits.mimo_engine:MimoEngine"
+gptsovits = "gptsovits.gpt_sovits_engine:GPTSoVITSEngine"
+mimo = "gptsovits.mimo_engine:MimoEngine"
 
 [project.entry-points."ai_love.channels"]
-qq = "gateway.channels.qq_channel:QQChannel"
+qq = "gateway.qq_channel:QQChannel"
 
 [project.entry-points."ai_love.content_strategies"]
-quote = "gateway.channels.content_type_resolver:QuoteStrategy"
-forward = "gateway.channels.content_type_resolver:ForwardStrategy"
-voice = "gateway.channels.content_type_resolver:VoiceStrategy"
-image = "gateway.channels.content_type_resolver:ImageStrategy"
-file = "gateway.channels.content_type_resolver:FileStrategy"
-at = "gateway.channels.content_type_resolver:AtStrategy"
-text = "gateway.channels.content_type_resolver:TextStrategy"
+quote = "gateway.content_type_resolver:QuoteStrategy"
+forward = "gateway.content_type_resolver:ForwardStrategy"
+voice = "gateway.content_type_resolver:VoiceStrategy"
+image = "gateway.content_type_resolver:ImageStrategy"
+file = "gateway.content_type_resolver:FileStrategy"
+at = "gateway.content_type_resolver:AtStrategy"
+text = "gateway.content_type_resolver:TextStrategy"
 
 [tool.setuptools]
 packages = []

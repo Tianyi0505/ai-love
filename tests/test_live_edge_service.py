@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 from live.avatar.avatar_module import AvatarModule
 from live.edge_service import LiveEdgeService
 from live.stream.stream_module import StreamModule
-from shared.configuration.service_settings import LiveEdgeSettings
 from shared.contracts.avatar_command import AvatarCommand
 from shared.contracts.stream_control import StreamControl
+from shared.service_settings import LiveEdgeSettings
 
 
 class LiveEdgeModuleTests(unittest.IsolatedAsyncioTestCase):

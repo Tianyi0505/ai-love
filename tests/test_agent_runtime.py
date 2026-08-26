@@ -14,8 +14,8 @@ try:
 except ModuleNotFoundError:
     sys.modules["asyncpg"] = SimpleNamespace()
 
-from agent.application.turn_coordinator import TurnCoordinator
-from agent.generation.response_plan import Emotion, ResponsePlan, Speech
+from agent.response_plan import Emotion, ResponsePlan, Speech
+from agent.turn_coordinator import TurnCoordinator
 from shared.contracts.entity import EntityCandidate, EntityContext, EntityReference
 from shared.contracts.social import Chat, ChatType, SocialMessage, SocialSender
 from shared.contracts.turn import AgentExecutionContext, ResponseCommand

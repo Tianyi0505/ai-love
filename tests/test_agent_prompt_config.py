@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import yaml
 
-from agent.application.group_participation_service import GroupParticipationService
-from agent.context.message_understanding import MessageUnderstanding
-from agent.generation.prompt_assembler import PromptAssembler
-from agent.generation.response_plan import ParticipationDecision
+from agent.group_participation_service import GroupParticipationService
+from agent.message_understanding import MessageUnderstanding
+from agent.prompt_assembler import PromptAssembler
+from agent.response_plan import ParticipationDecision
 from shared.contracts.rpc.relationship import GroupRelationshipData, GroupRelationshipResponse
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 

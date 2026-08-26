@@ -8,19 +8,18 @@ import httpx
 from stevedore.driver import DriverManager
 from stevedore.extension import error_on_conflict
 
-from gateway.application.gateway_message_handler import GatewayMessageHandler
-from gateway.application.grounding_request_handler import GroundingRequestHandler
-from gateway.application.group_member_synchronizer import GroupMemberSynchronizer
-from gateway.application.qq_whitelist_synchronizer import QQWhitelistSynchronizer
-from gateway.application.qzone_context_provider import QZoneContextProvider
-from gateway.application.social_send_handler import SocialSendHandler
-from gateway.channels.channel import Channel
+from gateway.channel import Channel
+from gateway.gateway_message_handler import GatewayMessageHandler
+from gateway.grounding_request_handler import GroundingRequestHandler
+from gateway.group_member_synchronizer import GroupMemberSynchronizer
+from gateway.qq_whitelist_synchronizer import QQWhitelistSynchronizer
 from gateway.qzone_commented_feed_repository import QZoneCommentedFeedRepository
+from gateway.qzone_context_provider import QZoneContextProvider
 from gateway.qzone_service import QZoneService
 from gateway.social_router import SocialRouter
-from shared.configuration.global_settings import GlobalSettings
-from shared.configuration.global_settings_store import GlobalSettingsStore
-from shared.configuration.service_settings import GatewaySettings
+from gateway.social_send_handler import SocialSendHandler
+from shared.account_ownership_repository import AccountOwnershipRepository
+from shared.base_service import BaseService
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.rpc.grounding import (
     ResolvePeopleRequest,
@@ -30,16 +29,17 @@ from shared.contracts.rpc.grounding import (
 )
 from shared.contracts.rpc.social import SocialSendRequest, SocialSendResponse
 from shared.contracts.social import SUBJ_SOCIAL_SEND
-from shared.domain.entity_grounding_facade import EntityGroundingFacade
-from shared.infrastructure.base_service import BaseService
-from shared.infrastructure.database import Database
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
-from shared.infrastructure.service_config import ServiceConfig
-from shared.persistence.repositories.account_ownership_repository import AccountOwnershipRepository
-from shared.persistence.repositories.conversation_repository import ConversationRepository
-from shared.persistence.repositories.identity_repository import IdentityRepository
-from shared.persistence.repositories.relationship_repository import RelationshipRepository
-from shared.utils.lfu import LazyLFU, LFUConfig
+from shared.conversation_repository import ConversationRepository
+from shared.database import Database
+from shared.entity_grounding_facade import EntityGroundingFacade
+from shared.global_settings import GlobalSettings
+from shared.global_settings_store import GlobalSettingsStore
+from shared.identity_repository import IdentityRepository
+from shared.lfu import LazyLFU, LFUConfig
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.relationship_repository import RelationshipRepository
+from shared.service_config import ServiceConfig
+from shared.service_settings import GatewaySettings
 
 logger = logging.getLogger("ailove.gateway")
 

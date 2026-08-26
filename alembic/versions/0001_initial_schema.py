@@ -7,7 +7,7 @@ Create Date: 2026-08-15
 """
 
 from alembic import op
-from shared.persistence import database_models as m
+from shared import database_models as m
 
 revision = "0001_initial"
 down_revision = None

@@ -7,11 +7,10 @@ from types import SimpleNamespace
 
 import yaml
 
-from memory.application.relationship_handler import RelationshipHandler
+from memory.episode_memory_repository import EpisodeMemoryRepository
 from memory.memory_eviction_service import MemoryEvictionService
 from memory.memory_policy import MemoryPolicy, MemoryRecord, MemoryScope, MemoryType
-from memory.repositories.episode_memory_repository import EpisodeMemoryRepository
-from shared.configuration.global_settings import GlobalSettings
+from memory.relationship_handler import RelationshipHandler
 from shared.contracts.relationship import (
     GroupRelationship,
     PersonRelationship,
@@ -21,8 +20,9 @@ from shared.contracts.relationship import (
 from shared.contracts.relationship_policy_config import RelationshipPolicyConfig
 from shared.contracts.rpc.relationship import GroupRelationshipRequest, RelationshipChatRequest
 from shared.contracts.tools import ToolExecutionContext
-from shared.domain.person_resolver import PersonResolver
-from shared.utils.lfu import LazyLFU, LFUConfig, LFUState
+from shared.global_settings import GlobalSettings
+from shared.lfu import LazyLFU, LFUConfig, LFUState
+from shared.person_resolver import PersonResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 

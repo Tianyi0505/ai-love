@@ -36,25 +36,10 @@ Gateway 只处理平台协议、账号路由和消息归一化。它把文字、
 ## 代码包边界
 
 ```text
-ai/                         # 底层 AI 调用能力，与 Agent 业务无关
-├── llm/                    # 文本生成与模型路由
-│   └── providers/          # Anthropic Gateway、DeepSeek、Ollama
-├── vision/                 # 图片理解
-│   └── providers/
-├── asr/                    # 语音识别接口与 Provider 注册
-│   └── providers/
-└── tts/                    # 语音合成接口、Provider 与服务入口
-    └── providers/
-
-agent/                      # 理解、决策和对话编排
-├── application/            # 社交、直播、主动聊天、记忆压缩用例
-├── context/                # 会话窗口、检索、发言状态、消息理解
-├── generation/             # Prompt、Agent Loop、模型响应解析
-├── clients/                # Memory、TTS、表情库、Extension Host 客户端
-└── persona/                # Agent 身份与人格模型
-
-gateway/                    # QQ、微信、B站、QQ 空间接入与账号路由
-memory/                     # 记忆、关系、表情业务及持久化
+agent/                      # Agent 运行时：对话、图片理解、上下文与外部服务客户端
+gptsovits/                  # 语音合成服务及 GPT-SoVITS、MIMO 引擎
+gateway/                    # 平台接入、消息归一化、账号路由与 QQ 空间
+memory/                     # 记忆、关系、表情与持久化
 extensions/
 ├── host/                   # 工具发现、绑定、权限和调用网关
 └── mcp/                    # 单一 MCP 进程
@@ -67,20 +52,22 @@ live/
 ├── stream/                 # OBS 与推流控制模块
 └── edge_service.py         # edge 侧统一进程入口
 shared/
-├── contracts/              # 跨进程消息和领域契约
-└── infrastructure/         # NATS、Nacos、数据库与服务生命周期
+├── contracts/              # 跨进程消息契约；rpc/ 保留请求响应命名空间
+├── *_settings.py           # 跨运行单元配置模型
+├── *_repository.py         # 确实被多个运行单元复用的数据访问
+└── nats_bus.py 等          # 共享运行时能力
 ```
 
-四类 AI 能力统一采用 `provider.py`、`registry.py`、`factory.py`、`providers/` 命名。`shared` 只存放确实被多个进程共同使用的契约和基础设施，不存放 Vision 或 Agent 私有响应模型。
+顶层包对应可独立理解或运行的业务单元。包内默认使用扁平模块，文件名直接表达职责；只有跨多个模块的真实功能域才建立子包，例如 `contracts.rpc`、各 MCP 工具、直播组件和管理端功能。`shared` 只存放确实被多个运行单元共同使用的契约与实现，不接收单一服务的私有代码。
 
 ## 包与微服务
 
 拆包不等于拆微服务。当前部署单元为：
 
 - `gateway`：包含 `gateway` 包。
-- `ai-agent`：包含 `agent`、`ai.llm`、`ai.vision`、`ai.asr`；一个进程可热加载多个 Agent Runtime。
-- `tts`：包含 `ai.tts`，通过 NATS 向 Agent 提供合成能力。
-- `memory`：包含 `memory` 的 controller、service、repository 等多个内部包。
+- `ai-agent`：包含 `agent` 包；一个进程可热加载多个 Agent Runtime。
+- `gptsovits`：包含 `gptsovits` 包，通过 HTTP 和 NATS 提供合成能力；Agent 侧适配位于 `agent.gpt_sovits_provider`。
+- `memory`：包含扁平的 `memory` 包。
 - `extension-host`：包含 `extensions.host`。
 - `mcp`：唯一 MCP 部署，同时加载天气、音乐和网络搜索能力，新增 MCP 能力不新增部署。
 - `director`：承载直播阵容和发言调度。

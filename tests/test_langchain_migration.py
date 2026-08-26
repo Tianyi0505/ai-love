@@ -8,21 +8,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from agent.generation.chat_agent import ChatAgent
-from agent.generation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
-from agent.generation.response_plan import Emotion, ParticipationDecision, ResponsePlan, Speech
-from ai.vision.image_describer import ImageDescriber
-from ai.vision.image_description import ImageDescription
-from ai.vision.image_fetcher import FetchedImage
-from memory.generation.memory_generation_output import MemoryConsolidationOutput, MemoryExtractionOutput
-from memory.generation.memory_model_pool import MemoryModelPool
-from shared.configuration.global_settings import ObservabilitySettings
-from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure.chat_model_factory import (
+from agent.chat_agent import ChatAgent
+from agent.image_describer import ImageDescriber
+from agent.image_description import ImageDescription
+from agent.image_fetcher import FetchedImage
+from agent.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
+from agent.response_plan import Emotion, ParticipationDecision, ResponsePlan, Speech
+from memory.memory_generation_output import MemoryConsolidationOutput, MemoryExtractionOutput
+from memory.memory_model_pool import MemoryModelPool
+from shared.chat_model_factory import (
     create_chat_model,
     create_openai_compatible_chat_model,
 )
-from shared.infrastructure.langchain_structured_output import (
+from shared.contracts.tools import ToolExecutionContext
+from shared.global_settings import ObservabilitySettings
+from shared.langchain_structured_output import (
     parsed_output,
     structured_output_runnable,
 )
@@ -37,7 +37,7 @@ def observability() -> ObservabilitySettings:
 
 
 class ChatModelFactoryTests(unittest.TestCase):
-    @patch("shared.infrastructure.chat_model_factory.ChatDeepSeek")
+    @patch("shared.chat_model_factory.ChatDeepSeek")
     def test_deepseek_model_uses_provider_prefix_and_environment(self, model_class) -> None:
         model_class.return_value = MagicMock()
         with patch.dict(
@@ -64,7 +64,7 @@ class ChatModelFactoryTests(unittest.TestCase):
             max_retries=1,
         )
 
-    @patch("shared.infrastructure.chat_model_factory.ChatAnthropic")
+    @patch("shared.chat_model_factory.ChatAnthropic")
     def test_anthropic_model_uses_existing_auth_token(self, model_class) -> None:
         model_class.return_value = MagicMock()
         with patch.dict(
@@ -91,7 +91,7 @@ class ChatModelFactoryTests(unittest.TestCase):
             max_retries=1,
         )
 
-    @patch("shared.infrastructure.chat_model_factory.ChatOpenAI")
+    @patch("shared.chat_model_factory.ChatOpenAI")
     def test_openai_compatible_model_uses_explicit_endpoint(self, model_class) -> None:
         client = MagicMock()
         create_openai_compatible_chat_model(
@@ -159,7 +159,7 @@ class ChatAgentTests(unittest.IsolatedAsyncioTestCase):
             emotion_intensity_min=0,
             emotion_intensity_max=1,
         )
-        with patch("agent.generation.chat_agent.create_agent", return_value=graph):
+        with patch("agent.chat_agent.create_agent", return_value=graph):
             agent = ChatAgent(
                 model=model,
                 model_name="deepseek:deepseek-chat",
@@ -276,7 +276,7 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
         pool = MemoryModelPool(definitions, config, observability())
 
         with patch(
-            "memory.generation.memory_model_pool.create_chat_model",
+            "memory.memory_model_pool.create_chat_model",
             return_value=model,
         ) as factory:
             loaded_definition, loaded_model = await pool.resources("ai")

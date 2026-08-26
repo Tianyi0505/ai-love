@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from extensions.host.grounding_tool_provider import GroundingToolProvider
 from extensions.host.mcp_tool_provider import MCPToolProvider
 from extensions.host.tool_gateway import PermissionLevel, ToolGateway, ToolGrant, ToolInvocation
-from shared.configuration.service_settings import ExtensionHostSettings
+from shared.base_service import BaseService
 from shared.contracts.rpc.tools import (
     ToolDescriptor,
     ToolExecuteRequest,
@@ -17,9 +17,9 @@ from shared.contracts.rpc.tools import (
     ToolListResponse,
 )
 from shared.contracts.tools import ToolExecutionContext
-from shared.infrastructure.base_service import BaseService
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
-from shared.infrastructure.service_config import ServiceConfig
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.service_config import ServiceConfig
+from shared.service_settings import ExtensionHostSettings
 
 logger = logging.getLogger("ailove.extension-host")
 

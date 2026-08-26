@@ -7,7 +7,7 @@ Revises: 0002_uuid_to_snowflake
 import sqlalchemy as sa
 
 from alembic import op
-from shared.persistence import database_models as models
+from shared import database_models as models
 
 revision = "0003_refactor_schema_compat"
 down_revision = "0002_uuid_to_snowflake"

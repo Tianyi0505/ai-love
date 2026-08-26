@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from shared.contracts.avatar_command import AvatarCommand
-from shared.infrastructure.nats_bus import Bus, Subscription
+from shared.nats_bus import Bus, Subscription
 
 logger = logging.getLogger("ailove.avatar")
 

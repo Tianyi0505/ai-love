@@ -16,9 +16,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from v2.nacos import NacosException
 
 from shared.contracts.agent import AgentDefinitionError
-from shared.infrastructure.database import Database
-from shared.infrastructure.nacos_agent_definition_store import NacosAgentDefinitionStore
-from shared.infrastructure.service_config import NacosConfigProvider
+from shared.database import Database
+from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.service_config import NacosConfigProvider
 
 from .auth.credentials import CredentialRepository, CredentialService
 from .auth.login import LoginService
