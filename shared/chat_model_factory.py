@@ -25,6 +25,7 @@ def create_chat_model(
         return ChatDeepSeek(
             model=model,
             api_key=_required_env("DEEPSEEK_API_KEY"),
+            extra_body={"thinking": {"type": "disabled"}},
             max_tokens=max_tokens,
             timeout=timeout_sec,
             max_retries=max_retries,

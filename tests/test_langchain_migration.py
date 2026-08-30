@@ -59,6 +59,7 @@ class ChatModelFactoryTests(unittest.TestCase):
             model="deepseek-chat",
             api_key="deepseek-key",
             base_url="https://deepseek.example/v1",
+            extra_body={"thinking": {"type": "disabled"}},
             max_tokens=100,
             timeout=30,
             max_retries=1,
