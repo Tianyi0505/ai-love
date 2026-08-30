@@ -1,8 +1,9 @@
 FROM python:3.11-slim AS base
 
 WORKDIR /app
+ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 COPY requirements.txt pyproject.toml ./
-RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --no-deps .
 COPY shared/ ./shared/
 COPY alembic.ini ./
