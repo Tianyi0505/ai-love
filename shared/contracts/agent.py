@@ -44,6 +44,10 @@ class ParticipationWeights(AgentConfigModel):
 class ProactiveConfig(AgentConfigModel):
     enabled: bool
     timezone: str
+    private_interval_sec: int
+    private_quiet_period_sec: int
+    private_cooldown_sec: int
+    private_min_weight: float
     group_min_score: float
     group_join_window_sec: int
     group_join_min_messages: int

@@ -20,6 +20,7 @@ from agent.live_event_handler import handle_live
 from agent.memory_client import MemoryClient
 from agent.persona import Persona
 from agent.social.group_participation_service import GroupParticipationService
+from agent.social.proactive_private_service import ProactivePrivateService
 from agent.social.qzone_comment_generator import QZoneCommentGenerator
 from agent.social.social_message_handler import handle_social
 from agent.social.sticker_client import StickerClient
@@ -157,6 +158,7 @@ class AIRuntime:
             self.ai_id,
             self.settings.social.session_state_ttl_sec,
         )
+        behavior_schedule = BehaviorSchedule.from_config(self.definition.behavior_policy)
         self.group_participation = GroupParticipationService(
             ai_id=self.ai_id,
             account_id=self.primary_social_account_id,
@@ -168,8 +170,25 @@ class AIRuntime:
             prompt_assembler=self.prompt_assembler,
             chat_agent=self.chat_agent,
             proactive=self.definition.behavior_policy.proactive,
-            behavior_schedule=BehaviorSchedule.from_config(self.definition.behavior_policy),
+            behavior_schedule=behavior_schedule,
         )
+        self.proactive_private = ProactivePrivateService(
+            ai_id=self.ai_id,
+            default_account_id=self.primary_social_account_id,
+            bus=self.bus,
+            relationship_timeout_sec=self._timeouts.relationship_group_sec,
+            sessions=self.sessions,
+            conversation=self.conversation,
+            memory=self.memory,
+            persona=self.persona,
+            prompt_assembler=self.prompt_assembler,
+            chat_agent=self.chat_agent,
+            proactive=self.definition.behavior_policy.proactive,
+            behavior_schedule=behavior_schedule,
+            send_response=self.send_response,
+        )
+        if self.definition.behavior_policy.proactive.enabled:
+            self.spawn(self.proactive_private.loop())
         self.comment_generator = QZoneCommentGenerator(
             self.settings.qq,
             self.prompt_assembler,

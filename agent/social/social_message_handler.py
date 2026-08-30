@@ -61,6 +61,8 @@ async def _process(service, msg, execution) -> dict:
             )
         service.group_participation.observe(msg.chat.chat_id)
         await service.group_participation.mark_replied(msg.chat.chat_id)
+    else:
+        await service.sessions.mark_replied(service.proactive_private.session_key(msg.sender.user_id))
     service.spawn(
         service.bus.request_model(
             "relationship.chat.request",

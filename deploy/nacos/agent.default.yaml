@@ -54,6 +54,10 @@ behavior_policy:
   proactive:
     enabled: true
     timezone: Asia/Shanghai
+    private_interval_sec: 1800
+    private_quiet_period_sec: 21600
+    private_cooldown_sec: 43200
+    private_min_weight: 0.15
     group_min_score: 0.08
     group_join_window_sec: 180
     group_join_min_messages: 2
@@ -269,6 +273,11 @@ prompts:
   group-join-session-inactive: 你尚未进入当前持续话题
   group-join-relationship: |-
     群熟悉度=${familiarity}，归属感=${belonging}，好感=${affinity}，活动意愿=${activity_willingness}，综合参与度=${score}；会话状态=${session_state}。
+  proactive-private-input: |-
+    这不是联系人发来的消息，而是一次主动联系检查。${name}已经一段时间没有与你互动。
+    结合双方长期认知，判断此刻是否有自然、具体、值得主动分享或关心的话题；有就直接对${name}说，没有就让 speech 为空数组。
+  proactive-private-relationship: |-
+    当前联系人=${name}，熟悉度=${familiarity}，好感=${affinity}，信任=${trust}，重要度=${importance}。
   participation-output: |-
     只输出合法 JSON 对象：{"participate": true, "reason": "基于当前话题和切入点的简短内部理由"}。
   qzone-comment-input: 联系人${author_name}发布了一条 QQ 空间动态：${feed_text}
@@ -306,3 +315,6 @@ prompts:
     - 你能提供尚未出现的具体信息、推进当前话题，或在已参与状态下自然承接互动时，可以 participate=true。
     - 话题尚未形成、当前消息无需回应、对话已收束、别人正在连续交流且插入会打断、只能重复已有内容，或唯一理由只是提高活跃度时，participate=false。
     不逐条处理消息队列；判断对象始终是当前话题、最新消息和此刻的切入点。关系与参与度较高时应适当更主动，但不机械回复明显无需回应的消息。
+  proactive-private: |-
+    这是主动发起私聊，不是在回复一条新消息。优先从对方的当前关注、未完成事项、稳定偏好，或你真正想与对方分享的具体内容中选择一个切入点。
+    有合适内容时只发一两句自然的文本，delivery=text，actions 为空；不要报关系分数，不要机械问候，不要为了刷存在感联系。确实没有自然话题时 speech 和 actions 都为空。
