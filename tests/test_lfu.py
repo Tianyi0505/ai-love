@@ -27,9 +27,9 @@ from shared.person_resolver import PersonResolver
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _settings() -> GlobalSettings:
+def _settings(qq_whitelist: list[int] | None = None) -> GlobalSettings:
     raw = yaml.safe_load((ROOT / "deploy" / "nacos" / "ailove.config.yaml").read_text(encoding="utf-8"))
-    raw["qq"]["whitelist"] = []
+    raw["qq"]["whitelist"] = qq_whitelist or []
     return GlobalSettings.model_validate(raw)
 
 
@@ -118,7 +118,50 @@ class RelationshipLFUTests(unittest.TestCase):
             "whitelist",
         )
 
-        self.assertEqual(1.0, self.policy.project_person("internal-person-id", current).familiarity)
+        projected = self.policy.project_person("internal-person-id", current)
+
+        self.assertEqual(1.0, projected.familiarity)
+        self.assertEqual(1.0, projected.affinity)
+
+    def test_whitelisted_person_affinity_stays_at_ceiling(self) -> None:
+        policy = RelationshipPolicy(
+            RelationshipCeilings(0.7, 1.0, frozenset({"priority-person"}), frozenset()),
+            _relationship_config(),
+            self.lfu,
+            now_value=lambda: self.now,
+        )
+
+        updated = policy.on_conversation(
+            "priority-person",
+            PersonRelationship(0, -0.5, 0, 0),
+            -1.0,
+        )
+        self.now += self.lfu.config.decay_interval_sec * 100
+        projected = policy.project_person("priority-person", updated)
+
+        self.assertEqual(1.0, updated.affinity)
+        self.assertEqual(1.0, projected.affinity)
+        self.assertEqual(10, updated.lfu_state["affinity_negative"]["counter"])
+
+    def test_whitelisted_group_affinity_stays_at_ceiling(self) -> None:
+        policy = RelationshipPolicy(
+            RelationshipCeilings(0.7, 1.0, frozenset(), frozenset({"priority-group"})),
+            _relationship_config(),
+            self.lfu,
+            now_value=lambda: self.now,
+        )
+
+        updated = policy.on_group_conversation(
+            "priority-group",
+            GroupRelationship(0, 0, -0.5, 0),
+            -1.0,
+        )
+        self.now += self.lfu.config.decay_interval_sec * 100
+        projected = policy.project_group("priority-group", updated)
+
+        self.assertEqual(1.0, updated.affinity)
+        self.assertEqual(1.0, projected.affinity)
+        self.assertEqual(10, updated.lfu_state["affinity_negative"]["counter"])
 
 
 class _RelationshipRepository:
@@ -151,9 +194,7 @@ class RelationshipHandlerLFUTests(unittest.IsolatedAsyncioTestCase):
             _settings(),
         )
 
-        response = await handler.group(
-            GroupRelationshipRequest(ai_id="ai", account_id="account", group_id="group")
-        )
+        response = await handler.group(GroupRelationshipRequest(ai_id="ai", account_id="account", group_id="group"))
 
         self.assertEqual(
             {"familiarity", "belonging", "affinity", "activity_willingness"},
@@ -179,6 +220,31 @@ class RelationshipHandlerLFUTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, repository.person.lfu_state["familiarity"]["counter"])
         self.assertEqual(1, repository.group.lfu_state["familiarity"]["counter"])
         self.assertEqual(0, repository.person.lfu_state["affinity_positive"]["counter"])
+
+    async def test_chat_rpc_keeps_whitelisted_person_and_group_affinity_at_ceiling(self) -> None:
+        repository = _RelationshipRepository()
+        handler = RelationshipHandler(
+            repository,
+            _RelationshipDefinitions(),
+            _settings([456]),
+        )
+
+        await handler.chat(
+            RelationshipChatRequest(
+                ai_id="ai",
+                person_id="123",
+                platform_user_id="456",
+                account_id="account",
+                chat_type="group",
+                group_id="782795932",
+                quality=-1,
+            )
+        )
+
+        self.assertEqual(1.0, repository.person.affinity)
+        self.assertEqual(1.0, repository.group.affinity)
+        self.assertEqual(0, repository.person.lfu_state["affinity_negative"]["counter"])
+        self.assertEqual(0, repository.group.lfu_state["affinity_negative"]["counter"])
 
 
 class MemoryLFUTests(unittest.TestCase):
@@ -511,11 +577,7 @@ class _EpisodeLFUSession:
         if "from memory_atoms" in sql and "join conversation_episodes" in sql:
             return _EpisodeResult(self._db.atoms)
         if "from memory_atoms" in sql:
-            selected_ids = next(
-                value
-                for value in statement.compile().params.values()
-                if isinstance(value, list)
-            )
+            selected_ids = next(value for value in statement.compile().params.values() if isinstance(value, list))
             return _EpisodeResult([row for row in self._db.atoms if row.atom_id in selected_ids])
         if "from conversation_summaries" in sql:
             return _EpisodeResult([SimpleNamespace(summary="摘要")])

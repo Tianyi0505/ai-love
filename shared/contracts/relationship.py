@@ -38,13 +38,19 @@ class RelationshipCeilings:
     person_whitelist: frozenset[str]
     group_whitelist: frozenset[str]
 
+    def is_person_whitelisted(self, person_id: str) -> bool:
+        return person_id in self.person_whitelist
+
+    def is_group_whitelisted(self, group_id: str) -> bool:
+        return group_id in self.group_whitelist
+
     # 处理联系人事件
     def person(self, person_id: str) -> float:
-        return self.whitelist if person_id in self.person_whitelist else self.default
+        return self.whitelist if self.is_person_whitelisted(person_id) else self.default
 
     # 处理群聊事件
     def group(self, group_id: str) -> float:
-        return self.whitelist if group_id in self.group_whitelist else self.default
+        return self.whitelist if self.is_group_whitelisted(group_id) else self.default
 
 
 # 封装关系策略规则
@@ -110,17 +116,15 @@ class RelationshipPolicy:
     ) -> PersonRelationship:
         moment = self._now_value() if now is None else now
         states = self._person_states(current, moment)
-        ceiling = (
-            self._ceilings.whitelist
-            if current.ceiling_policy == "whitelist"
-            else self._ceilings.person(person_id)
+        whitelisted = current.ceiling_policy == "whitelist" or self._ceilings.is_person_whitelisted(person_id)
+        ceiling = self._ceilings.whitelist if whitelisted else self._ceilings.default
+        affinity = (
+            ceiling
+            if whitelisted
+            else self._lfu.score(states["affinity_positive"], moment)
+            - self._lfu.score(states["affinity_negative"], moment)
         )
-        affinity = self._lfu.score(states["affinity_positive"], moment) - self._lfu.score(
-            states["affinity_negative"], moment
-        )
-        trust = self._lfu.score(states["trust_positive"], moment) - self._lfu.score(
-            states["trust_negative"], moment
-        )
+        trust = self._lfu.score(states["trust_positive"], moment) - self._lfu.score(states["trust_negative"], moment)
         return PersonRelationship(
             familiarity=min(ceiling, self._lfu.score(states["familiarity"], moment)),
             affinity=max(-ceiling, min(ceiling, affinity)),
@@ -139,8 +143,11 @@ class RelationshipPolicy:
         moment = self._now_value() if now is None else now
         states = self._group_states(current, moment)
         ceiling = self._ceilings.group(group_id)
-        affinity = self._lfu.score(states["affinity_positive"], moment) - self._lfu.score(
-            states["affinity_negative"], moment
+        affinity = (
+            ceiling
+            if self._ceilings.is_group_whitelisted(group_id)
+            else self._lfu.score(states["affinity_positive"], moment)
+            - self._lfu.score(states["affinity_negative"], moment)
         )
         activity = self._lfu.score(states["activity_positive"], moment) - self._lfu.score(
             states["activity_negative"], moment
@@ -164,9 +171,10 @@ class RelationshipPolicy:
         quality = max(self._config.bounds.quality_min, min(self._config.bounds.quality_max, quality))
         states = self._person_states(current, now)
         states["familiarity"] = self._lfu.access(states["familiarity"], now)
-        if quality > self._config.bounds.neutral_quality:
+        whitelisted = current.ceiling_policy == "whitelist" or self._ceilings.is_person_whitelisted(person_id)
+        if quality > self._config.bounds.neutral_quality and not whitelisted:
             states["affinity_positive"] = self._lfu.access(states["affinity_positive"], now)
-        elif quality < self._config.bounds.neutral_quality:
+        elif quality < self._config.bounds.neutral_quality and not whitelisted:
             states["affinity_negative"] = self._lfu.access(states["affinity_negative"], now)
         return self.project_person(
             person_id,
@@ -216,12 +224,16 @@ class RelationshipPolicy:
         quality = max(self._config.bounds.quality_min, min(self._config.bounds.quality_max, quality))
         states = self._group_states(current, now)
         states["familiarity"] = self._lfu.access(states["familiarity"], now)
+        whitelisted = self._ceilings.is_group_whitelisted(group_id)
         if quality > self._config.bounds.neutral_quality:
-            for key in ("belonging", "affinity_positive", "activity_positive"):
+            for key in ("belonging", "activity_positive"):
                 states[key] = self._lfu.access(states[key], now)
+            if not whitelisted:
+                states["affinity_positive"] = self._lfu.access(states["affinity_positive"], now)
         elif quality < self._config.bounds.neutral_quality:
-            for key in ("affinity_negative", "activity_negative"):
-                states[key] = self._lfu.access(states[key], now)
+            states["activity_negative"] = self._lfu.access(states["activity_negative"], now)
+            if not whitelisted:
+                states["affinity_negative"] = self._lfu.access(states["affinity_negative"], now)
         return self.project_group(
             group_id,
             GroupRelationship(0.0, 0.0, 0.0, 0.0, self._stored(states)),

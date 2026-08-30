@@ -12,7 +12,7 @@ relationship_policy:
   whitelist_ceiling: 1.0
   inherit_qq_whitelist_ceiling: true
   person_ceiling_whitelist: []
-  group_ceiling_whitelist: []
+  group_ceiling_whitelist: [782795932]
   bounds:
     quality_min: -1.0
     quality_max: 1.0
