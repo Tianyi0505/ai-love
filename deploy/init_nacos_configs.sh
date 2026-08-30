@@ -88,7 +88,7 @@ require_file() {
 echo "=== 写入配置 ==="
 
 # 发布服务配置
-for service_name in gateway director ai-agent gptsovits live-edge memory extension-host; do
+for service_name in gateway director ai-agent gptsovits live-edge extension-host; do
   publish_file "service.${service_name}" "${SCRIPT_DIR}/nacos/service.${service_name}.yaml"
 done
 

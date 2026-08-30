@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent.response_plan import ParticipationDecision, ResponsePlan
+from agent.conversation.response_plan import ParticipationDecision, ResponsePlan
 from shared.global_settings import ResponseOutputLimits
 
 

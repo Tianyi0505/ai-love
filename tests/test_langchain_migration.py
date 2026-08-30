@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from agent.chat_agent import ChatAgent
-from agent.image_describer import ImageDescriber
-from agent.image_description import ImageDescription
-from agent.image_fetcher import FetchedImage
-from agent.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
-from agent.response_plan import Emotion, ParticipationDecision, ResponsePlan, Speech
+from agent.conversation.chat_agent import ChatAgent
+from agent.conversation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
+from agent.conversation.response_plan import Emotion, ParticipationDecision, ResponsePlan, Speech
+from agent.vision.image_describer import ImageDescriber
+from agent.vision.image_description import ImageDescription
+from agent.vision.image_fetcher import FetchedImage
 from memory.memory_generation_output import MemoryConsolidationOutput, MemoryExtractionOutput
 from memory.memory_model_pool import MemoryModelPool
 from shared.chat_model_factory import (
@@ -159,7 +159,7 @@ class ChatAgentTests(unittest.IsolatedAsyncioTestCase):
             emotion_intensity_min=0,
             emotion_intensity_max=1,
         )
-        with patch("agent.chat_agent.create_agent", return_value=graph):
+        with patch("agent.conversation.chat_agent.create_agent", return_value=graph):
             agent = ChatAgent(
                 model=model,
                 model_name="deepseek:deepseek-chat",

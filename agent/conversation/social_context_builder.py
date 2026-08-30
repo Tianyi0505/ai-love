@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from agent.conversation_context import format_entries
-from agent.prompt_assembler import PromptContext
+from agent.conversation.conversation_context import format_entries
+from agent.conversation.prompt_assembler import PromptContext
 from shared.contracts.entity import EntityContext
 from shared.contracts.rpc.relationship import RelationshipSummaryRequest, RelationshipSummaryResponse
 from shared.contracts.social import SocialMessage

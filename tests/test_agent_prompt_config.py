@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock
 
 import yaml
 
-from agent.group_participation_service import GroupParticipationService
-from agent.message_understanding import MessageUnderstanding
-from agent.prompt_assembler import PromptAssembler
-from agent.response_plan import ParticipationDecision
+from agent.conversation.message_understanding import MessageUnderstanding
+from agent.conversation.prompt_assembler import PromptAssembler
+from agent.conversation.response_plan import ParticipationDecision
+from agent.social.group_participation_service import GroupParticipationService
 from shared.contracts.rpc.relationship import GroupRelationshipData, GroupRelationshipResponse
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 from shared.nacos_agent_definition_store import NacosAgentDefinitionStore

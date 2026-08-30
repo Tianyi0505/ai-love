@@ -19,6 +19,7 @@ CMD ["python", "-m", "live.director.director_service"]
 
 FROM base AS ai-agent
 COPY agent/ ./agent/
+COPY memory/ ./memory/
 CMD ["python", "-m", "agent.ai_agent_service"]
 
 FROM base AS gptsovits
@@ -38,10 +39,6 @@ FROM base AS mcp
 COPY extensions/mcp/ ./extensions/mcp/
 COPY extensions/__init__.py ./extensions/__init__.py
 CMD ["python", "-m", "extensions.mcp.mcp_server"]
-
-FROM base AS memory
-COPY memory/ ./memory/
-CMD ["python", "-m", "memory.memory_service"]
 
 FROM node:22-alpine AS ops-panel-frontend
 WORKDIR /frontend

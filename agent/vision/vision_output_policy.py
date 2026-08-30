@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent.image_description import ImageDescription
+from agent.vision.image_description import ImageDescription
 from shared.global_settings import VisionOutputLimits
 
 

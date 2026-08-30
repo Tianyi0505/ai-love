@@ -9,8 +9,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
-from agent.response_output_policy import ResponseOutputPolicy
-from agent.response_plan import ParticipationDecision, ResponsePlan
+from agent.conversation.response_output_policy import ResponseOutputPolicy
+from agent.conversation.response_plan import ParticipationDecision, ResponsePlan
 from shared.contracts.tools import ToolExecutionContext
 from shared.global_settings import ObservabilitySettings
 from shared.langchain_observability import (

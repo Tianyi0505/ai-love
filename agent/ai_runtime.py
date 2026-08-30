@@ -8,25 +8,25 @@ import httpx
 from stevedore.driver import DriverManager
 from stevedore.extension import error_on_conflict
 
-from agent.chat_agent import ChatAgent
-from agent.conversation_context import ConversationContext
+from agent.conversation.chat_agent import ChatAgent
+from agent.conversation.conversation_context import ConversationContext
+from agent.conversation.message_understanding import MessageUnderstanding
+from agent.conversation.prompt_assembler import PromptAssembler
+from agent.conversation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
+from agent.conversation.session_manager import SessionManager
+from agent.conversation.turn_coordinator import TurnCoordinator
 from agent.extension_toolset_loader import load_toolset
-from agent.group_participation_service import GroupParticipationService
-from agent.image_describer import ImageDescriber
-from agent.image_fetcher import ImageFetcher
 from agent.live_event_handler import handle_live
 from agent.memory_client import MemoryClient
-from agent.message_understanding import MessageUnderstanding
 from agent.persona import Persona
-from agent.prompt_assembler import PromptAssembler
-from agent.qzone_comment_generator import QZoneCommentGenerator
-from agent.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
-from agent.session_manager import SessionManager
-from agent.social_message_handler import handle_social
-from agent.sticker_client import StickerClient
-from agent.sticker_collector import StickerCollector
-from agent.turn_coordinator import TurnCoordinator
-from agent.vision_output_policy import VisionOutputLimits, VisionOutputPolicy
+from agent.social.group_participation_service import GroupParticipationService
+from agent.social.qzone_comment_generator import QZoneCommentGenerator
+from agent.social.social_message_handler import handle_social
+from agent.social.sticker_client import StickerClient
+from agent.social.sticker_collector import StickerCollector
+from agent.vision.image_describer import ImageDescriber
+from agent.vision.image_fetcher import ImageFetcher
+from agent.vision.vision_output_policy import VisionOutputLimits, VisionOutputPolicy
 from shared.chat_model_factory import (
     create_chat_model,
     create_openai_compatible_chat_model,

@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 import time
 
-from agent.chat_agent import ChatAgent
-from agent.conversation_context import ConversationContext, format_entries
-from agent.group_chat_manager import GroupChatManager
+from agent.conversation.chat_agent import ChatAgent
+from agent.conversation.conversation_context import ConversationContext, format_entries
+from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
+from agent.conversation.session_manager import SessionManager
 from agent.persona import Persona
-from agent.prompt_assembler import PromptAssembler, PromptContext
-from agent.session_manager import SessionManager
+from agent.social.group_chat_manager import GroupChatManager
 from shared.contracts.agent import ProactiveConfig
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.rpc.relationship import (

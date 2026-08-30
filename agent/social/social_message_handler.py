@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from agent.social_context_builder import build_social_context
+from agent.conversation.social_context_builder import build_social_context
 from shared.contracts.entity import EntityContext
 from shared.contracts.rpc.relationship import RelationshipChatRequest, RelationshipSummaryResponse
 from shared.contracts.rpc.rpc_model import SuccessResponse

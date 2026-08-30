@@ -53,7 +53,7 @@
 
 - 新增 LangChain 模型 span，记录 provider、model、token 用量和受开关控制的请求参数及内容。
 - 新增工具调用 span，并沿现有 NATS 调用传播上下文。
-- 向 ai-agent 和 memory 容器注入 DeepSeek API key 与 base URL。
+- 向承载 Agent Runtime 与 Memory Module 的 ai-agent 容器注入 DeepSeek API key 与 base URL。
 
 ## 验证
 

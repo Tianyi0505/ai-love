@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 
 from agent.agent_supervisor import AgentSupervisor
 from agent.ai_runtime import AIRuntime
+from memory.memory_module import MemoryModule
 from shared.account_ownership_repository import AccountOwnershipRepository
 from shared.ai_profile_repository import AIProfileRepository
 from shared.base_service import BaseService
@@ -50,6 +51,14 @@ class AIAgentService(BaseService):
         await self._db.connect()
         self._profiles = AIProfileRepository(self._db)
         self._accounts = AccountOwnershipRepository(self._db)
+        self._memory_module = MemoryModule(
+            nacos=self.cfg.nacos,
+            bus=self.bus,
+            scheduler=self.scheduler,
+            database=self._db,
+            definitions=self._definitions,
+        )
+        await self._memory_module.start()
 
         # 创建智能体运行时
         async def runtime_factory(definition):
@@ -73,6 +82,7 @@ class AIAgentService(BaseService):
     # 停止服务
     async def on_stop(self) -> None:
         await self._supervisor.stop()
+        await self._memory_module.stop()
         await self._redis.aclose()
         await self._db.close()
 

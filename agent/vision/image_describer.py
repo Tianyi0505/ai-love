@@ -5,9 +5,9 @@ import base64
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 
-from agent.image_description import ImageDescription
-from agent.image_fetcher import ImageFetcher
-from agent.vision_output_policy import VisionOutputPolicy
+from agent.vision.image_description import ImageDescription
+from agent.vision.image_fetcher import ImageFetcher
+from agent.vision.vision_output_policy import VisionOutputPolicy
 from shared.global_settings import ObservabilitySettings
 from shared.langchain_observability import (
     model_span,

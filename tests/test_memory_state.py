@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError, NoKeysError
 
+from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
 from agent.memory_client import MemoryClient
-from agent.prompt_assembler import PromptAssembler, PromptContext
 from memory.memory_output_policy import MemoryDocumentPolicy, MemoryDocumentSchemas
 from memory.memory_state_store import MemoryStateStore
 from shared.contracts.agent import AgentDefinition, ModelSelectionConfig, PersonalityConfig

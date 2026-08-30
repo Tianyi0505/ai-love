@@ -37,11 +37,9 @@ chroma/
 *.sqlite3
 
 # 忽略本地文档与归档文件
-docs/
+doc/
 *.txt
 *.tar
-*.md
-!README.md
 CLAUDE.md
 deploy/.migration-*
 deploy/.napcat-qrcode.png

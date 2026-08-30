@@ -244,41 +244,6 @@ services:
     restart: unless-stopped
     networks: [ailove]
 
-  memory:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: memory }
-    image: ailove/memory
-    container_name: ailove-memory
-    volumes:
-      - /opt/ailove/data:/app/data
-    environment:
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:?}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:?}
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=8
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
-      - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
-      - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
-      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
-      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
-      - AILOVE_DATABASE_POOL_RECYCLE_SEC=${AILOVE_DATABASE_POOL_RECYCLE_SEC:?}
-      - AILOVE_DATABASE_POOL_TIMEOUT_SEC=${AILOVE_DATABASE_POOL_TIMEOUT_SEC:?}
-    depends_on:
-      nacos: { condition: service_started }
-      nats: { condition: service_started }
-      postgres: { condition: service_healthy }
-    restart: unless-stopped
-    networks: [ailove]
-
 volumes:
   nacos-data:
   postgres-data:

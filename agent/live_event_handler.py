@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent.prompt_assembler import PromptContext
+from agent.conversation.prompt_assembler import PromptContext
 from shared.contracts.live import InteractionEvent
 from shared.contracts.rpc.social import SpeechRequest
 

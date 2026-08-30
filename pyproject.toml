@@ -8,7 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 
 [project.entry-points."ai_love.tts"]
-gptsovits = "agent.gpt_sovits_provider:GPTSoVITSProvider"
+gptsovits = "agent.speech.gpt_sovits_provider:GPTSoVITSProvider"
 
 [project.entry-points."ai_love.gptsovits"]
 gptsovits = "gptsovits.gpt_sovits_engine:GPTSoVITSEngine"

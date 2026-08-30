@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from agent.tts_provider import TTSProvider
+from agent.speech.tts_provider import TTSProvider
 from shared.contracts.tts import SynthesizeResponse
 
 

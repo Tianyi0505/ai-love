@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from agent.image_describer import ImageDescriber
-from agent.sticker_client import StickerClient
+from agent.social.sticker_client import StickerClient
+from agent.vision.image_describer import ImageDescriber
 
 logger = logging.getLogger("ailove.ai-agent.sticker-collector")
 

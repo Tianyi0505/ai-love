@@ -4,9 +4,9 @@ import asyncio
 import re
 from string import Template
 
-from agent.chat_agent import ChatAgent
-from agent.image_describer import ImageDescriber
-from agent.prompt_assembler import PromptAssembler, PromptContext
+from agent.conversation.chat_agent import ChatAgent
+from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
+from agent.vision.image_describer import ImageDescriber
 from shared.contracts.rpc.social import CommentRequest, CommentResponse
 from shared.global_settings import QQSettings
 

@@ -182,8 +182,8 @@ spec:
             - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
               value: "30"
           resources:
-            requests: {cpu: 25m, memory: 64Mi}
-            limits: {cpu: "1", memory: 384Mi}
+            requests: {cpu: 45m, memory: 112Mi}
+            limits: {cpu: 1500m, memory: 640Mi}
           volumeMounts:
             - name: data
               mountPath: /app/data
@@ -409,69 +409,3 @@ spec:
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 300m, memory: 192Mi}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: memory
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: memory
-  template:
-    metadata:
-      labels:
-        app: memory
-    spec:
-      nodeSelector:
-        ailove.role: core
-      containers:
-        - name: memory
-          image: ailove/memory:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: nacos:8848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "8"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://nats:4222
-            - name: AILOVE_DATABASE_POOL_MIN_SIZE
-              value: "1"
-            - name: AILOVE_DATABASE_POOL_MAX_SIZE
-              value: "10"
-            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
-              value: "300"
-            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
-              value: "30"
-          resources:
-            requests: {cpu: 20m, memory: 48Mi}
-            limits: {cpu: 500m, memory: 256Mi}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
-        - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
