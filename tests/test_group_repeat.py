@@ -15,13 +15,17 @@ from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, 
 
 class _Redis:
     def __init__(self) -> None:
-        self.values: dict[str, str] = {}
+        self.values: dict[str, dict[str, str]] = {}
 
-    async def set(self, key: str, value: str, *, ex: int, nx: bool):
-        if nx and key in self.values:
-            return False
-        self.values[key] = value
-        return True
+    async def eval(self, _script: str, _numkeys: int, key: str, digest: str, _ttl_sec: int) -> int:
+        state = self.values.setdefault(key, {})
+        if state.get("hash") == digest:
+            if state.get("repeated") == "1":
+                return 0
+            state["repeated"] = "1"
+            return 1
+        state.update(hash=digest, repeated="0")
+        return 0
 
 
 class _HTTPResponse:
@@ -65,12 +69,22 @@ def _message(*, chat_id: str = "123", message_id: str = "999") -> SocialMessage:
 
 
 class GroupRepeatServiceTests(unittest.IsolatedAsyncioTestCase):
-    async def test_repeats_second_identical_content_only_once_per_group(self) -> None:
+    async def test_repeats_only_contiguous_identical_content_once_per_group(self) -> None:
         service = GroupRepeatService(_Redis(), "ai-luoyu", 3600)
 
         self.assertFalse(await service.should_repeat(_message(message_id="1")))
         self.assertTrue(await service.should_repeat(_message(message_id="2")))
         self.assertFalse(await service.should_repeat(_message(message_id="3")))
+
+    async def test_another_message_resets_the_contiguous_sequence(self) -> None:
+        service = GroupRepeatService(_Redis(), "ai-luoyu", 3600)
+
+        self.assertFalse(await service.should_repeat(_message(message_id="1")))
+        other = _message(message_id="2")
+        other.text = "换个话题"
+        self.assertFalse(await service.should_repeat(other))
+        self.assertFalse(await service.should_repeat(_message(message_id="3")))
+        self.assertTrue(await service.should_repeat(_message(message_id="4")))
 
     async def test_same_content_in_another_group_has_independent_state(self) -> None:
         service = GroupRepeatService(_Redis(), "ai-luoyu", 3600)

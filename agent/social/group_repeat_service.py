@@ -7,6 +7,22 @@ from redis.asyncio import Redis
 
 from shared.contracts.social import SocialMessage
 
+_REPEAT_SCRIPT = """
+local previous_hash = redis.call('HGET', KEYS[1], 'hash')
+local repeated = redis.call('HGET', KEYS[1], 'repeated')
+if previous_hash == ARGV[1] then
+    if repeated == '1' then
+        return 0
+    end
+    redis.call('HSET', KEYS[1], 'repeated', '1')
+    redis.call('EXPIRE', KEYS[1], ARGV[2])
+    return 1
+end
+redis.call('HSET', KEYS[1], 'hash', ARGV[1], 'repeated', '0')
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return 0
+"""
+
 
 class GroupRepeatService:
     def __init__(self, redis: Redis, ai_id: str, ttl_sec: int) -> None:
@@ -32,9 +48,6 @@ class GroupRepeatService:
         if not message.message_id:
             return False
         digest = self.content_hash(message)
-        scope = f"{message.account_id}:{message.chat.chat_id}:{digest}"
-        observed_key = f"{self._prefix}observed:{scope}"
-        if await self._redis.set(observed_key, "1", ex=self._ttl_sec, nx=True):
-            return False
-        repeated_key = f"{self._prefix}repeated:{scope}"
-        return bool(await self._redis.set(repeated_key, "1", ex=self._ttl_sec, nx=True))
+        scope = f"{message.account_id}:{message.chat.chat_id}"
+        key = f"{self._prefix}{scope}"
+        return bool(await self._redis.eval(_REPEAT_SCRIPT, 1, key, digest, self._ttl_sec))
