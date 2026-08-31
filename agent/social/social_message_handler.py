@@ -38,12 +38,17 @@ async def _process(service, msg, execution) -> dict:
     tool_rounds = 0
     preview_chars = service.settings.social.log_preview_chars
 
-    message_input = await service.message_input.build(msg)
-    query = message_input.text or msg.text
-    images = message_input.images
+    is_group = msg.chat.chat_type.value == "group"
+    should_repeat = is_group and await service.group_repeat.should_repeat(msg)
+    if should_repeat:
+        query = msg.text
+        images = []
+    else:
+        message_input = await service.message_input.build(msg)
+        query = message_input.text or msg.text
+        images = message_input.images
     if msg.type == ContentType.IMAGE and msg.all_media_urls():
         service.spawn(service.sticker_collector.collect(msg.all_media_urls()))
-    is_group = msg.chat.chat_type.value == "group"
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id
     person_id = execution.sender_person_id
@@ -80,6 +85,32 @@ async def _process(service, msg, execution) -> dict:
             timeout=service._timeouts.relationship_update_sec,
         )
     )
+
+    if should_repeat:
+        command = ResponseCommand(
+            run_id=execution.run_id,
+            ai_id=service.ai_id,
+            account_id=msg.account_id,
+            conversation_id=execution.conversation_id,
+            platform=msg.platform,
+            chat=msg.chat.model_dump(mode="json"),
+            reply_to_message_id="",
+            text=attributed_query,
+            sticker=None,
+            voice=None,
+            repeat_message_id=msg.message_id,
+        )
+        await service.send_response(command)
+        service.group_participation.activate(msg.chat.chat_id)
+        await service.group_participation.mark_spoke(msg.chat.chat_id)
+        service.conversation.add_ai("group", msg.chat.chat_id, attributed_query)
+        logger.info(
+            "[ai-agent:%s] 群聊 +1: message_id=%s content_hash=%s",
+            service.ai_id,
+            msg.message_id,
+            service.group_repeat.content_hash(msg),
+        )
+        return {"outcome": "group_repeat", "tool_rounds": 0, "response_text": attributed_query}
 
     explicitly_addressed = bool(is_group and (msg.to_ai or (msg.at_user_id and msg.at_user_id == service.ai_id)))
     group_turn_started = False

@@ -18,6 +18,7 @@ class SocialSendRequest(RpcModel):
     text: str
     run_id: str
     reply_to_message_id: str = ""
+    repeat_message_id: str = ""
     sticker: dict[str, Any] | None = None
     voice: dict[str, Any] | None = None
 

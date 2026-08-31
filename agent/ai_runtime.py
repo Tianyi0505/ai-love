@@ -26,6 +26,7 @@ from agent.memory_client import MemoryClient
 from agent.persona import Persona
 from agent.social.direct_vision_qzone_comment_generator import DirectVisionQZoneCommentGenerator
 from agent.social.group_participation_service import GroupParticipationService
+from agent.social.group_repeat_service import GroupRepeatService
 from agent.social.proactive_private_service import ProactivePrivateService
 from agent.social.qzone_comment_generator import QZoneCommentGenerator
 from agent.social.social_message_handler import handle_social
@@ -183,6 +184,11 @@ class AIRuntime:
             self._timeouts,
         )
         self.sessions = SessionManager(
+            self._host.redis,
+            self.ai_id,
+            self.settings.social.session_state_ttl_sec,
+        )
+        self.group_repeat = GroupRepeatService(
             self._host.redis,
             self.ai_id,
             self.settings.social.session_state_ttl_sec,

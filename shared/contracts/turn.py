@@ -81,6 +81,7 @@ class ResponseCommand:
     text: str
     sticker: dict | None
     voice: dict | None
+    repeat_message_id: str = ""
 
     # 返回发送负载
     def send_request(self) -> SocialSendRequest:
@@ -90,10 +91,11 @@ class ResponseCommand:
             conversation_id=self.conversation_id,
             channel=self.platform,
             chat=self.chat,
-            type="text",
+            type="repeat" if self.repeat_message_id else "text",
             text=self.text,
             run_id=self.run_id,
             reply_to_message_id=self.reply_to_message_id,
+            repeat_message_id=self.repeat_message_id,
             sticker=self.sticker,
             voice=self.voice,
         )

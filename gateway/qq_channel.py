@@ -208,6 +208,11 @@ class QQChannel(Channel):
 
     # 获取消息
     async def _get_message(self, message_id: str) -> SocialMessage | None:
+        data = await self._get_message_data(message_id)
+        return self._to_message(NapCatMessageEvent.model_validate(data)) if data is not None else None
+
+    # 获取 NapCat 原始消息数据
+    async def _get_message_data(self, message_id: str) -> dict | None:
         value: int | str = int(message_id) if message_id.lstrip("-").isdigit() else message_id
         response = await self._http_client.post(
             f"{self._http_url}/get_msg",
@@ -215,8 +220,10 @@ class QQChannel(Channel):
             timeout=self._message_timeout_sec,
         )
         response.raise_for_status()
-        data = response.json()["data"]
-        return self._to_message(NapCatMessageEvent.model_validate(data)) if data is not None else None
+        payload = response.json()
+        if payload.get("status") not in (None, "ok"):
+            raise RuntimeError(str(payload.get("message", "获取消息失败")))
+        return payload["data"]
 
     # 获取转发消息节点列表
     async def _get_forward_nodes(self, forward_id: str) -> list[dict]:
@@ -246,21 +253,30 @@ class QQChannel(Channel):
         text = request.text
         sticker = request.sticker
         voice = request.voice
-        if not chat_id or (not text and not sticker and not voice):
+        repeat_message_id = request.repeat_message_id
+        if not chat_id or (not text and not sticker and not voice and not repeat_message_id):
             raise ValueError("缺少 chat_id 或内容")
+        if repeat_message_id and chat_type != ChatType.GROUP.value:
+            raise ValueError("+1 仅支持群聊消息")
         action = SendAction.PRIVATE_MSG.value if chat_type == ChatType.PRIVATE.value else SendAction.GROUP_MSG.value
-        message_segments: list[dict] = []
-        reply_to = request.reply_to_message_id
-        if reply_to.lstrip("-").isdigit():
-            message_segments.append({"type": SegmentType.REPLY.value, "data": {"id": int(reply_to)}})
-        if text:
-            message_segments.append({"type": SegmentType.TEXT.value, "data": {"text": text}})
-        if sticker:
-            message_segments.append({"type": SegmentType.IMAGE.value, "data": {"file": sticker.get("image_url", "")}})
-        if voice:
-            audio_path = voice.get("audio_path", "")
-            napcat_path = audio_path.replace("/app/data/voice", "/app/audio")
-            message_segments.append({"type": SegmentType.RECORD.value, "data": {"file": napcat_path}})
+        if repeat_message_id:
+            source = await self._get_message_data(repeat_message_id)
+            if source is None or not source.get("message"):
+                raise RuntimeError("+1 的原消息不存在或内容为空")
+            message_segments = list(source["message"])
+        else:
+            message_segments = []
+            reply_to = request.reply_to_message_id
+            if reply_to.lstrip("-").isdigit():
+                message_segments.append({"type": SegmentType.REPLY.value, "data": {"id": int(reply_to)}})
+            if text:
+                message_segments.append({"type": SegmentType.TEXT.value, "data": {"text": text}})
+            if sticker:
+                message_segments.append({"type": SegmentType.IMAGE.value, "data": {"file": sticker.get("image_url", "")}})
+            if voice:
+                audio_path = voice.get("audio_path", "")
+                napcat_path = audio_path.replace("/app/data/voice", "/app/audio")
+                message_segments.append({"type": SegmentType.RECORD.value, "data": {"file": napcat_path}})
         payload: dict = {"message": message_segments}
         if chat_type == ChatType.PRIVATE.value:
             payload["user_id"] = int(chat_id)
@@ -313,7 +329,7 @@ class QQChannel(Channel):
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
             channel=ChannelEnum.QQ.value,
-            send_types=["text", "image", "sticker", "voice"],
+            send_types=["text", "image", "sticker", "voice", "repeat"],
             receive_types=["text", "image", "voice", "sticker", "forward", "quote", "file", "at"],
             supports_history=False,
             is_live_platform=False,

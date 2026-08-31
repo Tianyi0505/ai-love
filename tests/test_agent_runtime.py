@@ -111,6 +111,26 @@ class ResponseCommandTests(unittest.TestCase):
         self.assertNotIn("voice", payload)
         self.assertEqual("run-1", payload["run_id"])
 
+    def test_repeat_payload_targets_original_message(self) -> None:
+        command = ResponseCommand(
+            run_id="run-2",
+            ai_id="luoyu",
+            account_id="qq-main",
+            conversation_id="conv-1",
+            platform="qq",
+            chat={"chat_id": "12345", "chat_type": "group"},
+            reply_to_message_id="",
+            text="原消息",
+            sticker=None,
+            voice=None,
+            repeat_message_id="987654",
+        )
+
+        payload = command.send_request()
+
+        self.assertEqual("repeat", payload.type)
+        self.assertEqual("987654", payload.repeat_message_id)
+
 class EntityContextTests(unittest.TestCase):
     def test_round_trip(self) -> None:
         context = EntityContext(
