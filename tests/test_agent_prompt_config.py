@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import yaml
 
 from agent.conversation.message_understanding import MessageUnderstanding
+from agent.conversation.multimodal_input import DirectVisionMessageInputBuilder
 from agent.conversation.prompt_assembler import PromptAssembler
 from agent.conversation.response_plan import ParticipationDecision
 from agent.social.group_participation_service import GroupParticipationService
@@ -47,6 +48,90 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("\n", definition.prompts["message-separator"])
         self.assertEqual("联系人: 扩展内容\n联系人: 晚上好", result)
+
+    async def test_legacy_message_understanding_keeps_separate_vision_path(self) -> None:
+        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        describer = SimpleNamespace(
+            describe=AsyncMock(return_value=SimpleNamespace(description="旧视觉模型识别结果"))
+        )
+        understanding = MessageUnderstanding(PromptAssembler(definition), {}, describer)
+        message = SocialMessage(
+            chat=Chat(chat_id="private", chat_type=ChatType.PRIVATE),
+            sender=SocialSender(user_id="contact", name="联系人"),
+            type=ContentType.IMAGE,
+            media_url="https://example.com/legacy.jpg",
+        )
+
+        result = await understanding.understand(message)
+
+        self.assertEqual("联系人: [图片] 旧视觉模型识别结果", result)
+        describer.describe.assert_awaited_once_with("https://example.com/legacy.jpg")
+
+    async def test_forwarded_images_keep_sender_attribution(self) -> None:
+        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        image_fetcher = SimpleNamespace(
+            data_urls=AsyncMock(
+                return_value=(
+                    "data:image/jpeg;base64,YWxpY2Ux",
+                    "data:image/jpeg;base64,YWxpY2Uy",
+                    "data:image/jpeg;base64,Ym9i",
+                )
+            )
+        )
+        understanding = DirectVisionMessageInputBuilder(
+            PromptAssembler(definition),
+            {},
+            image_fetcher,
+        )
+        message = SocialMessage(
+            chat=Chat(chat_id="private", chat_type=ChatType.PRIVATE),
+            sender=SocialSender(user_id="sender", name="转发者"),
+            type=ContentType.FORWARD,
+            sub_messages=[
+                SocialMessage(
+                    chat=Chat(chat_id="private", chat_type=ChatType.PRIVATE),
+                    sender=SocialSender(user_id="alice", name="小爱"),
+                    type=ContentType.IMAGE,
+                    media_urls=["https://example.com/alice-1.jpg", "https://example.com/alice-2.jpg"],
+                ),
+                SocialMessage(
+                    chat=Chat(chat_id="private", chat_type=ChatType.PRIVATE),
+                    sender=SocialSender(user_id="bob", name="小博"),
+                    type=ContentType.IMAGE,
+                    media_url="https://example.com/bob.jpg",
+                ),
+            ],
+        )
+
+        result = await understanding.build(message)
+
+        self.assertEqual(
+            [
+                "小爱: [图片1/2]",
+                "小爱: [图片2/2]",
+                "小博: [图片]",
+            ],
+            [image.attribution for image in result.images],
+        )
+        self.assertEqual(
+            [
+                "https://example.com/alice-1.jpg",
+                "https://example.com/alice-2.jpg",
+                "https://example.com/bob.jpg",
+            ],
+            [image.source_url for image in result.images],
+        )
+        self.assertIn("小爱: [图片1/2]", result.text)
+        self.assertIn("小博: [图片]", result.text)
+
+    async def test_default_agent_prioritizes_deepseek_vision_model_group(self) -> None:
+        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+
+        self.assertEqual("deepseek:deepseek-v4-flash", definition.model_profile.model)
+        self.assertEqual(
+            ["deepseek:deepseek-v4-flash-vision-exp"],
+            definition.model_profile.multimodal_models,
+        )
 
     # 验证被点名消息进入群聊参与决策
     async def test_addressed_group_message_reaches_participation_model(self) -> None:

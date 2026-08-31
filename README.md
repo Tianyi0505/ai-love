@@ -12,8 +12,9 @@ flowchart LR
         M["Memory Module<br/>记忆 / 关系 / 表情"]
     end
 
-    LLM["LLM"]
-    V["Vision"]
+    MM["多模态模型组<br/>文本 + 图片"]
+    V["独立视觉模型"]
+    LLM["独立文本模型"]
     ASR["ASR"]
     TTS["TTS"]
 
@@ -22,8 +23,11 @@ flowchart LR
 
     G -->|"文字 / 图片 URL / 语音 URL"| A
 
-    A -->|"模型生成"| LLM
-    A -->|"图片理解"| V
+    A -->|"优先：文本 + 原图"| MM
+    A -. "多模态组全部失败：图片" .-> V
+    V -. "带发送者归属的描述" .-> LLM
+    A -. "多模态组全部失败：文本" .-> LLM
+    A -->|"异步表情素材索引"| V
     A -->|"语音识别"| ASR
     A -->|"进程内 NATS RPC"| M
     A -->|"工具调用"| EH
@@ -35,13 +39,15 @@ flowchart LR
 
 Gateway 只处理平台协议、账号路由和消息归一化。它把文字、图片 URL、语音 URL 交给 Agent，不负责图片理解、语音识别或回复决策。
 
+`model_config.multimodal_models` 是第一优先级模型组，按配置顺序尝试；只有整组全部失败，才使用原有 `image` 独立视觉模型生成带发送者归属的图片描述，再交给 `model_config.model` 独立文本模型。未配置多模态模型组时，保持原有分离链路。
+
 ## 代码包边界
 
 ```text
 agent/                      # Agent 运行时与编排入口
 ├── conversation/          # 对话上下文、Prompt、模型响应与会话状态
 ├── social/                # 社交消息、群聊、空间评论与表情
-├── vision/                # 图片获取、描述与输出约束
+├── vision/                # 图片获取、传输封装与表情素材分析
 └── speech/                # TTS 接口与 GPT-SoVITS 适配
 gptsovits/                  # 语音合成服务及 GPT-SoVITS、MIMO 引擎
 gateway/                    # 平台接入、消息归一化、账号路由与 QQ 空间

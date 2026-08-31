@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock
 
 import yaml
 
+from agent.conversation.multimodal_input import MessageInput
 from agent.conversation.prompt_assembler import PromptAssembler
 from agent.conversation.response_plan import Emotion, ResponsePlan, Speech
 from agent.social.proactive_private_service import ProactivePrivateService
@@ -166,7 +167,7 @@ class ProactivePrivateReplyTests(unittest.IsolatedAsyncioTestCase):
         service = SimpleNamespace(
             ai_id=definition.ai_id,
             settings=SimpleNamespace(social=SimpleNamespace(log_preview_chars=30)),
-            understanding=SimpleNamespace(understand=AsyncMock(return_value="你好")),
+            message_input=SimpleNamespace(build=AsyncMock(return_value=MessageInput("你好"))),
             sticker_collector=object(),
             persona=SimpleNamespace(
                 name_for=lambda _user_id: "",

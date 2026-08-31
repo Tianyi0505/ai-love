@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
 from agent.conversation.chat_agent import ChatAgent
+from agent.conversation.multimodal_input import ImageAttachment
 from agent.conversation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
 from agent.conversation.response_plan import Emotion, ParticipationDecision, ResponsePlan, Speech
 from agent.vision.image_describer import ImageDescriber
@@ -174,7 +175,18 @@ class ChatAgentTests(unittest.IsolatedAsyncioTestCase):
                 observability=observability(),
             )
 
-        direct = await agent.generate_plan("system", "user", allow_tools=False)
+        direct = await agent.generate_plan(
+            "system",
+            "user",
+            allow_tools=False,
+            images=[
+                ImageAttachment(
+                    source_url="https://example.com/image.jpg",
+                    data_url="data:image/jpeg;base64,aW1hZ2U=",
+                    attribution="小爱: [图片]",
+                )
+            ],
+        )
         context = ToolExecutionContext(chat_id="trusted")
         with_tools = await agent.generate_plan(
             "system",
@@ -188,6 +200,13 @@ class ChatAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decision, participation)
         graph.ainvoke.assert_awaited_once()
         self.assertEqual(context, graph.ainvoke.await_args.kwargs["context"])
+        direct_message = plan_call.await_args_list[0].args[0][1]
+        self.assertEqual("user", direct_message.content[0]["text"])
+        self.assertEqual("下图对应消息：小爱: [图片]", direct_message.content[1]["text"].strip())
+        self.assertEqual(
+            "data:image/jpeg;base64,aW1hZ2U=",
+            direct_message.content[2]["image_url"]["url"],
+        )
 
 
 class ImageDescriberTests(unittest.IsolatedAsyncioTestCase):

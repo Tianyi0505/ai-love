@@ -103,6 +103,8 @@ extensions:
 
 model_config:
   model: deepseek:deepseek-v4-flash
+  multimodal_models:
+    - deepseek:deepseek-v4-flash-vision-exp
 
 prompts:
   system: |-

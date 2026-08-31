@@ -71,6 +71,7 @@ class BehaviorPolicyConfig(AgentConfigModel):
 
 class ModelSelectionConfig(AgentConfigModel):
     model: str
+    multimodal_models: list[str] = Field(default_factory=list)
 
 
 class AgentDefinition(AgentConfigModel):

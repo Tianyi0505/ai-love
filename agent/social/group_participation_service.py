@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.conversation_context import ConversationContext, format_entries
+from agent.conversation.multimodal_input import ImageAttachment
 from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
 from agent.conversation.session_manager import SessionManager
 from agent.persona import Persona
@@ -91,7 +93,13 @@ class GroupParticipationService:
     def finish_turn(self, chat_id: str) -> None:
         self._turns_in_flight.pop(chat_id, None)
 
-    async def should_join(self, chat_id: str, *, explicitly_addressed: bool) -> bool:
+    async def should_join(
+        self,
+        chat_id: str,
+        *,
+        explicitly_addressed: bool,
+        images: Sequence[ImageAttachment] = (),
+    ) -> bool:
         if not explicitly_addressed and (not self._proactive.enabled or not self._behavior_schedule.allows_proactive()):
             logger.info("[ai-agent:%s] 群聊跳过: 非工作时段/未启用", self._ai_id)
             return False
@@ -151,6 +159,7 @@ class GroupParticipationService:
         decision = await self._chat_agent.decide_participation(
             self._prompt_assembler.build_system_prompt(context),
             self._prompt_assembler.build_user_prompt(context),
+            images=images,
         )
         return decision.participate
 

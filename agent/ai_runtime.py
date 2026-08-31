@@ -10,7 +10,12 @@ from stevedore.extension import error_on_conflict
 
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.conversation_context import ConversationContext
+from agent.conversation.failover_chat_agent import FailoverChatAgent
 from agent.conversation.message_understanding import MessageUnderstanding
+from agent.conversation.multimodal_input import (
+    DescribedMessageInputBuilder,
+    DirectVisionMessageInputBuilder,
+)
 from agent.conversation.prompt_assembler import PromptAssembler
 from agent.conversation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
 from agent.conversation.session_manager import SessionManager
@@ -19,6 +24,7 @@ from agent.extension_toolset_loader import load_toolset
 from agent.live_event_handler import handle_live
 from agent.memory_client import MemoryClient
 from agent.persona import Persona
+from agent.social.direct_vision_qzone_comment_generator import DirectVisionQZoneCommentGenerator
 from agent.social.group_participation_service import GroupParticipationService
 from agent.social.proactive_private_service import ProactivePrivateService
 from agent.social.qzone_comment_generator import QZoneCommentGenerator
@@ -75,6 +81,7 @@ class AIRuntime:
             headers=image_config.fetch_headers,
             follow_redirects=True,
         )
+        self.image_fetcher = ImageFetcher(self._vision_fetch_client, image_config.media_type)
         self._vision_model_http_client = httpx.AsyncClient(
             timeout=image_config.request_timeout_sec,
         )
@@ -91,7 +98,7 @@ class AIRuntime:
         self.vision = ImageDescriber(
             vision_model,
             f"openai-compatible:{image_config.model}",
-            ImageFetcher(self._vision_fetch_client, image_config.media_type),
+            self.image_fetcher,
             vision_output_policy,
             image_config.prompt,
             image_config.max_tokens,
@@ -103,6 +110,12 @@ class AIRuntime:
             {},
             self.vision,
         )
+        multimodal_model_names = self.definition.model_profile.multimodal_models
+        self.message_input = (
+            DirectVisionMessageInputBuilder(self.prompt_assembler, {}, self.image_fetcher)
+            if multimodal_model_names
+            else DescribedMessageInputBuilder(self.understanding)
+        )
 
         response_output_policy = ResponseOutputPolicy(ResponseOutputLimits.model_validate(llm_config.output_limits))
         toolset = await load_toolset(
@@ -110,25 +123,41 @@ class AIRuntime:
             self.ai_id,
             self._timeouts,
         )
-        model_name = self.definition.model_profile.model
-        chat_model = create_chat_model(
-            model_name,
-            max_tokens=llm_config.max_tokens,
-            timeout_sec=llm_config.provider_request_timeout_sec,
-            max_retries=llm_config.retry_count,
-        )
-        self.chat_agent = ChatAgent(
-            model=chat_model,
-            model_name=model_name,
-            tools=toolset,
-            output_policy=response_output_policy,
-            max_requests=llm_config.max_requests,
-            participation_max_requests=llm_config.participation_max_requests,
-            max_tokens=llm_config.max_tokens,
-            retry_count=llm_config.retry_count,
-            tool_retry_count=llm_config.tool_retry_count,
-            observability=self.settings.observability,
-        )
+        def build_chat_agent(model_name: str) -> ChatAgent:
+            model = create_chat_model(
+                model_name,
+                max_tokens=llm_config.max_tokens,
+                timeout_sec=llm_config.provider_request_timeout_sec,
+                max_retries=llm_config.retry_count,
+            )
+            return ChatAgent(
+                model=model,
+                model_name=model_name,
+                tools=toolset,
+                output_policy=response_output_policy,
+                max_requests=llm_config.max_requests,
+                participation_max_requests=llm_config.participation_max_requests,
+                max_tokens=llm_config.max_tokens,
+                retry_count=llm_config.retry_count,
+                tool_retry_count=llm_config.tool_retry_count,
+                observability=self.settings.observability,
+            )
+
+        fallback_model_name = self.definition.model_profile.model
+        fallback_agent = build_chat_agent(fallback_model_name)
+        if multimodal_model_names:
+            primary_agents = tuple(
+                (model_name, build_chat_agent(model_name))
+                for model_name in multimodal_model_names
+            )
+            self.chat_agent = FailoverChatAgent(
+                primaries=primary_agents,
+                fallback=fallback_agent,
+                image_describer=self.vision,
+                fallback_model_name=fallback_model_name,
+            )
+        else:
+            self.chat_agent = fallback_agent
 
         self.stickers = StickerClient(self.bus, self.ai_id, self._timeouts)
         tts_config = self.settings.tts
@@ -189,11 +218,20 @@ class AIRuntime:
         )
         if self.definition.behavior_policy.proactive.enabled:
             self.spawn(self.proactive_private.loop())
-        self.comment_generator = QZoneCommentGenerator(
-            self.settings.qq,
-            self.prompt_assembler,
-            self.chat_agent,
-            self.vision,
+        self.comment_generator = (
+            DirectVisionQZoneCommentGenerator(
+                self.settings.qq,
+                self.prompt_assembler,
+                self.chat_agent,
+                self.image_fetcher,
+            )
+            if multimodal_model_names
+            else QZoneCommentGenerator(
+                self.settings.qq,
+                self.prompt_assembler,
+                self.chat_agent,
+                self.vision,
+            )
         )
         self.sticker_collector = StickerCollector(
             self.ai_id,

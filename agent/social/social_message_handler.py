@@ -38,8 +38,9 @@ async def _process(service, msg, execution) -> dict:
     tool_rounds = 0
     preview_chars = service.settings.social.log_preview_chars
 
-    understood = await service.understanding.understand(msg)
-    query = understood or msg.text
+    message_input = await service.message_input.build(msg)
+    query = message_input.text or msg.text
+    images = message_input.images
     if msg.type == ContentType.IMAGE and msg.all_media_urls():
         service.spawn(service.sticker_collector.collect(msg.all_media_urls()))
     is_group = msg.chat.chat_type.value == "group"
@@ -95,6 +96,7 @@ async def _process(service, msg, execution) -> dict:
         should_respond = await service.group_participation.should_join(
             msg.chat.chat_id,
             explicitly_addressed=True,
+            images=images,
         )
     else:
         should_respond = service.persona.should_respond_directly(
@@ -107,6 +109,7 @@ async def _process(service, msg, execution) -> dict:
             should_respond = await service.group_participation.should_join(
                 msg.chat.chat_id,
                 explicitly_addressed=False,
+                images=images,
             )
     if not should_respond:
         if group_turn_started:
@@ -138,6 +141,7 @@ async def _process(service, msg, execution) -> dict:
         service.prompt_assembler.build_system_prompt(prompt_context),
         service.prompt_assembler.build_user_prompt(prompt_context),
         tool_context=tool_context,
+        images=images,
     )
 
     sticker_to_send = None

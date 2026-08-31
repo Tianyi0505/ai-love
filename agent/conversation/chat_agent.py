@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import cast
 
 from langchain.agents import create_agent
@@ -9,6 +10,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
+from agent.conversation.multimodal_input import ImageAttachment
 from agent.conversation.response_output_policy import ResponseOutputPolicy
 from agent.conversation.response_plan import ParticipationDecision, ResponsePlan
 from shared.contracts.tools import ToolExecutionContext
@@ -81,10 +83,11 @@ class ChatAgent:
         *,
         tool_context: ToolExecutionContext | None = None,
         allow_tools: bool = True,
+        images: Sequence[ImageAttachment] = (),
     ) -> ResponsePlan:
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
+            _human_message(user_prompt, images),
         ]
         with model_span(
             "chat-agent.generate-plan",
@@ -115,10 +118,12 @@ class ChatAgent:
         self,
         system_prompt: str,
         user_prompt: str,
+        *,
+        images: Sequence[ImageAttachment] = (),
     ) -> ParticipationDecision:
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
+            _human_message(user_prompt, images),
         ]
         with model_span(
             "chat-agent.decide-participation",
@@ -136,3 +141,17 @@ class ChatAgent:
                 output=decision,
             )
         return self._output_policy.validate_participation(decision)
+
+
+def _human_message(user_prompt: str, images: Sequence[ImageAttachment]) -> HumanMessage:
+    if not images:
+        return HumanMessage(content=user_prompt)
+    content: list[dict] = [{"type": "text", "text": user_prompt}]
+    for image in images:
+        content.extend(
+            [
+                {"type": "text", "text": f"\n下图对应消息：{image.attribution}"},
+                {"type": "image_url", "image_url": {"url": image.data_url}},
+            ]
+        )
+    return HumanMessage(content=content)
