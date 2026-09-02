@@ -56,9 +56,10 @@ async def build_social_context(
     history_limit = service.settings.social.prompt_history_messages
     entries = list(service.conversation.window(msg.chat.chat_type.value, msg.chat.chat_id))[-(history_limit + 1) : -1]
     recent_text = format_entries(entries, ai_name=service.persona.name)
+    current_input = f"[{service.conversation.format_timestamp(msg.timestamp)}]\n{query}"
     return PromptContext(
         scene="social-private" if msg.chat.chat_type.value == "private" else "social-group",
-        user_input=query,
+        user_input=current_input,
         relationship_summary=relationship_summary,
         memories=tuple(memories),
         self_document=self_document,

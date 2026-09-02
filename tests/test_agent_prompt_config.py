@@ -128,6 +128,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
 
         self.assertEqual("deepseek:deepseek-v4-flash", definition.model_profile.model)
+        self.assertEqual("deepseek:deepseek-v4-flash", definition.model_profile.group_repeat_model)
         self.assertEqual(
             ["deepseek:deepseek-v4-flash-vision-exp"],
             definition.model_profile.multimodal_models,

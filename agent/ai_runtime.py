@@ -26,7 +26,7 @@ from agent.memory_client import MemoryClient
 from agent.persona import Persona
 from agent.social.direct_vision_qzone_comment_generator import DirectVisionQZoneCommentGenerator
 from agent.social.group_participation_service import GroupParticipationService
-from agent.social.group_repeat_service import GroupRepeatService
+from agent.social.group_repeat_service import GroupRepeatJudge, GroupRepeatService
 from agent.social.proactive_private_service import ProactivePrivateService
 from agent.social.qzone_comment_generator import QZoneCommentGenerator
 from agent.social.social_message_handler import handle_social
@@ -73,6 +73,7 @@ class AIRuntime:
 
         self.conversation = ConversationContext(
             window_size=self.settings.social.window_size,
+            timezone=self.definition.behavior_policy.proactive.timezone,
         )
 
         image_config = self.settings.image
@@ -192,6 +193,24 @@ class AIRuntime:
             self._host.redis,
             self.ai_id,
             self.settings.social.session_state_ttl_sec,
+        )
+        group_repeat_model_name = self.definition.model_profile.group_repeat_model or self.definition.model_profile.model
+        group_repeat_max_tokens = min(llm_config.max_tokens, 256)
+        self.group_repeat_judge = GroupRepeatJudge(
+            model=create_chat_model(
+                group_repeat_model_name,
+                max_tokens=group_repeat_max_tokens,
+                timeout_sec=llm_config.provider_request_timeout_sec,
+                max_retries=llm_config.retry_count,
+            ),
+            model_name=group_repeat_model_name,
+            conversation=self.conversation,
+            prompt_assembler=self.prompt_assembler,
+            ai_name=self.persona.name,
+            history_limit=self.settings.social.prompt_history_messages,
+            max_attempts=min(llm_config.participation_max_requests, llm_config.retry_count + 1),
+            max_tokens=group_repeat_max_tokens,
+            observability=self.settings.observability,
         )
         behavior_schedule = BehaviorSchedule.from_config(self.definition.behavior_policy)
         self.group_participation = GroupParticipationService(

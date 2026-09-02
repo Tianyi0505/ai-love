@@ -39,14 +39,13 @@ async def _process(service, msg, execution) -> dict:
     preview_chars = service.settings.social.log_preview_chars
 
     is_group = msg.chat.chat_type.value == "group"
-    should_repeat = is_group and await service.group_repeat.should_repeat(msg)
-    if should_repeat:
-        query = msg.text
-        images = []
-    else:
-        message_input = await service.message_input.build(msg)
-        query = message_input.text or msg.text
-        images = message_input.images
+    repeat_candidate = is_group and await service.group_repeat.claim_candidate(msg)
+    message_input = await service.message_input.build(msg)
+    query = message_input.text or msg.text
+    images = message_input.images
+    if repeat_candidate and not query.strip():
+        logger.info("[ai-agent:%s] 群聊 +1 候选缺少可判断内容，已跳过: message_id=%s", service.ai_id, msg.message_id)
+        repeat_candidate = False
     if msg.type == ContentType.IMAGE and msg.all_media_urls():
         service.spawn(service.sticker_collector.collect(msg.all_media_urls()))
     persona = service.persona
@@ -64,6 +63,7 @@ async def _process(service, msg, execution) -> dict:
                 speaker_id=person_id,
                 speaker_name=sender_name,
                 quote=quote_meta,
+                timestamp=msg.timestamp,
             )
         service.group_participation.observe(msg.chat.chat_id)
         await service.group_participation.mark_replied(msg.chat.chat_id)
@@ -86,7 +86,17 @@ async def _process(service, msg, execution) -> dict:
         )
     )
 
+    should_repeat = repeat_candidate and await service.group_repeat_judge.should_repeat(msg.chat.chat_id)
+    if repeat_candidate and not should_repeat:
+        logger.info(
+            "[ai-agent:%s] 群聊 +1 候选未通过小模型判断: message_id=%s content_hash=%s",
+            service.ai_id,
+            msg.message_id,
+            service.group_repeat.content_hash(msg),
+        )
+
     if should_repeat:
+        repeat_text = msg.text
         command = ResponseCommand(
             run_id=execution.run_id,
             ai_id=service.ai_id,
@@ -95,7 +105,7 @@ async def _process(service, msg, execution) -> dict:
             platform=msg.platform,
             chat=msg.chat.model_dump(mode="json"),
             reply_to_message_id="",
-            text=attributed_query,
+            text=repeat_text,
             sticker=None,
             voice=None,
             repeat_message_id=msg.message_id,
@@ -103,14 +113,14 @@ async def _process(service, msg, execution) -> dict:
         await service.send_response(command)
         service.group_participation.activate(msg.chat.chat_id)
         await service.group_participation.mark_spoke(msg.chat.chat_id)
-        service.conversation.add_ai("group", msg.chat.chat_id, attributed_query)
+        service.conversation.add_ai("group", msg.chat.chat_id, repeat_text)
         logger.info(
             "[ai-agent:%s] 群聊 +1: message_id=%s content_hash=%s",
             service.ai_id,
             msg.message_id,
             service.group_repeat.content_hash(msg),
         )
-        return {"outcome": "group_repeat", "tool_rounds": 0, "response_text": attributed_query}
+        return {"outcome": "group_repeat", "tool_rounds": 0, "response_text": repeat_text}
 
     explicitly_addressed = bool(is_group and (msg.to_ai or (msg.at_user_id and msg.at_user_id == service.ai_id)))
     group_turn_started = False
@@ -156,6 +166,7 @@ async def _process(service, msg, execution) -> dict:
             speaker_id=person_id,
             speaker_name=sender_name,
             quote=quote_meta,
+            timestamp=msg.timestamp,
         )
     service._current_chat_key = f"{msg.chat.chat_type.value}:{msg.chat.chat_id}"
 

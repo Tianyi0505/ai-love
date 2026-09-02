@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from agent.conversation.conversation_context import format_entries
 from agent.conversation.prompt_assembler import PromptContext
 from shared.contracts.live import InteractionEvent
 from shared.contracts.rpc.social import SpeechRequest
@@ -9,25 +10,29 @@ from shared.contracts.rpc.social import SpeechRequest
 async def handle_live(service, evt: InteractionEvent) -> None:
     chat_key = f"live:{evt.actor.uid}"
     service._current_chat_key = chat_key
-    service.conversation.add_user("live", str(evt.actor.uid), evt.content)
+    service.conversation.add_user(
+        "live",
+        str(evt.actor.uid),
+        evt.content,
+        speaker_id=str(evt.actor.uid),
+        speaker_name=evt.actor.name,
+        timestamp=evt.timestamp,
+    )
 
     history_limit = service.settings.social.live_prompt_history_messages
-    recent = tuple(
-        f"{role}: {content}"
-        for role, content, _meta in list(service.conversation.window("live", str(evt.actor.uid)))[
-            -(history_limit + 1) : -1
-        ]
+    entries = list(service.conversation.window("live", str(evt.actor.uid)))[-(history_limit + 1) : -1]
+    recent_text = format_entries(entries, ai_name=service.persona.name)
+    current_input = service.prompt_assembler.render(
+        "live-input",
+        actor_name=evt.actor.name,
+        event_type=evt.type.value,
+        content=evt.content,
     )
     prompt_context = PromptContext(
         scene="live",
-        user_input=service.prompt_assembler.render(
-            "live-input",
-            actor_name=evt.actor.name,
-            event_type=evt.type.value,
-            content=evt.content,
-        ),
+        user_input=f"[{service.conversation.format_timestamp(evt.timestamp)}]\n{current_input}",
         relationship_summary=service.prompt_assembler.render("live-relationship", actor_name=evt.actor.name),
-        recent_messages=recent,
+        recent_messages=(recent_text,) if recent_text else (),
     )
     plan = await service.chat_agent.generate_plan(
         service.prompt_assembler.build_system_prompt(prompt_context),

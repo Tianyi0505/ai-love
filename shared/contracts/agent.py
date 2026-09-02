@@ -71,6 +71,7 @@ class BehaviorPolicyConfig(AgentConfigModel):
 
 class ModelSelectionConfig(AgentConfigModel):
     model: str
+    group_repeat_model: str | None = None
     multimodal_models: list[str] = Field(default_factory=list)
 
 
