@@ -112,10 +112,10 @@ class AIRuntime:
             {},
             self.vision,
         )
-        multimodal_model_names = self.definition.model_profile.multimodal_models
+        multimodal_model_ids = self.definition.model_profile.multimodal_model_ids
         self.message_input = (
             DirectVisionMessageInputBuilder(self.prompt_assembler, {}, self.image_fetcher)
-            if multimodal_model_names
+            if multimodal_model_ids
             else DescribedMessageInputBuilder(self.understanding)
         )
 
@@ -125,16 +125,17 @@ class AIRuntime:
             self.ai_id,
             self._timeouts,
         )
-        def build_chat_agent(model_name: str) -> ChatAgent:
+        def build_chat_agent(model_id: str) -> ChatAgent:
             model = create_chat_model(
-                model_name,
+                model_id,
+                models=llm_config.models,
                 max_tokens=llm_config.max_tokens,
                 timeout_sec=llm_config.provider_request_timeout_sec,
                 max_retries=llm_config.retry_count,
             )
             return ChatAgent(
                 model=model,
-                model_name=model_name,
+                model_name=model_id,
                 tools=toolset,
                 output_policy=response_output_policy,
                 max_requests=llm_config.max_requests,
@@ -145,18 +146,18 @@ class AIRuntime:
                 observability=self.settings.observability,
             )
 
-        fallback_model_name = self.definition.model_profile.model
-        fallback_agent = build_chat_agent(fallback_model_name)
-        if multimodal_model_names:
+        fallback_model_id = self.definition.model_profile.model_id
+        fallback_agent = build_chat_agent(fallback_model_id)
+        if multimodal_model_ids:
             primary_agents = tuple(
-                (model_name, build_chat_agent(model_name))
-                for model_name in multimodal_model_names
+                (model_id, build_chat_agent(model_id))
+                for model_id in multimodal_model_ids
             )
             self.chat_agent = FailoverChatAgent(
                 primaries=primary_agents,
                 fallback=fallback_agent,
                 image_describer=self.vision,
-                fallback_model_name=fallback_model_name,
+                fallback_model_name=fallback_model_id,
             )
         else:
             self.chat_agent = fallback_agent
@@ -194,16 +195,20 @@ class AIRuntime:
             self.ai_id,
             self.settings.social.session_state_ttl_sec,
         )
-        group_repeat_model_name = self.definition.model_profile.group_repeat_model or self.definition.model_profile.model
+        group_repeat_model_id = (
+            self.definition.model_profile.group_repeat_model_id
+            or self.definition.model_profile.model_id
+        )
         group_repeat_max_tokens = min(llm_config.max_tokens, 256)
         self.group_repeat_judge = GroupRepeatJudge(
             model=create_chat_model(
-                group_repeat_model_name,
+                group_repeat_model_id,
+                models=llm_config.models,
                 max_tokens=group_repeat_max_tokens,
                 timeout_sec=llm_config.provider_request_timeout_sec,
                 max_retries=llm_config.retry_count,
             ),
-            model_name=group_repeat_model_name,
+            model_name=group_repeat_model_id,
             conversation=self.conversation,
             prompt_assembler=self.prompt_assembler,
             ai_name=self.persona.name,
@@ -250,7 +255,7 @@ class AIRuntime:
                 self.chat_agent,
                 self.image_fetcher,
             )
-            if multimodal_model_names
+            if multimodal_model_ids
             else QZoneCommentGenerator(
                 self.settings.qq,
                 self.prompt_assembler,

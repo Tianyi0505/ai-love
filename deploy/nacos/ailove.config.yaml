@@ -124,6 +124,17 @@ lfu:
     initial_counter: 0
 
 llm:
+  models:
+    deepseek-v4-flash:
+      provider: deepseek
+      model: deepseek-v4-flash
+      base_url: https://api.deepseek.com
+      api_key_env: DEEPSEEK_API_KEY
+    deepseek-v4-flash-vision-exp:
+      provider: deepseek
+      model: deepseek-v4-flash-vision-exp
+      base_url: https://api.deepseek.com
+      api_key_env: DEEPSEEK_API_KEY
   timeout_ms: 60000
   health_fail_threshold: 3
   health_recover_after_sec: 60

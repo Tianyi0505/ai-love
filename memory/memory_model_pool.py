@@ -44,7 +44,8 @@ class MemoryModelPool:
         cached_model = self._models.get(ai_id)
         if cached_model is None or cached_model[0] != definition.fingerprint:
             model = create_chat_model(
-                definition.model_profile.model,
+                definition.model_profile.model_id,
+                models=self._config.models,
                 max_tokens=self._config.max_tokens,
                 timeout_sec=self._config.provider_request_timeout_sec,
                 max_retries=self._config.retry_count,
@@ -90,7 +91,7 @@ class MemoryModelPool:
         output_type: type[OutputT],
     ) -> OutputT:
         definition, runnable = await self._structured_resources(ai_id, output_type)
-        model_name = definition.model_profile.model
+        model_name = definition.model_profile.model_id
         with model_span(
             "memory.generate",
             model_name,

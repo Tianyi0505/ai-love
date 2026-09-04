@@ -9,7 +9,7 @@
 ## 模型创建
 
 - 新增 `shared/infrastructure/chat_model_factory.py`。
-- 解析 `provider:model` 配置，并创建 DeepSeek、Anthropic 或 OpenAI chat model。
+- 根据 Agent 选择的模型 ID 从全局 `llm.models` 读取 provider、模型名、地址和密钥环境变量，并通过对应策略创建 DeepSeek、Anthropic 或 OpenAI chat model。
 - 注入 API key、base URL、最大输出 token、请求超时和网络重试次数。
 - 为图片理解提供 OpenAI-compatible 模型创建入口和共享异步 HTTP client。
 
@@ -57,7 +57,7 @@
 
 ## 验证
 
-- 验证 DeepSeek、Anthropic 和 OpenAI-compatible 模型路由。
+- 验证模型目录、DeepSeek、Anthropic 和 OpenAI-compatible 模型路由。
 - 验证回复、参与决策、图片描述和记忆输出的结构化解析。
 - 验证解析失败重试、模型调用上限和工具重试配置。
 - 验证模型参数与可信工具上下文隔离。

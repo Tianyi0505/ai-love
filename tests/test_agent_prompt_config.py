@@ -7,11 +7,12 @@ import yaml
 
 from agent.conversation.message_understanding import MessageUnderstanding
 from agent.conversation.multimodal_input import DirectVisionMessageInputBuilder
-from agent.conversation.prompt_assembler import PromptAssembler
+from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
 from agent.conversation.response_plan import ParticipationDecision
 from agent.social.group_participation_service import GroupParticipationService
 from shared.contracts.rpc.relationship import GroupRelationshipData, GroupRelationshipResponse
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
+from shared.global_settings import GlobalSettings
 from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,29 @@ class FileConfigProvider:
 
 # 验证智能体提示词配置
 class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
+    # 验证检索上下文位于用户问题前且标签含义写入系统提示词
+    async def test_retrieved_context_precedes_user_question_with_documented_xml_tags(self) -> None:
+        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        prompts = PromptAssembler(definition)
+        context = PromptContext(
+            scene="social-private",
+            user_input="现在的问题",
+            memories=("检索到的记忆",),
+            recent_messages=("最近的对话",),
+        )
+
+        system_prompt = prompts.build_system_prompt(context)
+        user_prompt = prompts.build_user_prompt(context)
+
+        self.assertIn("`<retrieved_context>`", system_prompt)
+        self.assertIn("`<conversation_history>`", system_prompt)
+        self.assertIn("`<user_question>`", system_prompt)
+        self.assertNotIn("检索到的记忆", system_prompt)
+        self.assertLess(user_prompt.index("<conversation_history>"), user_prompt.index("<retrieved_context>"))
+        self.assertLess(user_prompt.index("<retrieved_context>"), user_prompt.index("<user_question>"))
+        self.assertIn("</retrieved_context>\n\n<user_question>", user_prompt)
+        self.assertIn("检索到的记忆", user_prompt)
+
     # 验证真实配置加载后保留消息分隔符
     async def test_message_separator_survives_real_config_loading(self) -> None:
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
@@ -125,14 +149,25 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("小博: [图片]", result.text)
 
     async def test_default_agent_prioritizes_deepseek_vision_model_group(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        provider = FileConfigProvider()
+        definition = await NacosAgentDefinitionStore(provider).load("ai_luoyu")
+        global_config = await provider.get("ailove.config")
+        global_config["qq"]["whitelist"] = []
+        settings = GlobalSettings.model_validate(global_config)
 
-        self.assertEqual("deepseek:deepseek-v4-flash", definition.model_profile.model)
-        self.assertEqual("deepseek:deepseek-v4-flash", definition.model_profile.group_repeat_model)
+        self.assertEqual("deepseek-v4-flash", definition.model_profile.model_id)
+        self.assertEqual("deepseek-v4-flash", definition.model_profile.group_repeat_model_id)
         self.assertEqual(
-            ["deepseek:deepseek-v4-flash-vision-exp"],
-            definition.model_profile.multimodal_models,
+            ["deepseek-v4-flash-vision-exp"],
+            definition.model_profile.multimodal_model_ids,
         )
+        selected_model_ids = {
+            definition.model_profile.model_id,
+            definition.model_profile.group_repeat_model_id,
+            *definition.model_profile.multimodal_model_ids,
+        }
+        self.assertLessEqual(selected_model_ids, settings.llm.models.keys())
+        self.assertEqual("DEEPSEEK_API_KEY", settings.llm.models["deepseek-v4-flash"].api_key_env)
 
     # 验证被点名消息进入群聊参与决策
     async def test_addressed_group_message_reaches_participation_model(self) -> None:

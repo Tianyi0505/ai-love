@@ -21,8 +21,9 @@ from shared.chat_model_factory import (
     create_chat_model,
     create_openai_compatible_chat_model,
 )
+from shared.chat_model_strategy import CHAT_MODEL_STRATEGIES, ChatModelParameters
 from shared.contracts.tools import ToolExecutionContext
-from shared.global_settings import ObservabilitySettings
+from shared.global_settings import ChatModelSettings, ObservabilitySettings
 from shared.langchain_structured_output import (
     parsed_output,
     structured_output_runnable,
@@ -38,19 +39,25 @@ def observability() -> ObservabilitySettings:
 
 
 class ChatModelFactoryTests(unittest.TestCase):
-    @patch("shared.chat_model_factory.ChatDeepSeek")
-    def test_deepseek_model_uses_provider_prefix_and_environment(self, model_class) -> None:
+    @patch("shared.chat_model_strategy.ChatDeepSeek")
+    def test_deepseek_model_uses_catalog_and_configured_environment(self, model_class) -> None:
         model_class.return_value = MagicMock()
+        models = {
+            "chat": ChatModelSettings(
+                provider="deepseek",
+                model="deepseek-chat",
+                base_url="https://deepseek.example/v1",
+                api_key_env="DEEPSEEK_API_KEY",
+            )
+        }
         with patch.dict(
             os.environ,
-            {
-                "DEEPSEEK_API_KEY": "deepseek-key",
-                "DEEPSEEK_BASE_URL": "https://deepseek.example/v1",
-            },
+            {"DEEPSEEK_API_KEY": "deepseek-key"},
             clear=False,
         ):
             create_chat_model(
-                "deepseek:deepseek-chat",
+                "chat",
+                models=models,
                 max_tokens=100,
                 timeout_sec=30,
                 max_retries=1,
@@ -66,19 +73,25 @@ class ChatModelFactoryTests(unittest.TestCase):
             max_retries=1,
         )
 
-    @patch("shared.chat_model_factory.ChatAnthropic")
-    def test_anthropic_model_uses_existing_auth_token(self, model_class) -> None:
+    @patch("shared.chat_model_strategy.ChatAnthropic")
+    def test_anthropic_model_uses_configured_api_key_environment(self, model_class) -> None:
         model_class.return_value = MagicMock()
+        models = {
+            "chat": ChatModelSettings(
+                provider="anthropic",
+                model="claude-test",
+                base_url="https://anthropic.example",
+                api_key_env="ANTHROPIC_API_KEY",
+            )
+        }
         with patch.dict(
             os.environ,
-            {
-                "ANTHROPIC_AUTH_TOKEN": "anthropic-token",
-                "ANTHROPIC_BASE_URL": "https://anthropic.example",
-            },
+            {"ANTHROPIC_API_KEY": "anthropic-key"},
             clear=False,
         ):
             create_chat_model(
-                "anthropic:claude-test",
+                "chat",
+                models=models,
                 max_tokens=100,
                 timeout_sec=30,
                 max_retries=1,
@@ -86,8 +99,75 @@ class ChatModelFactoryTests(unittest.TestCase):
 
         model_class.assert_called_once_with(
             model="claude-test",
-            api_key="anthropic-token",
+            api_key="anthropic-key",
             base_url="https://anthropic.example",
+            max_tokens=100,
+            timeout=30,
+            max_retries=1,
+        )
+
+    def test_registered_strategy_can_be_selected_without_factory_branch(self) -> None:
+        strategy = MagicMock()
+        expected_model = MagicMock()
+        strategy.create.return_value = expected_model
+        models = {
+            "test": ChatModelSettings(
+                provider="custom",
+                model="test-model",
+                base_url="https://custom.example",
+                api_key_env="CUSTOM_API_KEY",
+            )
+        }
+
+        with (
+            patch.dict(CHAT_MODEL_STRATEGIES, {"custom": strategy}),
+            patch.dict(os.environ, {"CUSTOM_API_KEY": "custom-key"}, clear=False),
+        ):
+            actual_model = create_chat_model(
+                "test",
+                models=models,
+                max_tokens=100,
+                timeout_sec=30,
+                max_retries=1,
+            )
+
+        self.assertIs(expected_model, actual_model)
+        strategy.create.assert_called_once_with(
+            ChatModelParameters(
+                model="test-model",
+                api_key="custom-key",
+                base_url="https://custom.example",
+                max_tokens=100,
+                timeout_sec=30,
+                max_retries=1,
+            )
+        )
+
+    @patch("shared.chat_model_strategy.ChatOpenAI")
+    def test_openai_model_uses_catalog_and_configured_environment(self, model_class) -> None:
+        model_class.return_value = MagicMock()
+        models = {
+            "chat": ChatModelSettings(
+                provider="openai",
+                model="gpt-test",
+                base_url="https://openai.example/v1",
+                api_key_env="OPENAI_API_KEY",
+            )
+        }
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "openai-key"}, clear=False):
+            create_chat_model(
+                "chat",
+                models=models,
+                max_tokens=100,
+                timeout_sec=30,
+                max_retries=1,
+            )
+
+        model_class.assert_called_once_with(
+            model="gpt-test",
+            api_key="openai-key",
+            base_url="https://openai.example/v1",
             max_tokens=100,
             timeout=30,
             max_retries=1,
@@ -258,7 +338,7 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
     async def test_runnable_is_cached_by_fingerprint_and_output_type(self) -> None:
         definition = SimpleNamespace(
             fingerprint="v1",
-            model_profile=SimpleNamespace(model="deepseek:deepseek-chat"),
+            model_profile=SimpleNamespace(model_id="chat"),
         )
         definitions = SimpleNamespace(load=AsyncMock(return_value=definition))
         extraction = MemoryExtractionOutput(episode_summary="摘要", memories=[])
@@ -288,6 +368,7 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
             consolidation_runnable,
         ]
         config = SimpleNamespace(
+            models={},
             max_tokens=100,
             provider_request_timeout_sec=30,
             retry_count=0,

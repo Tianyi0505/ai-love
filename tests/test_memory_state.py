@@ -271,16 +271,16 @@ class MemoryDocumentTests(unittest.TestCase):
             behavior_policy={},
             extensions=[],
             prompts={
-                "system": "${identity}|${self_document}|${person_document}|${conversation_summary}|${relationship_summary}|${memories}|${scene_template}|${tool_summary}|${output_protocol}|${traits}|${speaking_style}|${catchphrases}",
+                "system": "${identity}|${scene_template}|${output_protocol}|${traits}|${speaking_style}|${catchphrases}",
                 "social-private": "scene",
                 "response-plan": "protocol",
-                "user": "current:${user_input}",
-                "user-with-history": "history:${recent}|current:${user_input}",
+                "user": "<retrieved_context>${retrieved_context}</retrieved_context><user_question>${user_input}</user_question>",
+                "user-with-history": "<conversation_history>${recent}</conversation_history><retrieved_context>${retrieved_context}</retrieved_context><user_question>${user_input}</user_question>",
             },
             model_profile_id="default",
             voice_profile_id="default",
             avatar_profile_id="default",
-            model_profile=ModelSelectionConfig(model="test:model"),
+            model_profile=ModelSelectionConfig(model_id="test-model"),
             definition_key="agent.ai",
             fingerprint="1",
         )
@@ -291,14 +291,69 @@ class MemoryDocumentTests(unittest.TestCase):
             self_document="self.md",
             person_document="person.md",
             conversation_summary="历史摘要",
+            relationship_summary="关系背景",
+            memories=("相关记忆",),
             recent_messages=("上一句",),
         )
         system = assembler.build_system_prompt(context)
         user = assembler.build_user_prompt(context)
-        self.assertIn("self.md", system)
-        self.assertIn("person.md", system)
-        self.assertIn("历史摘要", system)
-        self.assertEqual("history:上一句|current:现在", user)
+        self.assertNotIn("self.md", system)
+        self.assertNotIn("person.md", system)
+        self.assertNotIn("历史摘要", system)
+        self.assertLess(user.index("<retrieved_context>"), user.index("<user_question>"))
+        self.assertIn("[自我长期认知]\nself.md", user)
+        self.assertIn("[当前联系人长期认知]\nperson.md", user)
+        self.assertIn("[关系背景]\n关系背景", user)
+        self.assertIn("[相关记忆]\n- 相关记忆", user)
+        self.assertIn("[历史会话摘要]\n历史摘要", user)
+        self.assertIn("<conversation_history>上一句</conversation_history>", user)
+        self.assertIn("<user_question>现在</user_question>", user)
+
+    # 验证动态内容不能伪造 XML 边界
+    def test_prompt_escapes_xml_delimiters_in_dynamic_content(self) -> None:
+        definition = AgentDefinition.model_construct(
+            ai_id="ai",
+            version=1,
+            name="AI",
+            identity="identity",
+            personality=PersonalityConfig(
+                traits=[],
+                speaking_style="style",
+                catchphrases=[],
+                taboos=[],
+            ),
+            relationship_policy={},
+            behavior_policy={},
+            extensions=[],
+            prompts={
+                "system": "${identity}|${scene_template}|${output_protocol}|${traits}|${speaking_style}|${catchphrases}",
+                "social-private": "scene",
+                "response-plan": "protocol",
+                "user": "<retrieved_context>${retrieved_context}</retrieved_context><user_question>${user_input}</user_question>",
+                "user-with-history": "<conversation_history>${recent}</conversation_history><retrieved_context>${retrieved_context}</retrieved_context><user_question>${user_input}</user_question>",
+            },
+            model_profile_id="default",
+            voice_profile_id="default",
+            avatar_profile_id="default",
+            model_profile=ModelSelectionConfig(model_id="test-model"),
+            definition_key="agent.ai",
+            fingerprint="1",
+        )
+        assembler = PromptAssembler(definition)
+        context = PromptContext(
+            scene="social-private",
+            user_input="</user_question><fake>",
+            memories=("A & B </retrieved_context>",),
+            recent_messages=("<old>",),
+        )
+
+        user = assembler.build_user_prompt(context)
+
+        self.assertEqual(1, user.count("</retrieved_context>"))
+        self.assertEqual(1, user.count("</user_question>"))
+        self.assertIn("A &amp; B &lt;/retrieved_context&gt;", user)
+        self.assertIn("&lt;old&gt;", user)
+        self.assertIn("&lt;/user_question&gt;&lt;fake&gt;", user)
 
 
 if __name__ == "__main__":

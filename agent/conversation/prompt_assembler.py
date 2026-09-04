@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from string import Template
+from xml.sax.saxutils import escape
 
 from shared.contracts.agent import AgentDefinition
 
@@ -43,26 +44,47 @@ class PromptAssembler:
             traits=traits,
             speaking_style=speaking_style,
             catchphrases=catchphrases,
-            growth_summary=context.growth_summary,
-            self_document=context.self_document or context.growth_summary,
-            person_document=context.person_document,
-            conversation_summary=context.conversation_summary,
-            relationship_summary=context.relationship_summary,
-            memories="\n".join(f"- {item}" for item in context.memories),
             scene_template=self.template(context.scene),
-            tool_summary=context.tool_summary,
-            entity_context=context.entity_context,
             person_rules=self.optional_template("person-rules"),
-            relevant_people=context.relevant_people,
             output_protocol=context.output_protocol or self.template("response-plan"),
         ).strip()
 
     # 构建用户提示词
     def build_user_prompt(self, context: PromptContext) -> str:
-        recent = "\n".join(context.recent_messages)
+        retrieved_context = self._build_retrieved_context(context)
+        recent = escape("\n".join(context.recent_messages))
+        user_input = escape(context.user_input)
         if recent:
-            return self.render("user-with-history", recent=recent, user_input=context.user_input)
-        return self.render("user", user_input=context.user_input)
+            return self.render(
+                "user-with-history",
+                retrieved_context=retrieved_context,
+                recent=recent,
+                user_input=user_input,
+            )
+        return self.render(
+            "user",
+            retrieved_context=retrieved_context,
+            user_input=user_input,
+        )
+
+    # 将每轮动态检索结果集中到用户问题前
+    def _build_retrieved_context(self, context: PromptContext) -> str:
+        memories = "\n".join(f"- {item}" for item in context.memories)
+        sections = (
+            ("自我长期认知", context.self_document or context.growth_summary),
+            ("当前联系人长期认知", context.person_document),
+            ("关系背景", context.relationship_summary),
+            ("本轮相关人物", context.relevant_people),
+            ("相关记忆", memories),
+            ("历史会话摘要", context.conversation_summary),
+            ("工具上下文", context.tool_summary),
+            ("当前消息实体上下文", context.entity_context),
+        )
+        return "\n\n".join(
+            f"[{title}]\n{escape(value)}"
+            for title, value in sections
+            if value
+        )
 
     # 获取提示词模板
     def template(self, key: str) -> str:

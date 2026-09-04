@@ -39,7 +39,7 @@ flowchart LR
 
 Gateway 只处理平台协议、账号路由和消息归一化。它把文字、图片 URL、语音 URL 交给 Agent，不负责图片理解、语音识别或回复决策。
 
-`model_config.multimodal_models` 是第一优先级模型组，按配置顺序尝试；只有整组全部失败，才使用原有 `image` 独立视觉模型生成带发送者归属的图片描述，再交给 `model_config.model` 独立文本模型。未配置多模态模型组时，保持原有分离链路。
+`model_config.multimodal_model_ids` 是第一优先级模型组，按配置顺序尝试；只有整组全部失败，才使用原有 `image` 独立视觉模型生成带发送者归属的图片描述，再交给 `model_config.model_id` 独立文本模型。模型 ID 对应 `ailove.config` 中的 `llm.models` 条目，API Key 实际值由条目的 `api_key_env` 从进程环境读取。未配置多模态模型组时，保持原有分离链路。
 
 ## 代码包边界
 

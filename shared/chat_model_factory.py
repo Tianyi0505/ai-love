@@ -1,57 +1,44 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 
 import httpx
-from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_deepseek import ChatDeepSeek
 from langchain_openai import ChatOpenAI
+
+from shared.chat_model_strategy import CHAT_MODEL_STRATEGIES, ChatModelParameters
+from shared.global_settings import ChatModelSettings
 
 
 def create_chat_model(
-    model_ref: str,
+    model_id: str,
     *,
+    models: Mapping[str, ChatModelSettings],
     max_tokens: int,
     timeout_sec: float,
     max_retries: int,
 ) -> BaseChatModel:
-    provider, separator, model = model_ref.partition(":")
-    if not separator or not provider or not model:
-        raise ValueError(f"模型配置必须使用 provider:model 格式: {model_ref}")
+    model_config = models.get(model_id)
+    if model_config is None:
+        raise ValueError(f"未配置模型: {model_id}")
 
-    if provider == "deepseek":
-        options = _base_url_option("DEEPSEEK_BASE_URL")
-        return ChatDeepSeek(
-            model=model,
-            api_key=_required_env("DEEPSEEK_API_KEY"),
-            extra_body={"thinking": {"type": "disabled"}},
+    strategy = CHAT_MODEL_STRATEGIES.get(model_config.provider)
+    if strategy is None:
+        raise ValueError(f"不支持的模型 provider: {model_config.provider}")
+    api_key = os.getenv(model_config.api_key_env)
+    if not api_key:
+        raise RuntimeError(f"缺少模型凭据环境变量: {model_config.api_key_env}")
+    return strategy.create(
+        ChatModelParameters(
+            model=model_config.model,
+            api_key=api_key,
+            base_url=model_config.base_url,
             max_tokens=max_tokens,
-            timeout=timeout_sec,
+            timeout_sec=timeout_sec,
             max_retries=max_retries,
-            **options,
         )
-    if provider == "anthropic":
-        options = _base_url_option("ANTHROPIC_BASE_URL")
-        return ChatAnthropic(
-            model=model,
-            api_key=_first_env("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"),
-            max_tokens=max_tokens,
-            timeout=timeout_sec,
-            max_retries=max_retries,
-            **options,
-        )
-    if provider == "openai":
-        options = _base_url_option("OPENAI_BASE_URL")
-        return ChatOpenAI(
-            model=model,
-            api_key=_required_env("OPENAI_API_KEY"),
-            max_tokens=max_tokens,
-            timeout=timeout_sec,
-            max_retries=max_retries,
-            **options,
-        )
-    raise ValueError(f"不支持的模型 provider: {provider}")
+    )
 
 
 def create_openai_compatible_chat_model(
@@ -73,23 +60,3 @@ def create_openai_compatible_chat_model(
         max_retries=max_retries,
         http_async_client=http_async_client,
     )
-
-
-def _required_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"缺少模型凭据环境变量: {name}")
-    return value
-
-
-def _first_env(*names: str) -> str:
-    for name in names:
-        value = os.getenv(name)
-        if value:
-            return value
-    raise RuntimeError(f"缺少模型凭据环境变量: {' / '.join(names)}")
-
-
-def _base_url_option(name: str) -> dict[str, str]:
-    value = os.getenv(name)
-    return {"base_url": value} if value else {}

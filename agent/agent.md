@@ -14,7 +14,7 @@
 **AI Runtime** (`agent/ai_runtime.py`):
 
 - 每个 `AIRuntime` 只服务一个 AI，组装 Persona、Prompt、ChatAgent、Vision、Memory、Sticker、TTS、工具集、会话状态、群聊参与策略和主动私聊调度。
-- 对话模型由 `create_chat_model()` 创建，视觉模型由 `create_openai_compatible_chat_model()` 创建；扩展工具通过 `tool.list.request` 动态加载，TTS 通过 `ai_love.tts` entry point 加载。
+- Agent 定义只保存对话模型 ID，`create_chat_model()` 从全局 `llm.models` 解析 provider、模型名、地址和密钥环境变量后创建模型；视觉模型由 `create_openai_compatible_chat_model()` 创建。扩展工具通过 `tool.list.request` 动态加载，TTS 通过 `ai_love.tts` entry point 加载。
 - 同一会话使用 `TurnCoordinator` 串行演进，不同会话可并发。社交回合完成后发布 `memory.activity`；回复只能通过 `social.send.request` 返回 Gateway。
 - Runtime 替换前必须等待 `_in_flight` 归零；新增后台任务必须经 `spawn()` 登记，以便停止时统一取消并关闭 HTTP client。
 - 主动私聊按工作时段周期检查关系候选人，满足静默期后基于长期记忆生成具体话题；发送后必须等对方回复并遵守冷却时间。主动消息同样只经 `social.send.request` 发往 Gateway。

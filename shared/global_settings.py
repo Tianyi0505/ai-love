@@ -125,7 +125,15 @@ class ResponseOutputLimits(SettingsModel):
     emotion_intensity_max: float
 
 
+class ChatModelSettings(SettingsModel):
+    provider: str
+    model: str
+    base_url: str
+    api_key_env: str
+
+
 class LLMSettings(SettingsModel):
+    models: dict[str, ChatModelSettings]
     timeout_ms: int
     health_fail_threshold: int
     health_recover_after_sec: float
