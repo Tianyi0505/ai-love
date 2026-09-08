@@ -101,7 +101,15 @@ class QQChannel(Channel):
         segments = evt.message
         msg_type = evt.message_type
         user_id = str(evt.user_id)
-        text = "".join(str(seg.data["text"]) for seg in segments if seg.type == SegmentType.TEXT.value).strip()
+        text_parts: list[str] = []
+        for seg in segments:
+            if seg.type == SegmentType.TEXT.value:
+                text_parts.append(str(seg.data["text"]))
+            elif seg.type == SegmentType.FACE.value:
+                # 按原始顺序保留原生表情并作为聊天内容接收
+                label = seg.data.get("text") or seg.data.get("name") or f"ID:{seg.data['id']}"
+                text_parts.append(f"[QQ表情：{label}]")
+        text = "".join(text_parts).strip()
         at_targets = [str(seg.data["qq"]) for seg in segments if seg.type == SegmentType.AT.value]
         images = [seg.data for seg in segments if seg.type == SegmentType.IMAGE.value]
         voices = [seg.data for seg in segments if seg.type == SegmentType.RECORD.value]

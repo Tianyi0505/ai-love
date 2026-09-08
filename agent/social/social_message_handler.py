@@ -230,6 +230,8 @@ async def _process(service, msg, execution) -> dict:
         service.group_participation.finish_turn(msg.chat.chat_id)
 
     remembered = f"[语音] {reply}" if voice_sent else reply
+    if sticker_sent:
+        remembered = f"{remembered} [表情包] {sticker_to_send['description']}".strip()
     service.conversation.add_ai(msg.chat.chat_type.value, msg.chat.chat_id, remembered)
     mode = (
         ("语音" if voice_sent else "")

@@ -59,15 +59,25 @@ class StickerService:
         )
 
     async def search(self, ai_id: str, query: str) -> dict | None:
+        query_tokens = [token for token in jieba.lcut(query) if any(char.isalnum() for char in token)]
+        if not query_tokens:
+            return None
         stickers = await self._repo.all(ai_id)
         if not stickers:
             return None
-        corpus_tokens = [jieba.lcut(f"{sticker['description']} {' '.join(sticker['tags'])}") for sticker in stickers]
+        corpus_tokens = [
+            [
+                token
+                for token in jieba.lcut(f"{sticker['description']} {' '.join(sticker['tags'])}")
+                if any(char.isalnum() for char in token)
+            ]
+            for sticker in stickers
+        ]
         retriever = bm25s.BM25()
         retriever.index(corpus_tokens, show_progress=False)
         candidate_count = min(self._settings.search_candidate_limit, len(stickers))
         candidates, lexical_scores = retriever.retrieve(
-            [jieba.lcut(query)],
+            [query_tokens],
             corpus=stickers,
             k=candidate_count,
             show_progress=False,
@@ -86,7 +96,10 @@ class StickerService:
                 lexical_scores[0],
                 strict=True,
             )
+            if lexical_score > 0
         ]
+        if not scored:
+            return None
         score, sticker = max(scored, key=lambda item: item[0])
         if score < self._settings.search_min_score:
             return None

@@ -19,6 +19,7 @@ class SendAction(str, Enum):
 # 定义消息段类型枚举
 class SegmentType(str, Enum):
     TEXT = "text"
+    FACE = "face"
     AT = "at"
     IMAGE = "image"
     RECORD = "record"
