@@ -182,9 +182,10 @@ async def _process(service, msg, execution) -> dict:
         sender_name=sender_name,
         entity_context=entity_context,
     )
+    user_prompt = service.prompt_assembler.build_user_prompt(prompt_context)
     plan = await service.chat_agent.generate_plan(
         service.prompt_assembler.build_system_prompt(prompt_context),
-        service.prompt_assembler.build_user_prompt(prompt_context),
+        user_prompt,
         tool_context=tool_context,
         images=images,
     )
@@ -196,6 +197,18 @@ async def _process(service, msg, execution) -> dict:
     if sticker_actions:
         sticker_query = sticker_actions[0].query
         sticker_to_send = await service.stickers.search(sticker_query)
+        if sticker_to_send is not None:
+            suitable = await service.sticker_judge.should_send(
+                sticker_to_send["image_url"],
+                {
+                    "场景": msg.chat.chat_type.value,
+                    "聊天上下文": user_prompt,
+                    "计划回复": reply,
+                    "表情意图": sticker_query,
+                },
+            )
+            if not suitable:
+                sticker_to_send = None
 
     wants_voice = any(speech.delivery == "voice" for speech in plan.speech)
     voice = None

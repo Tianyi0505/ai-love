@@ -293,6 +293,7 @@ class ImageDescriberTests(unittest.IsolatedAsyncioTestCase):
     async def test_image_is_sent_as_multimodal_structured_input(self) -> None:
         output = ImageDescription(
             description="一张图片",
+            image_type="photo",
             tags=["图片"],
             match_quality=0.5,
             emotion="neutral",

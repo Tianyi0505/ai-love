@@ -27,7 +27,11 @@ class StickerCollector:
 
     async def _collect(self, image_url: str) -> None:
         description = await self._vision.describe(image_url)
-        if description.match_quality < self._minimum_quality or not description.sticker_description:
+        if (
+            description.image_type != "sticker"
+            or description.match_quality < self._minimum_quality
+            or not description.sticker_description
+        ):
             return
         added = await self._stickers.add(
             image_url,

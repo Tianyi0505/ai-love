@@ -54,6 +54,7 @@ class ModelFailoverTests(unittest.IsolatedAsyncioTestCase):
             describe=AsyncMock(
                 return_value=ImageDescription(
                     description="一只白猫",
+                    image_type="photo",
                     tags=["猫"],
                     match_quality=0.1,
                     emotion="neutral",
@@ -92,6 +93,7 @@ class ModelFailoverTests(unittest.IsolatedAsyncioTestCase):
             describe=AsyncMock(
                 return_value=ImageDescription(
                     description="图片中的人正在提问",
+                    image_type="photo",
                     tags=["提问"],
                     match_quality=0.0,
                     emotion="neutral",

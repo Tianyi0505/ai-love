@@ -33,6 +33,7 @@ from agent.social.qzone_comment_generator import QZoneCommentGenerator
 from agent.social.social_message_handler import handle_social
 from agent.social.sticker_client import StickerClient
 from agent.social.sticker_collector import StickerCollector
+from agent.social.sticker_judge import StickerJudge
 from agent.vision.image_describer import ImageDescriber
 from agent.vision.image_fetcher import ImageFetcher
 from agent.vision.vision_output_policy import VisionOutputLimits, VisionOutputPolicy
@@ -171,6 +172,15 @@ class AIRuntime:
             self.chat_agent = fallback_agent
 
         self.stickers = StickerClient(self.bus, self.ai_id, self._timeouts)
+        self.sticker_judge = StickerJudge(
+            vision_model,
+            f"openai-compatible:{image_config.model}",
+            self.image_fetcher,
+            self.prompt_assembler.template("sticker-selection"),
+            image_config.max_tokens,
+            image_config.retry_count,
+            self.settings.observability,
+        )
         tts_config = self.settings.tts
         self._tts_http_client = httpx.AsyncClient(timeout=self._timeouts.tts_request_sec)
         self.tts = DriverManager(

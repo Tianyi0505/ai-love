@@ -2,15 +2,18 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 import yaml
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 
 from agent.conversation.conversation_context import ConversationContext
 from agent.conversation.multimodal_input import MessageInput
 from agent.conversation.response_plan import Action, Emotion, ResponsePlan, Speech
 from agent.social.social_message_handler import handle_social
+from agent.social.sticker_judge import StickerDecision, StickerJudge
 from memory.sticker_service import StickerService
 from shared.contracts.entity import EntityContext
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
@@ -38,10 +41,15 @@ def sticker_service():
 
 @pytest.mark.parametrize("chat_type", [ChatType.PRIVATE, ChatType.GROUP])
 @pytest.mark.parametrize(
-    ("query", "reply", "matched"),
-    [("开心 庆祝 鼓掌", "太棒啦", True), ("安慰 抱抱 陪伴", "我陪着你", False)],
+    ("query", "reply", "image_type", "suitable", "matched"),
+    [
+        ("开心 庆祝 鼓掌", "太棒啦", "sticker", True, True),
+        ("安慰 抱抱 陪伴", "我陪着你", "sticker", True, False),
+        ("开心 庆祝 鼓掌", "太棒啦", "screenshot", True, False),
+        ("开心 庆祝 鼓掌", "太棒啦", "sticker", False, False),
+    ],
 )
-async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, query, reply, matched):
+async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, query, reply, image_type, suitable, matched):
     """验证社交回复通过真实检索选择匹配表情并记录发送内容"""
     tasks = []
 
@@ -51,6 +59,17 @@ async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, 
         return task
 
     stickers = sticker_service()
+    model = MagicMock()
+    judge_call = AsyncMock(return_value={
+        "parsed": StickerDecision(image_type=image_type, suitable=suitable, reason="根据图片和当前场景判断"),
+        "raw": AIMessage(content=""), "parsing_error": None,
+    })
+    model.with_structured_output.return_value = RunnableLambda(judge_call)
+    judge = StickerJudge(
+        model, "vision", SimpleNamespace(data_urls=AsyncMock(return_value=("data:image/png;base64,YQ==",))),
+        "根据图片和当前场景判断", 100, 0,
+        SimpleNamespace(include_model_content=False, include_binary_content=False, include_model_request_parameters=False),
+    )
     plan = ResponsePlan(
         speech=[Speech(text=reply, delivery="text")],
         emotion=Emotion(name="neutral", intensity=0.5),
@@ -77,6 +96,7 @@ async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, 
         prompt_assembler=SimpleNamespace(build_system_prompt=Mock(return_value="system"),
                                          build_user_prompt=Mock(return_value="user")),
         stickers=SimpleNamespace(search=lambda query: stickers.search("ai-luoyu", query)),
+        sticker_judge=judge,
         send_response=AsyncMock(),
     )
     message = SocialMessage(
@@ -96,6 +116,10 @@ async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, 
     command = service.send_response.await_args.args[0]
     assert command.text == reply
     assert (command.sticker is not None) == matched
+    if query == "开心 庆祝 鼓掌":
+        judge_call.assert_awaited_once()
+    else:
+        judge_call.assert_not_awaited()
     remembered = service.conversation.window(chat_type.value, "20000")[-1][1]
     assert reply in remembered
     if matched:
