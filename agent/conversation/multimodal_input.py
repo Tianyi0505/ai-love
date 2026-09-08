@@ -14,12 +14,14 @@ class ImageAttachment:
     source_url: str
     data_url: str
     attribution: str
+    is_group: bool = False
 
 
 @dataclass(frozen=True)
 class MessageInput:
     text: str
     images: tuple[ImageAttachment, ...] = ()
+    group_message: dict | None = None
 
 
 class DescribedMessageInputBuilder:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from agent.conversation.conversation_context import format_entries
+from agent.conversation.conversation_context import format_entries, format_group_entries
 from agent.conversation.prompt_assembler import PromptContext
 from shared.contracts.entity import EntityContext
 from shared.contracts.rpc.relationship import RelationshipSummaryRequest, RelationshipSummaryResponse
@@ -55,8 +55,11 @@ async def build_social_context(
         relevant_people = ""
     history_limit = service.settings.social.prompt_history_messages
     entries = list(service.conversation.window(msg.chat.chat_type.value, msg.chat.chat_id))[-(history_limit + 1) : -1]
-    recent_text = format_entries(entries, ai_name=service.persona.name)
-    current_input = f"[{service.conversation.format_timestamp(msg.timestamp)}]\n{query}"
+    recent_text = (
+        format_group_entries(entries, ai_name=service.persona.name)
+        if is_group else format_entries(entries, ai_name=service.persona.name)
+    )
+    current_input = query if is_group else f"[{service.conversation.format_timestamp(msg.timestamp)}]\n{query}"
     return PromptContext(
         scene="social-private" if msg.chat.chat_type.value == "private" else "social-group",
         user_input=current_input,
@@ -147,15 +150,4 @@ async def _collect_group_memories(service, query: str, people: list[dict]) -> li
 
 # 渲染相关人物区块
 def _render_relevant_people(people: list[dict]) -> str:
-    lines: list[str] = []
-    for item in people:
-        name = item["name"] or item["group_card"] or item["person_id"]
-        lines.append(f"- {item['person_id']}（{name}）")
-        relevance = "、".join(item["relevance"]) or "相关人物"
-        lines.append(f"  相关性：{relevance}")
-        lines.append(f"  关系：{item.get('relationship') or ''}")
-        facts = item.get("facts") or []
-        if facts:
-            lines.append("  已知事实：")
-            lines.extend(f"  - {fact['content']}" for fact in facts)
-    return "\n".join(lines)
+    return json.dumps(people, ensure_ascii=False)

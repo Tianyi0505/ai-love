@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -221,7 +222,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         system_prompt, user_prompt = chat_agent.decide_participation.await_args.args
         self.assertIn("当前真实消息明确 @ 了你", user_prompt)
-        self.assertIn("[person | 联系人]", user_prompt)
+        self.assertEqual("联系人", json.loads(user_prompt)["user_question"]["用户群聊名"])
         self.assertIn("联系人: 你还记得群主吗", user_prompt)
         self.assertIn("只输出合法 JSON", system_prompt)
 

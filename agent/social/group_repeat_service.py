@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
-from agent.conversation.conversation_context import ConversationContext, format_entries
+from agent.conversation.conversation_context import ConversationContext, format_group_entries
 from agent.conversation.prompt_assembler import PromptAssembler
 from shared.contracts.social import ContentType, SocialMessage
 from shared.global_settings import ObservabilitySettings
@@ -102,8 +102,11 @@ class GroupRepeatJudge:
                 logger.info("群聊 +1 候选缺少可判断的连续上下文，已跳过: chat_id=%s", chat_id)
                 return False
 
-            system_prompt = self._prompt_assembler.template("group-repeat-decision")
-            user_prompt = f"[最近群聊]\n{format_entries(entries, self._ai_name)}"
+            system_prompt = (
+                self._prompt_assembler.template("group-repeat-decision")
+                + "\n\n" + self._prompt_assembler.template("group-message-format")
+            )
+            user_prompt = format_group_entries(entries, self._ai_name)
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
             with model_span(
                 "group-repeat.decide",

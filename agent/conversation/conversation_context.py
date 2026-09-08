@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import deque
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -7,6 +8,28 @@ from zoneinfo import ZoneInfo
 ConversationEntry = tuple[str, str, dict]
 
 _WEEKDAYS = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+
+
+def group_message_record(timestamp: str, name: str, content: object) -> dict:
+    return {"时间点": timestamp, "用户群聊名": name, "用户发的消息/图片": content}
+
+
+def group_entries(entries, ai_name: str = "") -> list[dict]:
+    records: list[dict] = []
+    for role, text, meta in entries:
+        if "group_message" in meta:
+            records.append(meta["group_message"])
+            continue
+        content: object = text
+        if meta.get("quote") is not None:
+            content = {"文字": text, "引用用户群聊名": meta["quote"]["name"]}
+        name = ai_name if role == "assistant" else str(meta["speaker_name"])
+        records.append(group_message_record(str(meta.get("timestamp", "")), name, content))
+    return records
+
+
+def format_group_entries(entries, ai_name: str = "") -> str:
+    return json.dumps(group_entries(entries, ai_name), ensure_ascii=False)
 
 
 def format_entries(entries, ai_name: str = "") -> str:
@@ -67,6 +90,7 @@ class ConversationContext:
         speaker_name: str = "",
         quote: dict | None = None,
         timestamp: int | float | datetime | None = None,
+        group_message: dict | None = None,
     ) -> None:
         meta: dict = {
             "speaker_id": speaker_id,
@@ -75,6 +99,8 @@ class ConversationContext:
         }
         if quote is not None:
             meta["quote"] = quote
+        if group_message is not None:
+            meta["group_message"] = group_message
         self.window(chat_type, chat_id).append(("user", text, meta))
 
     def add_ai(

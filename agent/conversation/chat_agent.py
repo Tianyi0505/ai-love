@@ -150,7 +150,7 @@ def _human_message(user_prompt: str, images: Sequence[ImageAttachment]) -> Human
     for image in images:
         content.extend(
             [
-                {"type": "text", "text": f"\n下图对应消息：{image.attribution}"},
+                {"type": "text", "text": image.attribution if image.is_group else f"\n下图对应消息：{image.attribution}"},
                 {"type": "image_url", "image_url": {"url": image.data_url}},
             ]
         )

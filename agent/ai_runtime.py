@@ -19,6 +19,7 @@ from agent.conversation.multimodal_input import (
 from agent.conversation.prompt_assembler import PromptAssembler
 from agent.conversation.response_output_policy import ResponseOutputLimits, ResponseOutputPolicy
 from agent.conversation.session_manager import SessionManager
+from agent.conversation.social_message_input import SocialMessageInputBuilder
 from agent.conversation.turn_coordinator import TurnCoordinator
 from agent.extension_toolset_loader import load_toolset
 from agent.live_event_handler import handle_live
@@ -113,10 +114,17 @@ class AIRuntime:
             self.vision,
         )
         multimodal_model_ids = self.definition.model_profile.multimodal_model_ids
-        self.message_input = (
+        private_message_input = (
             DirectVisionMessageInputBuilder(self.prompt_assembler, {}, self.image_fetcher)
             if multimodal_model_ids
             else DescribedMessageInputBuilder(self.understanding)
+        )
+        self.message_input = SocialMessageInputBuilder(
+            private_message_input,
+            self.conversation,
+            self.image_fetcher,
+            self.vision,
+            direct_vision=bool(multimodal_model_ids),
         )
 
         response_output_policy = ResponseOutputPolicy(ResponseOutputLimits.model_validate(llm_config.output_limits))

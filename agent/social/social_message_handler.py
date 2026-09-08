@@ -50,6 +50,8 @@ async def _process(service, msg, execution) -> dict:
         service.spawn(service.sticker_collector.collect(msg.all_media_urls()))
     persona = service.persona
     sender_name = persona.name_for(msg.sender.user_id) or msg.sender.name or msg.sender.user_id
+    if is_group:
+        sender_name = msg.sender.name or msg.sender.user_id
     person_id = execution.sender_person_id
     tool_context = execution.tool_context()
     attributed_query = query
@@ -64,6 +66,7 @@ async def _process(service, msg, execution) -> dict:
                 speaker_name=sender_name,
                 quote=quote_meta,
                 timestamp=msg.timestamp,
+                group_message=message_input.group_message,
             )
         service.group_participation.observe(msg.chat.chat_id)
         await service.group_participation.mark_replied(msg.chat.chat_id)

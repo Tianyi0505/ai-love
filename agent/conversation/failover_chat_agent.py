@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Sequence
 
@@ -86,6 +87,18 @@ class FailoverChatAgent:
         descriptions = await asyncio.gather(
             *(self._image_describer.describe(image.source_url) for image in images)
         )
+        if images[0].is_group:
+            prompt = json.loads(user_prompt)
+            records = []
+            for image, description in zip(images, descriptions, strict=True):
+                record = json.loads(image.attribution)
+                record["用户发的消息/图片"] = {
+                    "图片": record["用户发的消息/图片"],
+                    "识别结果": description.description,
+                }
+                records.append(record)
+            prompt["图片识别结果"] = records
+            return json.dumps(prompt, ensure_ascii=False)
         image_text = "\n".join(
             f"{image.attribution} {description.description}"
             for image, description in zip(images, descriptions, strict=True)

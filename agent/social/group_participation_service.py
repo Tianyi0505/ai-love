@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Sequence
 
 from agent.conversation.chat_agent import ChatAgent
-from agent.conversation.conversation_context import ConversationContext, format_entries
+from agent.conversation.conversation_context import ConversationContext, format_group_entries, group_entries
 from agent.conversation.multimodal_input import ImageAttachment
 from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
 from agent.conversation.session_manager import SessionManager
@@ -122,8 +123,8 @@ class GroupParticipationService:
             return False
 
         ai_name = self._persona.name
-        current_message = format_entries([recent[-1]], ai_name)
-        history_text = format_entries(recent[:-1], ai_name)
+        current_message = json.dumps(group_entries([recent[-1]], ai_name)[0], ensure_ascii=False)
+        history_text = format_group_entries(recent[:-1], ai_name)
         relationship = await self._relationship(chat_id)
         score = self._participation_score(relationship)
         logger.info(
@@ -140,10 +141,8 @@ class GroupParticipationService:
         )
         context = PromptContext(
             scene="group-join",
-            user_input=self._prompt_assembler.render(
-                "group-join-addressed-input" if explicitly_addressed else "group-join-input",
-                current_message=current_message,
-            ),
+            user_input=current_message,
+            extra={"提及状态": "当前真实消息明确 @ 了你" if explicitly_addressed else "当前群聊消息"},
             recent_messages=(history_text,) if history_text else (),
             relationship_summary=self._prompt_assembler.render(
                 "group-join-relationship",

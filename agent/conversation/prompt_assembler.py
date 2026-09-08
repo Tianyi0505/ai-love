@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from string import Template
 from xml.sax.saxutils import escape
@@ -38,7 +39,7 @@ class PromptAssembler:
         traits = "、".join(personality.traits)
         speaking_style = personality.speaking_style
         catchphrases = "、".join(personality.catchphrases)
-        return self.render(
+        prompt = self.render(
             "system",
             identity=self._definition.identity,
             traits=traits,
@@ -48,9 +49,28 @@ class PromptAssembler:
             person_rules=self.optional_template("person-rules"),
             output_protocol=context.output_protocol or self.template("response-plan"),
         ).strip()
+        if context.scene in {"social-group", "group-join"}:
+            prompt += "\n\n" + self.template("group-message-format")
+        return prompt
 
     # 构建用户提示词
     def build_user_prompt(self, context: PromptContext) -> str:
+        if context.scene in {"social-group", "group-join"}:
+            return json.dumps(
+                {
+                    "retrieved_context": {
+                        "关系背景": context.relationship_summary,
+                        "本轮相关人物": json.loads(context.relevant_people) if context.relevant_people else [],
+                        "相关记忆": list(context.memories),
+                        "历史会话摘要": context.conversation_summary,
+                        "实体上下文": json.loads(context.entity_context) if context.entity_context else {},
+                        "参与判断": context.extra,
+                    },
+                    "conversation_history": [record for batch in context.recent_messages for record in json.loads(batch)],
+                    "user_question": json.loads(context.user_input),
+                },
+                ensure_ascii=False,
+            )
         retrieved_context = self._build_retrieved_context(context)
         recent = escape("\n".join(context.recent_messages))
         user_input = escape(context.user_input)
