@@ -39,6 +39,7 @@ class GroupParticipationService:
         chat_agent: ChatAgent,
         proactive: ProactiveConfig,
         behavior_schedule: BehaviorSchedule,
+        group_whitelist: Sequence[str | int],
     ) -> None:
         self._ai_id = ai_id
         self._account_id = account_id
@@ -51,6 +52,7 @@ class GroupParticipationService:
         self._chat_agent = chat_agent
         self._proactive = proactive
         self._behavior_schedule = behavior_schedule
+        self._group_whitelist = frozenset(str(group_id) for group_id in group_whitelist)
         self._manager = GroupChatManager()
         self._turns_in_flight: dict[str, float] = {}
 
@@ -101,7 +103,10 @@ class GroupParticipationService:
         explicitly_addressed: bool,
         images: Sequence[ImageAttachment] = (),
     ) -> bool:
-        if not explicitly_addressed and (not self._proactive.enabled or not self._behavior_schedule.allows_proactive()):
+        if not explicitly_addressed and (
+            not self._proactive.enabled
+            or (chat_id not in self._group_whitelist and not self._behavior_schedule.allows_proactive())
+        ):
             logger.info("[ai-agent:%s] 群聊跳过: 非工作时段/未启用", self._ai_id)
             return False
 

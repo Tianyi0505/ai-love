@@ -18,6 +18,7 @@ from gateway.qzone_context_provider import QZoneContextProvider
 from gateway.qzone_service import QZoneService
 from gateway.social_router import SocialRouter
 from gateway.social_send_handler import SocialSendHandler
+from shared import private_reply_observability as private_metrics
 from shared.account_ownership_repository import AccountOwnershipRepository
 from shared.base_service import BaseService
 from shared.contracts.behavior import BehaviorSchedule
@@ -27,7 +28,12 @@ from shared.contracts.rpc.grounding import (
     SearchGroupHistoryRequest,
     SearchGroupHistoryResponse,
 )
-from shared.contracts.rpc.social import SocialSendRequest, SocialSendResponse
+from shared.contracts.rpc.social import (
+    SocialSendRequest,
+    SocialSendResponse,
+    SocialSendStatusRequest,
+    SocialSendStatusResponse,
+)
 from shared.contracts.social import SUBJ_SOCIAL_SEND
 from shared.conversation_repository import ConversationRepository
 from shared.database import Database
@@ -37,9 +43,11 @@ from shared.global_settings_store import GlobalSettingsStore
 from shared.identity_repository import IdentityRepository
 from shared.lfu import LazyLFU, LFUConfig
 from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.private_interaction_repository import PrivateInteractionRepository
 from shared.relationship_repository import RelationshipRepository
 from shared.service_config import ServiceConfig
 from shared.service_settings import GatewaySettings
+from shared.social_delivery_repository import SocialDeliveryRepository
 
 logger = logging.getLogger("ailove.gateway")
 
@@ -58,6 +66,8 @@ class GatewayService(BaseService):
         identities = IdentityRepository(self._db)
         relationships = RelationshipRepository(self._db, settings.relationship_storage)
         conversations = ConversationRepository(self._db, settings.social.message_retention_days)
+        private_jobs = PrivateInteractionRepository(self._db, retention_days=settings.social.message_retention_days)
+        deliveries = SocialDeliveryRepository(self._db)
         grounding = EntityGroundingFacade(
             self._db,
             settings.grounding,
@@ -85,8 +95,11 @@ class GatewayService(BaseService):
             bus=self.bus,
             live_settings=settings.live,
             priority_user_ids=priority_user_ids,
+            private_jobs=private_jobs,
+            self_user_ids={spec.account_id: str(spec.config.get("uin", "")) for spec in section.accounts},
         )
-        social_sender = SocialSendHandler(self._channels, conversations)
+        social_sender = SocialSendHandler(self._channels, conversations, deliveries, router,
+                                         send_retries=section.private_reply.send_retries)
 
         for spec in section.accounts:
             channel_config = {**spec.config, "account_id": spec.account_id}
@@ -124,6 +137,23 @@ class GatewayService(BaseService):
             SocialSendResponse,
             social_sender.send,
         )
+        await self.bus.reply_model("social.send.status.request", SocialSendStatusRequest,
+                                   SocialSendStatusResponse, social_sender.status)
+
+        async def recover_private():
+            try:
+                await message_handler.recover_private(section.private_reply.batch_size)
+            except Exception as exc:
+                private_metrics.scan_failure("gateway-inbound", type(exc).__name__)
+            try:
+                await social_sender.recover()
+            except Exception as exc:
+                private_metrics.scan_failure("gateway-delivery", type(exc).__name__)
+
+        self.scheduler.add_job(recover_private, "interval", seconds=section.private_reply.scan_interval_sec,
+                               max_instances=1)
+        self.scheduler.add_job(private_jobs.cleanup, "interval", hours=24, max_instances=1)
+        self.scheduler.add_job(deliveries.cleanup, "interval", hours=24, max_instances=1)
         await self.bus.reply_model(
             "identity.resolve-people.request",
             ResolvePeopleRequest,

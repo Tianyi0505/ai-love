@@ -2,3 +2,12 @@ instance_addr: 127.0.0.1:0
 catalog_poll_interval_sec: 2
 account_ids_by_ai:
   __AILOVE_AI_ID__: [qq-main]
+
+private_reply:
+  scan_interval_sec: 5
+  batch_size: 100
+  concurrency: 10
+  processing_budget_sec: 45
+  lease_sec: 120
+  heartbeat_sec: 15
+  send_retries: 2

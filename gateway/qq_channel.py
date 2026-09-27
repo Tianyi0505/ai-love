@@ -8,13 +8,20 @@ import httpx
 import websockets
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from stevedore.named import NamedExtensionManager
+from websockets.exceptions import ConnectionClosed
 
 from gateway.channel import Channel, ChannelCapabilities
 from gateway.content_type_resolver import ContentContext, ContentTypeResolver
 from gateway.enums import Channel as ChannelEnum
 from gateway.enums import EventPostType, SegmentType, SendAction
 from gateway.napcat_message_event import NapCatMessageEvent
-from shared.contracts.rpc.social import SocialSendRequest, SocialSendResponse
+from shared.contracts.rpc.social import (
+    DeliveryRejected,
+    DeliveryRetryable,
+    ReplyUnavailable,
+    SocialSendRequest,
+    SocialSendResponse,
+)
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 
 logger = logging.getLogger("ailove.gateway.qq")
@@ -76,6 +83,8 @@ class QQChannel(Channel):
                                     tasks.create_task(self._handle_message(msg))
                         except Exception:
                             logger.exception("[qq] 消息解析失败，已跳过当前事件")
+                except ConnectionClosed:
+                    logger.warning("[qq] NapCat WS 连接断开，正在重连")
                 finally:
                     self._ws = None
 
@@ -189,7 +198,7 @@ class QQChannel(Channel):
 
     # 补全引用消息
     async def _hydrate_quote(self, message: SocialMessage, ancestors: frozenset[tuple[str, str]]) -> None:
-        reply_id = str(message.meta.pop("reply_message_id", "") or "")
+        reply_id = str(message.meta.get("reply_message_id", "") or "")
         if not reply_id:
             return
         key = ("quote", reply_id)
@@ -290,15 +299,19 @@ class QQChannel(Channel):
             payload["user_id"] = int(chat_id)
         else:
             payload["group_id"] = int(chat_id)
-        response = await self._http_client.post(
-            f"{self._http_url}/{action}",
-            json=payload,
-            timeout=self._message_timeout_sec,
-        )
+        try:
+            response = await self._http_client.post(
+                f"{self._http_url}/{action}", json=payload, timeout=self._message_timeout_sec,
+            )
+        except (httpx.ConnectTimeout, httpx.ConnectError, httpx.PoolTimeout) as exc:
+            raise DeliveryRetryable("平台连接尚未建立") from exc
         response.raise_for_status()
         data = response.json()
         if data["status"] != "ok":
-            raise RuntimeError(str(data["message"]))
+            reason = f"{data.get('message', '')} {data.get('wording', '')}".lower()
+            if request.reply_to_message_id and any(marker in reason for marker in ("reply", "引用", "回复消息")):
+                raise ReplyUnavailable("平台明确拒绝引用目标")
+            raise DeliveryRejected("平台明确拒绝消息")
         return SocialSendResponse(message_id=str(data["data"]["message_id"]))
 
     # 获取 NapCat 的当前群成员快照

@@ -4,8 +4,10 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
+    Identity,
     Index,
     Integer,
     Text,
@@ -18,6 +20,75 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     pass
+
+
+class PrivateReplyJob(Base):
+    __tablename__ = "private_reply_jobs"
+    job_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    received_seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True)
+    ai_id: Mapped[str] = mapped_column(Text)
+    person_id: Mapped[int] = mapped_column(BigInteger)
+    conversation_id: Mapped[int] = mapped_column(BigInteger)
+    platform: Mapped[str] = mapped_column(Text)
+    account_id: Mapped[str] = mapped_column(Text)
+    platform_message_id: Mapped[str] = mapped_column(Text)
+    run_id: Mapped[str] = mapped_column(Text, unique=True)
+    message_snapshot: Mapped[dict] = mapped_column(JSONB)
+    response_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    status: Mapped[str] = mapped_column(Text, server_default="accepted")
+    claim_version: Mapped[int] = mapped_column(Integer, server_default="0")
+    lease_until: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    next_attempt_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reason_code: Mapped[str] = mapped_column(Text, server_default="")
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    retain_until: Mapped[object] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint("platform", "account_id", "conversation_id", "platform_message_id"),
+        Index("ix_private_reply_ready", "status", "next_attempt_at"),
+        Index("ix_private_reply_order", "conversation_id", "received_seq"),
+    )
+
+
+class PrivateContactState(Base):
+    __tablename__ = "private_contact_states"
+    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    person_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    unanswered_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    last_success_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_inbound_job_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_inbound_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, server_default="0")
+    pending_run_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(Text, server_default="suspended")
+    reason_code: Mapped[str] = mapped_column(Text, server_default="migration")
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    __table_args__ = (CheckConstraint("unanswered_count BETWEEN 0 AND 3", name="ck_private_count"),)
+
+
+class SocialDelivery(Base):
+    __tablename__ = "social_deliveries"
+    ai_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    account_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    run_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    person_id: Mapped[int] = mapped_column(BigInteger)
+    conversation_id: Mapped[str] = mapped_column(Text)
+    source_job_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    claim_version: Mapped[int] = mapped_column(Integer, server_default="0")
+    request_snapshot: Mapped[dict] = mapped_column(JSONB)
+    request_digest: Mapped[str] = mapped_column(Text)
+    original_digest: Mapped[str] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, server_default="0")
+    status: Mapped[str] = mapped_column(Text, server_default="prepared")
+    platform_message_id: Mapped[str] = mapped_column(Text, server_default="")
+    attempt_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    reason_code: Mapped[str] = mapped_column(Text, server_default="")
+    history_recorded: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
 
 # 表示AI档案记录

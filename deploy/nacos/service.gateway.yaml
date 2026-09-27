@@ -8,3 +8,12 @@ accounts:
       http_url: __NAPCAT_HTTP_URL__
       uin: __AILOVE_QQ_UIN__
       content_strategies: [quote, forward, voice, image, file, at, text]
+
+private_reply:
+  scan_interval_sec: 5
+  batch_size: 100
+  concurrency: 10
+  processing_budget_sec: 45
+  lease_sec: 120
+  heartbeat_sec: 15
+  send_retries: 2

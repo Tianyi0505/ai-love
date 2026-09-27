@@ -371,6 +371,8 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
         config = SimpleNamespace(
             models={},
             max_tokens=100,
+            memory_max_tokens=200,
+            memory_request_timeout_sec=120,
             provider_request_timeout_sec=30,
             retry_count=0,
             memory_max_requests=1,
@@ -392,6 +394,8 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(extraction, second)
         self.assertEqual(consolidation, document)
         factory.assert_called_once()
+        self.assertEqual(200, factory.call_args.kwargs["max_tokens"])
+        self.assertEqual(120, factory.call_args.kwargs["timeout_sec"])
         self.assertEqual(2, model.with_structured_output.call_count)
 
 

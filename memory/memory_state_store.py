@@ -43,6 +43,7 @@ class PendingState(BaseModel):
     atom_ids: tuple[str, ...]
     episode_tokens: dict[str, int]
     first_pending_at: float
+    retry_at: float = 0.0
     status: StateStatus
     lease_until: float | None
     claim_id: str | None
@@ -161,6 +162,7 @@ class MemoryStateStore:
                     atom_ids=tuple(dict.fromkeys(atom_ids)),
                     episode_tokens={episode_id: estimated_tokens},
                     first_pending_at=moment,
+                    retry_at=0.0,
                     status="active",
                     lease_until=None,
                     claim_id=None,
@@ -191,6 +193,8 @@ class MemoryStateStore:
         result: list[StateEntry[PendingState]] = []
         for entry in await self._entries(self._pending, PendingState):
             state = entry.data
+            if state.retry_at > moment:
+                continue
             if state.status == "processing" and state.lease_until is not None and state.lease_until > moment:
                 continue
             threshold = getattr(thresholds, state.owner_type)
@@ -241,6 +245,7 @@ class MemoryStateStore:
                     "atom_ids": remaining_atoms,
                     "episode_tokens": episode_tokens,
                     "first_pending_at": time.time(),
+                    "retry_at": 0.0,
                     "status": "active",
                     "lease_until": None,
                     "claim_id": None,
@@ -250,11 +255,18 @@ class MemoryStateStore:
                 return
         raise RuntimeError("完成待合并记忆状态冲突")
 
-    async def release_pending(self, claim: StateEntry[PendingState]) -> None:
+    async def release_pending(self, claim: StateEntry[PendingState], retry_delay_sec: float) -> None:
         current = await self._get(self._pending, claim.key, PendingState)
         if current is None or current.data.claim_id != claim.data.claim_id:
             return
-        state = current.data.model_copy(update={"status": "active", "lease_until": None, "claim_id": None})
+        state = current.data.model_copy(
+            update={
+                "status": "active",
+                "retry_at": time.time() + retry_delay_sec,
+                "lease_until": None,
+                "claim_id": None,
+            }
+        )
         await self._update(self._pending, current.key, state, current.revision)
 
     async def _delete_if_claim(

@@ -9,6 +9,7 @@ import yaml
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
+from nats.errors import NoRespondersError
 
 try:
     import websockets  # noqa: F401
@@ -55,6 +56,11 @@ class _ExtensionBus:
             })
         self.execute_request = request.model_dump(mode="json")
         return response_type.model_validate({"content": "{}", "data": {}})
+
+
+class _UnavailableExtensionBus:
+    async def request_model(self, subject, request, response_type, timeout):
+        raise NoRespondersError
 
 
 class _Rows(list):
@@ -167,6 +173,15 @@ class _RoleSession:
 
 
 class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_agent_can_start_without_extension_responder(self) -> None:
+        toolset = await load_toolset(
+            _UnavailableExtensionBus(),
+            "ai",
+            SimpleNamespace(tool_list_sec=1, tool_execute_sec=1),
+        )
+
+        self.assertEqual([], toolset)
+
     async def test_group_owner_is_resolved_from_live_group_members(self) -> None:
         db = _RoleDB()
         settings = global_settings()

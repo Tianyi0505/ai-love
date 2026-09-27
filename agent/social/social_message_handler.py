@@ -34,7 +34,7 @@ def _quote_meta(msg) -> dict | None:
 
 
 # 执行回复决策与生成
-async def _process(service, msg, execution) -> dict:
+async def _process(service, msg, execution, *, send=True):
     tool_rounds = 0
     preview_chars = service.settings.social.log_preview_chars
 
@@ -70,8 +70,6 @@ async def _process(service, msg, execution) -> dict:
             )
         service.group_participation.observe(msg.chat.chat_id)
         await service.group_participation.mark_replied(msg.chat.chat_id)
-    else:
-        await service.sessions.mark_replied(service.proactive_private.session_key(msg.sender.user_id))
     service.spawn(
         service.bus.request_model(
             "relationship.chat.request",
@@ -143,7 +141,7 @@ async def _process(service, msg, execution) -> dict:
             images=images,
         )
     else:
-        should_respond = service.persona.should_respond_directly(
+        should_respond = not is_group or service.persona.should_respond_directly(
             msg.chat.chat_type.value,
             msg.to_ai,
             msg.at_user_id,
@@ -194,27 +192,38 @@ async def _process(service, msg, execution) -> dict:
     reply = plan.text
     voice_sent = False
     sticker_actions = [action for action in plan.actions if action.type == "sticker"]
-    if sticker_actions:
-        sticker_query = sticker_actions[0].query
-        sticker_to_send = await service.stickers.search(sticker_query)
-        if sticker_to_send is not None:
-            suitable = await service.sticker_judge.should_send(
-                sticker_to_send["image_url"],
-                {
-                    "场景": msg.chat.chat_type.value,
-                    "聊天上下文": user_prompt,
-                    "计划回复": reply,
-                    "表情意图": sticker_query,
-                },
-            )
-            if not suitable:
-                sticker_to_send = None
+    try:
+        if sticker_actions:
+            sticker_query = sticker_actions[0].query
+            sticker_to_send = await service.stickers.search(sticker_query)
+            if sticker_to_send is not None:
+                suitable = await service.sticker_judge.should_send(
+                    sticker_to_send["image_url"],
+                    {
+                        "场景": msg.chat.chat_type.value,
+                        "聊天上下文": user_prompt,
+                        "计划回复": reply,
+                        "表情意图": sticker_query,
+                    },
+                )
+                if not suitable:
+                    sticker_to_send = None
+    except Exception:
+        if is_group:
+            raise
+        sticker_to_send = None
+        logger.warning("private_sticker_fallback run_id=%s", execution.run_id)
 
     wants_voice = any(speech.delivery == "voice" for speech in plan.speech)
     voice = None
     if service.settings.qq.voice_reply and wants_voice:
-        voice = await service.tts.synthesize(reply)
-        voice_sent = True
+        try:
+            voice = await service.tts.synthesize(reply)
+            voice_sent = True
+        except Exception:
+            if is_group:
+                raise
+            logger.warning("private_voice_fallback run_id=%s", execution.run_id)
 
     command = ResponseCommand(
         run_id=execution.run_id,
@@ -228,6 +237,8 @@ async def _process(service, msg, execution) -> dict:
         sticker=sticker_to_send,
         voice=voice,
     )
+    if not send:
+        return command
     await service.send_response(command)
     sticker_sent = sticker_to_send is not None
 

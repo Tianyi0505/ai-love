@@ -118,6 +118,7 @@ async def test_napcat_group_names_remain_json_data_through_model_calls(mode):
         sessions=sessions, conversation=conversation, persona=persona, prompt_assembler=prompts,
         chat_agent=chat_agent, proactive=definition.behavior_policy.proactive,
         behavior_schedule=SimpleNamespace(allows_proactive=lambda: True),
+        group_whitelist=definition.relationship_policy.group_ceiling_whitelist,
     )
     quoted = event(90, QUOTE_NAME, [{"type": "image", "data": {"url": "https://example.com/quote.png"}}])
     http_response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"status": "ok", "data": quoted})

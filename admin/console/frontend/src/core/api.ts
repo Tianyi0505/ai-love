@@ -84,12 +84,20 @@ export async function apiRequest<T>(
     headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
-  const payload = await response.json();
+  if (response.status === 401) {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ApiError(
+      response.status,
+      response.ok ? "服务返回的数据格式异常" : `请求失败（HTTP ${response.status}），请稍后重试`,
+    );
+  }
   if (!response.ok) {
-    if (response.status === 401) {
-      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
-    }
-    throw new ApiError(response.status, String(payload.detail));
+    throw new ApiError(response.status, String(payload?.detail ?? `请求失败（HTTP ${response.status}）`));
   }
   return payload as T;
 }

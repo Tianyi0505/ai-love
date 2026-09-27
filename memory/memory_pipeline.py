@@ -169,7 +169,7 @@ class MemoryPipeline:
                     claim.data.owner_type,
                     claim.data.owner_id,
                 )
-                await self._state.release_pending(claim)
+                await self._state.release_pending(claim, self._consolidation.retry_delay_sec)
                 raise
 
     # 聚合长期记忆

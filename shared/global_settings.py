@@ -140,6 +140,8 @@ class LLMSettings(SettingsModel):
     max_requests: int
     participation_max_requests: int
     memory_max_requests: int
+    memory_max_tokens: int
+    memory_request_timeout_sec: float
     max_tokens: int
     retry_count: int
     tool_retry_count: int
@@ -229,6 +231,7 @@ class MemoryConsolidationThresholds(SettingsModel):
 
 class MemoryConsolidationSettings(SettingsModel):
     scheduler_poll_sec: float
+    retry_delay_sec: float
     person: MemoryConsolidationThresholds
     self: MemoryConsolidationThresholds
 

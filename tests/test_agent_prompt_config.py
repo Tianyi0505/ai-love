@@ -15,6 +15,7 @@ from shared.contracts.rpc.relationship import GroupRelationshipData, GroupRelati
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 from shared.global_settings import GlobalSettings
 from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.service_settings import PrivateReplySettings
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,6 +30,15 @@ class FileConfigProvider:
 
 # 验证智能体提示词配置
 class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
+    async def test_private_reply_runtime_defaults_and_proactive_cooldown(self) -> None:
+        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        gateway = yaml.safe_load((ROOT / "deploy" / "nacos" / "service.gateway.yaml").read_text(encoding="utf-8"))
+        ai_agent = yaml.safe_load((ROOT / "deploy" / "nacos" / "service.ai-agent.yaml").read_text(encoding="utf-8"))
+
+        assert PrivateReplySettings.model_validate(gateway["private_reply"]) == PrivateReplySettings()
+        assert PrivateReplySettings.model_validate(ai_agent["private_reply"]) == PrivateReplySettings()
+        assert definition.behavior_policy.proactive.private_cooldown_sec == 1800
+
     # 验证检索上下文位于用户问题前且标签含义写入系统提示词
     async def test_retrieved_context_precedes_user_question_with_documented_xml_tags(self) -> None:
         definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
@@ -149,26 +159,26 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("小爱: [图片1/2]", result.text)
         self.assertIn("小博: [图片]", result.text)
 
-    async def test_default_agent_prioritizes_deepseek_vision_model_group(self) -> None:
+    async def test_default_agent_uses_free_agnes_with_separate_vision(self) -> None:
         provider = FileConfigProvider()
         definition = await NacosAgentDefinitionStore(provider).load("ai_luoyu")
         global_config = await provider.get("ailove.config")
         global_config["qq"]["whitelist"] = []
         settings = GlobalSettings.model_validate(global_config)
 
-        self.assertEqual("deepseek-v4-flash", definition.model_profile.model_id)
-        self.assertEqual("deepseek-v4-flash", definition.model_profile.group_repeat_model_id)
-        self.assertEqual(
-            ["deepseek-v4-flash-vision-exp"],
-            definition.model_profile.multimodal_model_ids,
-        )
+        self.assertEqual("agnes-3.0-flash", definition.model_profile.model_id)
+        self.assertEqual("agnes-3.0-flash", definition.model_profile.group_repeat_model_id)
+        self.assertEqual([], definition.model_profile.multimodal_model_ids)
         selected_model_ids = {
             definition.model_profile.model_id,
             definition.model_profile.group_repeat_model_id,
             *definition.model_profile.multimodal_model_ids,
         }
         self.assertLessEqual(selected_model_ids, settings.llm.models.keys())
-        self.assertEqual("DEEPSEEK_API_KEY", settings.llm.models["deepseek-v4-flash"].api_key_env)
+        self.assertEqual("AGNES_API_KEY", settings.llm.models["agnes-3.0-flash"].api_key_env)
+        self.assertEqual("BAILIAN_API_KEY", settings.image.api_key_env)
+        self.assertEqual(16384, settings.llm.memory_max_tokens)
+        self.assertEqual(240, settings.llm.memory_request_timeout_sec)
 
     # 验证被点名消息进入群聊参与决策
     async def test_addressed_group_message_reaches_participation_model(self) -> None:
@@ -215,6 +225,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
             chat_agent=chat_agent,
             proactive=definition.behavior_policy.proactive,
             behavior_schedule=SimpleNamespace(allows_proactive=lambda: True),
+            group_whitelist=definition.relationship_policy.group_ceiling_whitelist,
         )
 
         result = await participation.should_join("group", explicitly_addressed=True)
@@ -269,6 +280,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
             chat_agent=chat_agent,
             proactive=definition.behavior_policy.proactive,
             behavior_schedule=SimpleNamespace(allows_proactive=lambda: True),
+            group_whitelist=definition.relationship_policy.group_ceiling_whitelist,
         )
 
         participation.observe("group")

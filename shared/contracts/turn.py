@@ -33,6 +33,7 @@ class AgentExecutionContext:
     @classmethod
     def from_social_message(cls, message, ai_id: str, run_id: str | None = None) -> "AgentExecutionContext":
         resolved_run_id = run_id or message.meta.get("run_id") or new_run_id()
+        has_quote = bool(message.meta.get("reply_message_id") or message.quote_ref)
         return cls(
             run_id=str(resolved_run_id),
             ai_id=ai_id,
@@ -44,7 +45,9 @@ class AgentExecutionContext:
             sender_person_id=str(message.meta.get("person_id", "")),
             sender_platform_user_id=message.sender.user_id,
             message_id=message.message_id,
-            reply_to_message_id=str(message.quote_ref.message_id) if message.quote_ref else "",
+            # quote_ref 是当前消息引用的历史消息，仅供理解上下文使用。
+            # 出站回复始终引用当前收到的消息，避免把回复挂到历史消息上。
+            reply_to_message_id=str(message.message_id) if has_quote else "",
             occurred_at=message.timestamp,
             source="social",
         )
@@ -82,6 +85,10 @@ class ResponseCommand:
     sticker: dict | None
     voice: dict | None
     repeat_message_id: str = ""
+    delivery_kind: str = ""
+    source_job_id: str = ""
+    claim_version: int = 0
+    person_id: str = ""
 
     # 返回发送负载
     def send_request(self) -> SocialSendRequest:
@@ -98,4 +105,8 @@ class ResponseCommand:
             repeat_message_id=self.repeat_message_id,
             sticker=self.sticker,
             voice=self.voice,
+            delivery_kind=self.delivery_kind,
+            source_job_id=self.source_job_id,
+            claim_version=self.claim_version,
+            person_id=self.person_id,
         )

@@ -2,7 +2,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class PrivateReplySettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    scan_interval_sec: float = Field(default=5, gt=0)
+    batch_size: int = Field(default=100, gt=0)
+    concurrency: int = Field(default=10, gt=0)
+    processing_budget_sec: float = Field(default=45, gt=0)
+    lease_sec: float = Field(default=120, gt=0)
+    heartbeat_sec: float = Field(default=15, gt=0)
+    send_retries: int = Field(default=2, ge=0, le=2)
+
+    @model_validator(mode="after")
+    def validate_lease(self):
+        if self.lease_sec <= max(self.heartbeat_sec, self.processing_budget_sec):
+            raise ValueError("领取租约必须大于心跳和处理预算")
+        return self
 
 
 class ServiceSettings(BaseModel):
@@ -28,11 +45,13 @@ class GatewayAccountSettings(BaseModel):
 
 class GatewaySettings(ServiceSettings):
     accounts: tuple[GatewayAccountSettings, ...]
+    private_reply: PrivateReplySettings = Field(default_factory=PrivateReplySettings)
 
 
 class AIAgentSettings(ServiceSettings):
     catalog_poll_interval_sec: float
     account_ids_by_ai: dict[str, tuple[str, ...]]
+    private_reply: PrivateReplySettings = Field(default_factory=PrivateReplySettings)
 
 
 class DirectorSettings(ServiceSettings):
