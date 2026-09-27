@@ -100,6 +100,7 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - AGNES_API_KEY=${AGNES_API_KEY:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
       - BAILIAN_API_KEY=${BAILIAN_API_KEY:?}
       - AILOVE_NACOS_ADDRS=nacos:8848

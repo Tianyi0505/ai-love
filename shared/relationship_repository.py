@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Callable
 
-from sqlalchemy import select, update
+from sqlalchemy import select, true, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from shared import database_models as m
@@ -171,27 +171,22 @@ class RelationshipRepository:
             await session.commit()
 
     async def list_people(self, ai_id: str) -> list[dict]:
-        latest_user = (
-            select(m.PlatformIdentity.platform_user_id)
-            .where(m.PlatformIdentity.person_id == m.PersonRelationship.person_id)
-            .order_by(m.PlatformIdentity.verified_at.desc())
-            .limit(self._settings.latest_identity_limit)
-            .scalar_subquery()
-        )
-        latest_account = (
-            select(m.PlatformIdentity.account_id)
-            .where(m.PlatformIdentity.person_id == m.PersonRelationship.person_id)
-            .order_by(m.PlatformIdentity.verified_at.desc())
-            .limit(self._settings.latest_identity_limit)
-            .scalar_subquery()
+        identity = (
+            select(m.PlatformIdentity.platform_user_id.label("user_id"), m.PlatformIdentity.account_id)
+            .join(m.AIAccountBinding, m.AIAccountBinding.account_id == m.PlatformIdentity.account_id)
+            .where(m.PlatformIdentity.person_id == m.PersonRelationship.person_id,
+                   m.PlatformIdentity.platform == "qq", m.AIAccountBinding.ai_id == ai_id,
+                   m.AIAccountBinding.ended_at.is_(None))
+            .order_by(m.PlatformIdentity.verified_at.desc(), m.PlatformIdentity.identity_id.desc())
+            .limit(1).correlate(m.PersonRelationship).lateral()
         )
         async with self._db.session() as session:
             rows = await session.execute(
                 select(
                     m.PersonRelationship.person_id,
                     m.Person.display_name,
-                    latest_user.label("user_id"),
-                    latest_account.label("account_id"),
+                    identity.c.user_id,
+                    identity.c.account_id,
                     m.PersonRelationship.familiarity,
                     m.PersonRelationship.affinity,
                     m.PersonRelationship.trust,
@@ -202,6 +197,7 @@ class RelationshipRepository:
                 )
                 .select_from(m.PersonRelationship)
                 .join(m.Person, m.Person.person_id == m.PersonRelationship.person_id)
+                .outerjoin(identity, true())
                 .where(m.PersonRelationship.ai_id == ai_id)
                 .order_by(m.PersonRelationship.last_interaction_at.desc())
             )

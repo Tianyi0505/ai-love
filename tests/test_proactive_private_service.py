@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import unittest
 from pathlib import Path
@@ -9,19 +8,15 @@ from unittest.mock import AsyncMock, Mock
 
 import yaml
 
-from agent.conversation.multimodal_input import MessageInput
 from agent.conversation.prompt_assembler import PromptAssembler
 from agent.conversation.response_plan import Emotion, ResponsePlan, Speech
 from agent.social.proactive_private_service import ProactivePrivateService
-from agent.social.social_message_handler import handle_social
 from shared.contracts.rpc.memory import MemoryContextResponse
 from shared.contracts.rpc.relationship import (
     PersonRelationshipRecord,
     RelationshipListResponse,
-    RelationshipSummaryResponse,
 )
-from shared.contracts.rpc.social import SocialSendResponse
-from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
+from shared.contracts.rpc.social import SocialSendResponse, SocialSendStatusResponse
 from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,8 +60,8 @@ class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
             request_model=AsyncMock(return_value=RelationshipListResponse(relationships=relationships))
         )
         sessions = SimpleNamespace(
-            can_initiate=AsyncMock(return_value=True),
-            mark_spoke=AsyncMock(),
+            state=AsyncMock(return_value=SimpleNamespace(status="active", pending_run_id=None, unanswered_count=0, last_success_at=None, revision=0)),
+            reserve=AsyncMock(return_value=True),
         )
         memory = SimpleNamespace(
             context=AsyncMock(
@@ -93,7 +88,8 @@ class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
             default_account_id="qq-main",
             bus=bus,
             relationship_timeout_sec=1.0,
-            sessions=sessions,
+            interactions=sessions,
+            allowed_account_ids=("qq-main",),
             conversation=conversation,
             memory=memory,
             persona=SimpleNamespace(name_for=lambda _user_id: ""),
@@ -109,17 +105,17 @@ class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
         priority = self.relationship(person_id="person-priority", user_id="10001", name="优先联系人", priority=True)
         other = self.relationship(person_id="person-other", user_id="10002", name="其他联系人", priority=False)
         service, _bus, sessions, memory, chat_agent, send_response, conversation = self.service([other, priority])
-        sessions.can_initiate.side_effect = [False, True]
+        sessions.state.side_effect = [None, SimpleNamespace(status="active", pending_run_id=None, unanswered_count=0, last_success_at=None, revision=0)]
 
         sent = await service.run_once(self.now)
 
         self.assertTrue(sent)
         self.assertEqual(
             [
-                ("proactive-private:10001", 43200),
-                ("proactive-private:10002", 43200),
+                (self.definition.ai_id, "person-priority"),
+                (self.definition.ai_id, "person-other"),
             ],
-            [call.args for call in sessions.can_initiate.await_args_list],
+            [call.args for call in sessions.state.await_args_list],
         )
         memory.context.assert_awaited_once_with(person_id="person-other")
         system_prompt, user_prompt = chat_agent.generate_plan.await_args.args
@@ -134,7 +130,7 @@ class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("10002", command.chat["chat_id"])
         self.assertEqual("private", command.chat["chat_type"])
         self.assertEqual("复习得怎么样啦", command.text)
-        sessions.mark_spoke.assert_awaited_once_with("proactive-private:10002")
+        sessions.reserve.assert_awaited_once()
         conversation.add_ai.assert_called_once_with("private", "10002", "复习得怎么样啦")
 
     async def test_recent_interaction_does_not_enter_generation(self) -> None:
@@ -150,58 +146,68 @@ class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
         sent = await service.run_once(self.now)
 
         self.assertFalse(sent)
-        sessions.can_initiate.assert_not_awaited()
+        sessions.state.assert_not_awaited()
         memory.context.assert_not_awaited()
         chat_agent.generate_plan.assert_not_awaited()
         send_response.assert_not_awaited()
 
-
-class ProactivePrivateReplyTests(unittest.IsolatedAsyncioTestCase):
-    async def test_private_inbound_marks_proactive_session_replied(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
-        tasks = []
-
-        def spawn(coro):
-            task = asyncio.create_task(coro)
-            tasks.append(task)
-            return task
-
-        sessions = SimpleNamespace(mark_replied=AsyncMock())
-        service = SimpleNamespace(
-            ai_id=definition.ai_id,
-            settings=SimpleNamespace(social=SimpleNamespace(log_preview_chars=30)),
-            message_input=SimpleNamespace(build=AsyncMock(return_value=MessageInput("你好"))),
-            sticker_collector=object(),
-            persona=SimpleNamespace(
-                name_for=lambda _user_id: "",
-                should_respond_directly=lambda *_args: False,
-            ),
-            sessions=sessions,
-            proactive_private=SimpleNamespace(
-                session_key=ProactivePrivateService.session_key,
-            ),
-            definition=definition,
-            bus=SimpleNamespace(
-                request_model=AsyncMock(return_value=RelationshipSummaryResponse(summary="")),
-            ),
-            _timeouts=SimpleNamespace(relationship_update_sec=1.0),
-            spawn=spawn,
+    async def test_work_hours_and_bound_account_are_checked_before_generation(self) -> None:
+        candidate = self.relationship(
+            person_id="person", user_id="10001", name="联系人", priority=True
         )
-        message = SocialMessage(
-            chat=Chat(chat_id="10001", chat_type=ChatType.PRIVATE, chat_name="联系人"),
-            sender=SocialSender(user_id="10001", name="联系人"),
-            type=ContentType.TEXT,
-            text="你好",
-            message_id="message-1",
-            timestamp=1,
-            account_id="qq-main",
-            platform="qq",
-            meta={"person_id": "person-1", "conversation_id": "conversation-1"},
+        service, bus, sessions, memory, chat_agent, send_response, _conversation = self.service([candidate])
+        service._behavior_schedule = SimpleNamespace(allows_proactive=lambda _now=None: False)
+
+        self.assertFalse(await service.run_once(self.now))
+        bus.request_model.assert_not_awaited()
+
+        service._behavior_schedule = SimpleNamespace(allows_proactive=lambda _now=None: True)
+        bus.request_model.reset_mock()
+        bus.request_model.return_value = RelationshipListResponse(
+            relationships=[candidate.model_copy(update={"account_id": "qq-unbound"})]
         )
+        self.assertFalse(await service.run_once(self.now))
+        sessions.state.assert_not_awaited()
+        memory.context.assert_not_awaited()
+        chat_agent.generate_plan.assert_not_awaited()
+        send_response.assert_not_awaited()
 
-        await handle_social(service, message)
-        await asyncio.gather(*tasks)
+    async def test_cooldown_and_empty_topic_do_not_reserve_quota(self) -> None:
+        candidate = self.relationship(
+            person_id="person", user_id="10001", name="联系人", priority=True
+        )
+        service, _bus, sessions, _memory, chat_agent, send_response, _conversation = self.service([candidate])
+        sessions.state.return_value = SimpleNamespace(
+            status="active",
+            pending_run_id=None,
+            unanswered_count=1,
+            last_success_at=self.now - dt.timedelta(minutes=29),
+            revision=1,
+        )
+        self.assertFalse(await service.run_once(self.now))
+        chat_agent.generate_plan.assert_not_awaited()
 
-        sessions.mark_replied.assert_awaited_once_with("proactive-private:10001")
-if __name__ == "__main__":
-    unittest.main()
+        sessions.state.return_value.last_success_at = self.now - dt.timedelta(minutes=31)
+        chat_agent.generate_plan.return_value.speech = []
+        self.assertFalse(await service.run_once(self.now))
+        sessions.reserve.assert_not_awaited()
+        send_response.assert_not_awaited()
+
+    async def test_known_send_failure_does_not_record_success(self) -> None:
+        candidate = self.relationship(
+            person_id="person", user_id="10001", name="联系人", priority=True
+        )
+        service, bus, _sessions, _memory, _chat_agent, send_response, conversation = self.service([candidate])
+        send_response.side_effect = RuntimeError("rpc error")
+
+        async def response(subject, *_args, **_kwargs):
+            if subject == "relationship.list.request":
+                return RelationshipListResponse(relationships=[candidate])
+            return SocialSendStatusResponse(status="failed", reason_code="DeliveryRejected")
+
+        bus.request_model.side_effect = response
+        self.assertFalse(await service.run_once(self.now))
+        conversation.add_ai.assert_not_called()
+
+
+# 私信清零的旧孤立mock测试已由 test_private_contact_persistence 的真实入口测试替代。

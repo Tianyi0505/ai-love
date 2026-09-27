@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from dataclasses import dataclass
+from unittest.mock import patch
 
 from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError, NoKeysError
 
@@ -140,6 +141,7 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
             MemoryConsolidationSettings.model_validate(
                 {
                     "scheduler_poll_sec": 1,
+                    "retry_delay_sec": 3600,
                     "person": {
                         "min_episode_count": 1,
                         "min_atom_count": 10,
@@ -189,6 +191,7 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
             MemoryConsolidationSettings.model_validate(
                 {
                     "scheduler_poll_sec": 1,
+                    "retry_delay_sec": 3600,
                     "person": {
                         "min_episode_count": 1,
                         "min_atom_count": 10,
@@ -206,6 +209,36 @@ class MemoryStateTests(unittest.IsolatedAsyncioTestCase):
             now=2,
         )
         self.assertEqual("pending.legacy", ready[0].key)
+
+    # 验证合并失败释放后必须等待退避时间再重试
+    async def test_released_pending_waits_for_retry_delay(self) -> None:
+        settings = MemoryConsolidationSettings.model_validate(
+            {
+                "scheduler_poll_sec": 1,
+                "retry_delay_sec": 3600,
+                "person": {
+                    "min_episode_count": 1,
+                    "min_atom_count": 10,
+                    "token_threshold": 100,
+                    "max_wait_sec": 100,
+                },
+                "self": {
+                    "min_episode_count": 10,
+                    "min_atom_count": 10,
+                    "token_threshold": 100,
+                    "max_wait_sec": 100,
+                },
+            }
+        )
+        await self.state.add_pending("ai", "person", "person", "episode-1", ["atom-1"], 10, 1)
+        ready = await self.state.ready_pending(settings, now=2)
+        claim = await self.state.claim_pending(ready[0], now=2)
+
+        with patch("memory.memory_state_store.time.time", return_value=3):
+            await self.state.release_pending(claim, settings.retry_delay_sec)
+
+        self.assertEqual([], await self.state.ready_pending(settings, now=3602))
+        self.assertEqual(1, len(await self.state.ready_pending(settings, now=3603)))
 
     # 验证记忆客户端只发布轻量活动
     async def test_agent_memory_client_only_publishes_lightweight_activity(self) -> None:

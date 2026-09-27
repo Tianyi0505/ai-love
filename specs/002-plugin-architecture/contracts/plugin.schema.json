@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI-Love current plugin manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "entrypoint", "provides", "requires", "instance_scope", "config_schema", "permissions_requested", "isolation", "upgrade_mode", "state", "limits", "ui"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+    "entrypoint": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*:[A-Za-z_][A-Za-z0-9_]*$"},
+    "provides": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/capability"}},
+    "requires": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/requirement"}},
+    "instance_scope": {"enum": ["host", "ai", "account", "session", "device"]},
+    "config_schema": {"type": "string", "minLength": 1},
+    "permissions_requested": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "isolation": {"enum": ["trusted-inprocess", "worker", "restricted-worker"]},
+    "upgrade_mode": {"enum": ["drain-and-replace", "host-restart"]},
+    "state": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["namespace", "transfer"], "properties": {"namespace": {"type": "string", "minLength": 1}, "transfer": {"type": "string", "minLength": 1}}}]},
+    "limits": {"type": "object", "additionalProperties": false, "required": ["max_inflight", "queue_capacity"], "properties": {"max_inflight": {"type": "integer", "minimum": 1}, "queue_capacity": {"type": "integer", "minimum": 0}}},
+    "ui": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["kind", "capability"], "properties": {"kind": {"enum": ["status", "form", "table", "document"]}, "capability": {"type": "string", "minLength": 1}}}}
+  },
+  "$defs": {
+    "capability": {"type": "object", "additionalProperties": false, "required": ["capability"], "properties": {"capability": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"}}},
+    "requirement": {"type": "object", "additionalProperties": false, "required": ["capability", "optional"], "properties": {"capability": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"}, "optional": {"type": "boolean"}}}
+  }
+}

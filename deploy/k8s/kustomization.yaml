@@ -4,6 +4,7 @@ namespace: ailove
 resources:
   - namespace.yaml
   - infrastructure.yaml
+  - observability.yaml
   # 启用 NapCat 时添加 napcat.yaml
   - apps.yaml
   - ops-panel-dashboard-rbac.yaml

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import literal, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
 
 from shared import database_models as m
 from shared.database import Database
@@ -79,6 +80,7 @@ class IdentityRepository:
                     verified_by="platform-observed",
                 )
                 session.add(identity)
+                await self._initialize_private_contact(session, person.person_id, account_id)
                 await session.flush()
                 result = str(identity.identity_id), str(person.person_id)
         return result
@@ -124,6 +126,14 @@ class IdentityRepository:
                         verified_by="platform-observed",
                     )
                     session.add(identity)
+                    await self._initialize_private_contact(session, person_row.person_id, account_id)
                     await session.flush()
                     result[user_id] = (str(identity.identity_id), str(person_row.person_id))
         return result
+
+    async def _initialize_private_contact(self, session, person_id, account_id):
+        await session.execute(insert(m.PrivateContactState).from_select(
+            ["ai_id", "person_id", "status", "reason_code"],
+            select(m.AIAccountBinding.ai_id, literal(person_id), literal("active"), literal(""))
+            .where(m.AIAccountBinding.account_id == account_id, m.AIAccountBinding.ended_at.is_(None))
+        ).on_conflict_do_nothing())

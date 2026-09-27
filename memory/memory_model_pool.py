@@ -46,8 +46,8 @@ class MemoryModelPool:
             model = create_chat_model(
                 definition.model_profile.model_id,
                 models=self._config.models,
-                max_tokens=self._config.max_tokens,
-                timeout_sec=self._config.provider_request_timeout_sec,
+                max_tokens=self._config.memory_max_tokens,
+                timeout_sec=self._config.memory_request_timeout_sec,
                 max_retries=self._config.retry_count,
             )
             self._models[ai_id] = (definition.fingerprint, model)
@@ -96,7 +96,7 @@ class MemoryModelPool:
             "memory.generate",
             model_name,
             self._observability,
-            {"max_tokens": self._config.max_tokens},
+            {"max_tokens": self._config.memory_max_tokens},
         ) as span:
             result = await runnable.ainvoke([HumanMessage(content=prompt)])
             output = parsed_output(result, output_type)

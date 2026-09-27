@@ -8,9 +8,9 @@ from collections.abc import Awaitable, Callable
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.conversation_context import ConversationContext
 from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
-from agent.conversation.session_manager import SessionManager
 from agent.memory_client import MemoryClient
 from agent.persona import Persona
+from shared import private_reply_observability as private_metrics
 from shared.contracts.agent import ProactiveConfig
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.rpc.relationship import (
@@ -18,10 +18,15 @@ from shared.contracts.rpc.relationship import (
     RelationshipListRequest,
     RelationshipListResponse,
 )
-from shared.contracts.rpc.social import SocialSendResponse
+from shared.contracts.rpc.social import (
+    SocialSendResponse,
+    SocialSendStatusRequest,
+    SocialSendStatusResponse,
+)
 from shared.contracts.social import Chat, ChatType
 from shared.contracts.turn import ResponseCommand, new_run_id
 from shared.nats_bus import Bus
+from shared.private_interaction_repository import PrivateInteractionRepository
 
 logger = logging.getLogger("ailove.ai-agent.proactive-private")
 
@@ -34,7 +39,8 @@ class ProactivePrivateService:
         default_account_id: str,
         bus: Bus,
         relationship_timeout_sec: float,
-        sessions: SessionManager,
+        interactions: PrivateInteractionRepository,
+        allowed_account_ids: tuple[str, ...],
         conversation: ConversationContext,
         memory: MemoryClient,
         persona: Persona,
@@ -48,7 +54,8 @@ class ProactivePrivateService:
         self._default_account_id = default_account_id
         self._bus = bus
         self._relationship_timeout_sec = relationship_timeout_sec
-        self._sessions = sessions
+        self._interactions = interactions
+        self._allowed_account_ids = allowed_account_ids
         self._conversation = conversation
         self._memory = memory
         self._persona = persona
@@ -94,10 +101,12 @@ class ProactivePrivateService:
             len(candidates),
         )
         for candidate in candidates:
-            session_key = self.session_key(candidate.user_id)
-            if not await self._sessions.can_initiate(session_key, self._proactive.private_cooldown_sec):
+            state = await self._interactions.state(self._ai_id, candidate.person_id)
+            if state is None or state.status != "active" or state.pending_run_id or state.unanswered_count >= 3:
                 continue
-            return await self._contact(candidate, session_key)
+            if state.last_success_at and (current - state.last_success_at).total_seconds() < self._proactive.private_cooldown_sec:
+                continue
+            return await self._contact(candidate, state, current)
         return False
 
     @staticmethod
@@ -105,7 +114,7 @@ class ProactivePrivateService:
         return f"proactive-private:{user_id}"
 
     def _eligible(self, relationship: PersonRelationshipRecord, now: dt.datetime) -> bool:
-        if not relationship.user_id:
+        if relationship.account_id not in self._allowed_account_ids or not relationship.user_id:
             return False
         if relationship.familiarity + relationship.importance < self._proactive.private_min_weight:
             return False
@@ -117,7 +126,7 @@ class ProactivePrivateService:
         elapsed = now - last_interaction.astimezone(dt.timezone.utc)
         return elapsed.total_seconds() >= self._proactive.private_quiet_period_sec
 
-    async def _contact(self, relationship: PersonRelationshipRecord, session_key: str) -> bool:
+    async def _contact(self, relationship: PersonRelationshipRecord, state, current: dt.datetime) -> bool:
         name = self._persona.name_for(relationship.user_id) or relationship.display_name or "朋友"
         memory_context = await self._memory.context(person_id=relationship.person_id)
         context = PromptContext(
@@ -142,13 +151,24 @@ class ProactivePrivateService:
         )
         text = plan.text.strip()
         if not text:
+            private_metrics.proactive("skipped", "empty")
             logger.info("[ai-agent:%s] 主动私聊跳过: 与 %s 暂无自然话题", self._ai_id, name)
             return False
 
-        account_id = relationship.account_id or self._default_account_id
-        await self._send_response(
-            ResponseCommand(
-                run_id=new_run_id(),
+        if not self._behavior_schedule.allows_proactive(current):
+            private_metrics.proactive("skipped", "schedule")
+            return False
+        run_id = new_run_id()
+        if not await self._interactions.reserve(self._ai_id, relationship.person_id, run_id, state.revision,
+                                               self._proactive.private_cooldown_sec,
+                                               self._proactive.private_quiet_period_sec):
+            private_metrics.proactive("skipped", "stale")
+            return False
+        account_id = relationship.account_id
+        command = ResponseCommand(
+                run_id=run_id,
+                delivery_kind="proactive_private",
+                person_id=relationship.person_id,
                 ai_id=self._ai_id,
                 account_id=account_id,
                 conversation_id="",
@@ -163,8 +183,26 @@ class ProactivePrivateService:
                 sticker=None,
                 voice=None,
             )
-        )
-        await self._sessions.mark_spoke(session_key)
+        try:
+            await self._send_response(command)
+        except Exception as exc:
+            try:
+                status = await self._bus.request_model(
+                    "social.send.status.request",
+                    SocialSendStatusRequest(ai_id=self._ai_id, account_id=account_id, run_id=run_id),
+                    SocialSendStatusResponse,
+                    timeout=self._relationship_timeout_sec,
+                )
+            except Exception:
+                status = SocialSendStatusResponse(status="unknown")
+            if status.status != "sent":
+                if status.status not in ("failed",) or status.retryable:
+                    await self._interactions.mark_pending_unknown(
+                        self._ai_id, relationship.person_id, run_id, type(exc).__name__
+                    )
+                private_metrics.proactive("unknown" if status.status != "failed" else "failed", status.status)
+                return False
         self._conversation.add_ai(ChatType.PRIVATE.value, relationship.user_id, text)
-        logger.info("[ai-agent:%s] 主动私聊 %s: %s", self._ai_id, name, text[:30])
+        private_metrics.proactive("sent")
+        logger.info("[ai-agent:%s] 主动私聊已确认: person_id=%s", self._ai_id, relationship.person_id)
         return True

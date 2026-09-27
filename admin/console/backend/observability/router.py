@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import ValidationError
 
 from admin.console.backend.auth.router import require_session
 
@@ -119,7 +121,16 @@ async def personality(
     request: Request,
 ) -> PersonalityResponse:
     reader: PersonalityReader = request.app.state.personality_reader
-    return await reader.read(request.app.state.config.ai_id)
+    try:
+        return await reader.read(request.app.state.config.ai_id)
+    except ValidationError as exc:
+        logging.getLogger("ailove.panel").error(
+            "[panel] 人格配置校验失败: %s", exc.errors(include_input=False, include_context=False)
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="人格配置与控制台版本不兼容，请检查配置或更新控制台",
+        ) from exc
 
 
 @router.get("/self-memory", response_model=SelfMemoryResponse)

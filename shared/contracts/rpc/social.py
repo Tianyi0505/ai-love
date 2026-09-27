@@ -21,10 +21,55 @@ class SocialSendRequest(RpcModel):
     repeat_message_id: str = ""
     sticker: dict[str, Any] | None = None
     voice: dict[str, Any] | None = None
+    delivery_kind: str = ""
+    source_job_id: str = ""
+    claim_version: int = 0
+    person_id: str = ""
 
 
 class SocialSendResponse(RpcModel):
     message_id: str
+
+
+class SocialSendStatusRequest(RpcModel):
+    ai_id: str
+    account_id: str
+    run_id: str
+
+
+class SocialSendStatusResponse(RpcModel):
+    status: str
+    message_id: str = ""
+    reason_code: str = ""
+    retryable: bool = False
+
+
+class DeliveryInProgress(RuntimeError):
+    pass
+
+
+class DeliveryUnknown(RuntimeError):
+    pass
+
+
+class DeliveryConflict(RuntimeError):
+    pass
+
+
+class DeliveryRejected(RuntimeError):
+    pass
+
+
+class DeliveryRetryable(RuntimeError):
+    pass
+
+
+class StaleClaim(RuntimeError):
+    pass
+
+
+class ReplyUnavailable(DeliveryRejected):
+    """渠道已证明引用目标无效且整次发送未发生。"""
 
 
 class CommentRequest(RpcModel):

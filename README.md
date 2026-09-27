@@ -114,6 +114,35 @@ ailove.config             # 配置全局运行参数与 QQ 白名单
 
 新增 AI：发布精简的 `agent.<ai_id>` 个性化覆盖，把 ID 加入 `agent.catalog`，并在账号绑定表中建立显式绑定。运行时会将它与 `agent.default` 递归合并，列表配置由个性化配置整体覆盖；无需复制通用 Prompt、关系策略或记忆实现。
 
+## Agnes 免费对话模型
+
+`ailove.config/llm.models` 已注册 `agnes-3.0-flash` 和 `agnes-2.5-flash`，
+使用 `agnes` provider、`https://apihub.agnes-ai.com/v1` 和进程环境变量 `AGNES_API_KEY`。
+适配器沿用项目的对话、工具调用和记忆链路，通过工具调用返回结构化结果，仅接受这两个模型名称。
+默认对话、群聊判断和记忆使用 `agnes-3.0-flash`，图片理解配置保持原样；本次不增加图片或视频生成功能。
+
+本地 Compose 从 `deploy/.env` 读取密钥并传入 ai-agent；该文件被 Git 和 Docker 构建上下文排除。
+直接运行 Python 时需要自行设置进程环境变量（程序不会自动加载 `.env`）；
+Kubernetes 使用现有 `ailove-secrets` 的 `envFrom`，需在部署时注入 `AGNES_API_KEY`。
+请勿把真实密钥写入 Nacos 或提交到仓库。
+
+需要切换默认模型时，修改 `agent.default` 中以下配置，并确认各 `agent.<ai_id>` 没有另行指定模型；使用另一免费模型时将两个模型 ID 改为 `agnes-2.5-flash`：
+
+```yaml
+model_config:
+  model_id: agnes-3.0-flash
+  group_repeat_model_id: agnes-3.0-flash
+  multimodal_model_ids: []
+```
+
+此配置让文本对话、群聊判断和记忆使用 Agnes，图片继续通过原有独立视觉模型生成描述。
+清空 `multimodal_model_ids` 是为了避免已有优先模型组继续接管对话。
+现有视觉和语音服务的计费不受此新增模型配置影响。
+
+2026-09-26 核对的[官方价格](https://www.agnes-ai.com/zh-Hans/docs/pricing)显示，这两个模型的缓存输入、输入和输出当前均为零价。
+免费属于当前优惠，名称白名单不会自动检测后续价格变化，启用或长期使用前应重新核对价格。
+接口依据：[2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-25-flash)、[3.0 Flash](https://wiki.agnes-ai.com/en/docs/agnes-30-flash)。
+
 ## 当前约束
 
 - 先接通现有单 QQ 账号，再接 B站。

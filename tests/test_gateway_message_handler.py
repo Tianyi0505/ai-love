@@ -13,7 +13,7 @@ class _Channel:
 
 class _Identities:
     async def resolve_or_create(self, platform, account_id, user_id, name):
-        return "identity-1", "person-1"
+        return "1", "2"
 
 
 class _Conversations:
@@ -21,7 +21,7 @@ class _Conversations:
         self.recorded = None
 
     async def get_or_create(self, platform, account_id, chat_id, chat_type):
-        return "conversation-1"
+        return "3"
 
     async def record_inbound(self, message, ai_id):
         self.recorded = (message, ai_id)
@@ -62,7 +62,7 @@ class _Bus:
 
 
 @pytest.mark.asyncio
-async def test_private_message_is_grounded_before_publishing_to_agent() -> None:
+async def test_private_message_is_grounded_before_publishing_to_agent(private_database) -> None:
     conversations = _Conversations()
     grounding = _Grounding()
     bus = _Bus()
@@ -75,7 +75,8 @@ async def test_private_message_is_grounded_before_publishing_to_agent() -> None:
         grounding=grounding,
         bus=bus,
         live_settings=SimpleNamespace(),
-        priority_user_ids=frozenset(),
+        priority_user_ids=frozenset({"20000"}),
+        private_jobs=__import__("shared.private_interaction_repository", fromlist=["PrivateInteractionRepository"]).PrivateInteractionRepository(private_database),
     )
     message = SocialMessage(
         chat=Chat(chat_id="20000", chat_type=ChatType.PRIVATE),
@@ -89,9 +90,10 @@ async def test_private_message_is_grounded_before_publishing_to_agent() -> None:
 
     await handler.handle(message)
 
+    message = bus.published[1]
     assert grounding.calls == [(message, "ai-1")]
     assert message.meta["entity_context"] == {
-        "current_sender": {"person_id": "person-1", "display_name": "发送者"},
+        "current_sender": {"person_id": "2", "display_name": "发送者"},
         "references": [],
         "recent_participants": [],
     }

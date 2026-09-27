@@ -13,3 +13,12 @@ __pycache__
 tests
 CLAUDE.md
 README.md
+
+.env
+.env.*
+**/.env
+**/.env.*
+*.key
+*.pem
+.pytest_cache
+.ruff_cache

@@ -28,6 +28,7 @@ from agent.persona import Persona
 from agent.social.direct_vision_qzone_comment_generator import DirectVisionQZoneCommentGenerator
 from agent.social.group_participation_service import GroupParticipationService
 from agent.social.group_repeat_service import GroupRepeatJudge, GroupRepeatService
+from agent.social.private_reply_service import PrivateReplyService
 from agent.social.proactive_private_service import ProactivePrivateService
 from agent.social.qzone_comment_generator import QZoneCommentGenerator
 from agent.social.social_message_handler import handle_social
@@ -48,6 +49,7 @@ from shared.contracts.rpc.social import CommentRequest, CommentResponse, SocialS
 from shared.contracts.social import SocialMessage
 from shared.contracts.turn import ResponseCommand
 from shared.global_settings_store import GlobalSettingsStore
+from shared.private_interaction_repository import PrivateInteractionRepository
 
 logger = logging.getLogger("ailove.ai-agent")
 
@@ -67,6 +69,8 @@ class AIRuntime:
     # 启动服务
     async def start(self) -> None:
         self.ai_id = self.definition.ai_id
+        self.private_jobs = PrivateInteractionRepository(self._host._db)
+        self.private_replies = PrivateReplyService(self, self.private_jobs, self._host._settings.private_reply)
 
         self.settings = await GlobalSettingsStore(self.cfg.nacos).load()
         self._timeouts = self.settings.timeouts
@@ -254,7 +258,8 @@ class AIRuntime:
             default_account_id=self.primary_social_account_id,
             bus=self.bus,
             relationship_timeout_sec=self._timeouts.relationship_group_sec,
-            sessions=self.sessions,
+            interactions=self.private_jobs,
+            allowed_account_ids=self._account_ids,
             conversation=self.conversation,
             memory=self.memory,
             persona=self.persona,
@@ -287,6 +292,7 @@ class AIRuntime:
             self.stickers,
             self.settings.sticker.collect_min_quality,
         )
+        self.spawn(self.private_replies.loop())
 
     # 返回主社交账号标识
     @property
@@ -326,6 +332,12 @@ class AIRuntime:
 
     # 处理社交
     async def handle_social(self, message: SocialMessage) -> None:
+        if message.chat.chat_type.value == "private":
+            if not message.meta.get("private_reply_job_id"):
+                logger.error("私聊消息缺少持久任务: message_id=%s", message.message_id)
+                return
+            self.spawn(self.private_replies.handle(message.meta["private_reply_job_id"]))
+            return
         key = f"{self.ai_id}\x1f{str(message.meta.get('conversation_id') or '') or message.chat.chat_id}"
         self._in_flight += 1
 

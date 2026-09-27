@@ -125,6 +125,17 @@ lfu:
 
 llm:
   models:
+    # 当前免费优惠，核对日期 2026-09-26；价格以 Agnes 官方公告为准。
+    agnes-3.0-flash:
+      provider: agnes
+      model: agnes-3.0-flash
+      base_url: https://apihub.agnes-ai.com/v1
+      api_key_env: AGNES_API_KEY
+    agnes-2.5-flash:
+      provider: agnes
+      model: agnes-2.5-flash
+      base_url: https://apihub.agnes-ai.com/v1
+      api_key_env: AGNES_API_KEY
     deepseek-v4-flash:
       provider: deepseek
       model: deepseek-v4-flash
@@ -141,6 +152,8 @@ llm:
   max_requests: 4
   participation_max_requests: 1
   memory_max_requests: 1
+  memory_max_tokens: 16384
+  memory_request_timeout_sec: 240
   max_tokens: 4096
   retry_count: 0
   tool_retry_count: 0
@@ -240,9 +253,10 @@ memory:
   extraction:
     quiet_window_sec: 600
     scheduler_poll_sec: 5
-    retry_delay_sec: 60
+    retry_delay_sec: 3600
   consolidation:
     scheduler_poll_sec: 10
+    retry_delay_sec: 3600
     person:
       min_episode_count: 3
       min_atom_count: 10

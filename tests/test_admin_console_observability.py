@@ -169,6 +169,30 @@ def create_observability_app(personality_reader: FixedPersonalityReader) -> Fast
 
 
 class ObservabilityRouteTests(unittest.TestCase):
+    def test_personality_route_reads_current_agent_configuration(self) -> None:
+        reader = PersonalityReader(NacosAgentDefinitionStore(FileConfigProvider()))
+        with TestClient(create_observability_app(reader)) as client:
+            client.cookies.set("ai_love_session", "valid-session")
+            response = client.get("/ai-love-api/personality")
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("ai_luoyu", response.json()["ai_id"])
+
+    def test_incompatible_configuration_returns_json_without_configuration_values(self) -> None:
+        class IncompatibleProvider(FileConfigProvider):
+            async def get(self, key: str) -> dict:
+                data = await super().get(key)
+                if key == "agent.default":
+                    data["model_config"]["model_id"] = {"sensitive": "do-not-expose"}
+                return data
+
+        reader = PersonalityReader(NacosAgentDefinitionStore(IncompatibleProvider()))
+        with TestClient(create_observability_app(reader)) as client:
+            client.cookies.set("ai_love_session", "valid-session")
+            response = client.get("/ai-love-api/personality")
+        self.assertEqual(503, response.status_code)
+        self.assertIn("不兼容", response.json()["detail"])
+        self.assertNotIn("do-not-expose", response.text)
+
     def test_routes_use_fixed_ai_and_return_raw_markdown(self) -> None:
         personality_reader = FixedPersonalityReader()
         with TestClient(create_observability_app(personality_reader)) as client:
