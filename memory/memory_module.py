@@ -56,13 +56,14 @@ from shared.relationship_repository import RelationshipRepository
 
 # 提供进程内记忆模块能力
 class MemoryModule:
-    def __init__(self, *, nacos, bus, scheduler, database, definitions) -> None:
+    def __init__(self, *, nacos, bus, scheduler, database, definitions, model_factory=None) -> None:
         self._nacos = nacos
         self._bus = bus
         self._scheduler = scheduler
         self._db = database
         self._definitions = definitions
         self._subscriptions = []
+        self._model_factory = model_factory
 
     # 启动模块
     async def start(self) -> None:
@@ -200,6 +201,7 @@ class MemoryModule:
                 self._definitions,
                 self._settings.llm,
                 self._settings.observability,
+                model_factory=self._model_factory,
             ),
             bus=self._bus,
             config=self._memory_config,

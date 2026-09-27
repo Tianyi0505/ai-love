@@ -1,0 +1,20 @@
+{
+  "id": "weather",
+  "name": "天气",
+  "description": "查询天气与预报。",
+  "host": "mcp",
+  "category": "tool",
+  "entrypoint": "plugins.mcp:MCPToolPlugin",
+  "provides": [
+    "tools.weather"
+  ],
+  "requires": [
+    "mcp.server"
+  ],
+  "enabled": true,
+  "config": {
+    "registration": "extensions.mcp.weather.weather_tool:register_weather",
+    "resource_factory": "plugins.mcp:weather_resource",
+    "resource_name": "weather"
+  }
+}

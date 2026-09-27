@@ -1,0 +1,17 @@
+{
+  "id": "mcp.server",
+  "name": "MCP 服务",
+  "description": "可动态注册与撤销工具的 HTTP 宿主。",
+  "host": "mcp",
+  "category": "tool",
+  "entrypoint": "plugins.mcp:MCPServerPlugin",
+  "provides": [
+    "mcp.server"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "port": 8011,
+    "bind": "0.0.0.0"
+  }
+}

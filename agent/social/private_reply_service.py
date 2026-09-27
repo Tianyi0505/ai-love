@@ -42,15 +42,21 @@ class PrivateReplyService:
 
     async def handle(self, job_id):
         async with self.semaphore:
-            job = await self.jobs.claim(job_id, self.runtime.ai_id, self.settings.lease_sec)
-            if job is None:
+            if getattr(self.runtime, "_draining", False):
                 return
-            pulse = asyncio.create_task(self._heartbeat(job))
+            self.runtime._in_flight = getattr(self.runtime, "_in_flight", 0) + 1
             try:
-                await self._run(job)
+                job = await self.jobs.claim(job_id, self.runtime.ai_id, self.settings.lease_sec)
+                if job is None:
+                    return
+                pulse = asyncio.create_task(self._heartbeat(job))
+                try:
+                    await self._run(job)
+                finally:
+                    pulse.cancel()
+                    await asyncio.gather(pulse, return_exceptions=True)
             finally:
-                pulse.cancel()
-                await asyncio.gather(pulse, return_exceptions=True)
+                self.runtime._in_flight -= 1
 
     async def _run(self, job):
         runtime = self.runtime
@@ -125,7 +131,7 @@ class PrivateReplyService:
                 logger.error('private_job_error run_id=%s reason=%s', job.run_id, type(result).__name__)
 
     async def loop(self):
-        while True:
+        while not getattr(self.runtime, "_draining", False):
             try:
                 await self.scan()
             except Exception as exc:

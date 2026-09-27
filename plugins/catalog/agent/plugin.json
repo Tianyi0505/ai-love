@@ -1,0 +1,21 @@
+{
+  "id": "agent",
+  "name": "对话与社交",
+  "description": "人物运行时、私聊、群聊与主动联系。",
+  "host": "ai-agent",
+  "category": "agent",
+  "entrypoint": "plugins.components:ServicePlugin",
+  "provides": [
+    "agent.runtime"
+  ],
+  "requires": [
+    "agent.environment",
+    "memory.runtime",
+    "model.factory",
+    "speech.clients"
+  ],
+  "enabled": true,
+  "config": {
+    "implementation": "agent.ai_agent_service:AIAgentService"
+  }
+}

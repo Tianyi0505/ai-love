@@ -38,6 +38,17 @@ class AIAgentService(BaseService):
 
     # 启动服务
     async def on_start(self) -> None:
+        if hasattr(self, "plugin_context"):
+            environment = self.plugin_context.require("agent.environment")
+            self._redis = environment.redis
+            self._db = environment.database
+            self._definitions = environment.definitions
+            self._profiles = environment.profiles
+            self._accounts = environment.accounts
+            self._settings = await self.cfg.section(AIAgentSettings)
+            await self._start_runtimes()
+            return
+
         redis_settings = RedisConnectionSettings()
         self._redis = Redis.from_url(
             redis_settings.url,
@@ -60,6 +71,10 @@ class AIAgentService(BaseService):
         )
         await self._memory_module.start()
 
+        await self._start_runtimes()
+
+    async def _start_runtimes(self) -> None:
+
         # 创建智能体运行时
         async def runtime_factory(definition):
             account_ids = await self._account_ids_for(definition.ai_id)
@@ -67,6 +82,8 @@ class AIAgentService(BaseService):
 
         self._supervisor = AgentSupervisor(runtime_factory)
         await self._supervisor.reconcile(await self._active_definitions())
+        if hasattr(self, "plugin_context"):
+            self.plugin_context.resources.on_quiesce(self._supervisor.drain)
 
         await self.bus.subscribe_model(SUBJ_SOCIAL_ALL, SocialMessage, self._on_social)
         await self.bus.subscribe_model(SUBJ_LIVE_TURN_ALL, InteractionEvent, self._on_live)
@@ -81,10 +98,15 @@ class AIAgentService(BaseService):
 
     # 停止服务
     async def on_stop(self) -> None:
-        await self._supervisor.stop()
-        await self._memory_module.stop()
-        await self._redis.aclose()
-        await self._db.close()
+        if hasattr(self, "_supervisor"):
+            await self._supervisor.stop()
+        if not hasattr(self, "plugin_context"):
+            if hasattr(self, "_memory_module"):
+                await self._memory_module.stop()
+            if hasattr(self, "_redis"):
+                await self._redis.aclose()
+            if hasattr(self, "_db"):
+                await self._db.close()
 
     # 监听智能体配置变化
     async def _watch_agent_configs(self) -> None:

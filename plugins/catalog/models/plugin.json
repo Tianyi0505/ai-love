@@ -1,0 +1,21 @@
+{
+  "id": "models",
+  "name": "对话模型",
+  "description": "按公开工厂契约接入模型供应商。",
+  "host": "ai-agent",
+  "category": "model",
+  "entrypoint": "plugins.factories:ModelFactoryPlugin",
+  "provides": [
+    "model.factory"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "implementations": {
+      "openai": "shared.chat_model_strategy:OpenAIChatModelStrategy",
+      "anthropic": "shared.chat_model_strategy:AnthropicChatModelStrategy",
+      "deepseek": "shared.chat_model_strategy:DeepSeekChatModelStrategy",
+      "agnes": "shared.chat_model_strategy:AgnesChatModelStrategy"
+    }
+  }
+}

@@ -55,6 +55,9 @@ class QQChannel(Channel):
         self._message_timeout_sec = settings.message_timeout_sec
         self._forward_timeout_sec = settings.forward_timeout_sec
         self._ws = None
+        self._receiver_task: asyncio.Task | None = None
+        self._message_tasks: set[asyncio.Task] = set()
+        self._stopping = False
         self._session_locks: dict[str, asyncio.Lock] = {}
         strategy_names = list(settings.content_strategies)
         strategies = NamedExtensionManager(
@@ -69,8 +72,20 @@ class QQChannel(Channel):
 
     # 启动服务
     async def start(self) -> None:
-        async with asyncio.TaskGroup() as tasks:
+        self._stopping = False
+        self._receiver_task = asyncio.create_task(self._receive())
+        try:
+            await self._receiver_task
+        finally:
+            if self._message_tasks:
+                await asyncio.gather(*self._message_tasks, return_exceptions=True)
+
+    async def _receive(self) -> None:
+        try:
             async for ws in websockets.connect(self._ws_url):
+                if self._stopping:
+                    await ws.close()
+                    break
                 self._ws = ws
                 try:
                     logger.info("[qq] 已连接 NapCat WS: %s", self._ws_url)
@@ -80,18 +95,28 @@ class QQChannel(Channel):
                             if payload["post_type"] == EventPostType.MESSAGE.value:
                                 msg = self._to_message(NapCatMessageEvent.model_validate(payload))
                                 if msg is not None:
-                                    tasks.create_task(self._handle_message(msg))
+                                    task = asyncio.create_task(self._handle_message(msg))
+                                    self._message_tasks.add(task)
+                                    task.add_done_callback(self._message_tasks.discard)
                         except Exception:
                             logger.exception("[qq] 消息解析失败，已跳过当前事件")
                 except ConnectionClosed:
                     logger.warning("[qq] NapCat WS 连接断开，正在重连")
                 finally:
                     self._ws = None
+        finally:
+            self._ws = None
 
     # 停止服务
     async def stop(self) -> None:
+        self._stopping = True
         if self._ws is not None:
             await self._ws.close()
+        if self._receiver_task is not None:
+            self._receiver_task.cancel()
+            await asyncio.gather(self._receiver_task, return_exceptions=True)
+        if self._message_tasks:
+            await asyncio.gather(*self._message_tasks, return_exceptions=True)
 
     # 按会话处理消息：不同会话并行，同一会话内串行
     async def _handle_message(self, msg: SocialMessage) -> None:

@@ -1,0 +1,14 @@
+{
+  "id": "agent.environment",
+  "name": "人物运行资源",
+  "description": "数据库、账号归属与会话连接的共享生命周期。",
+  "host": "ai-agent",
+  "category": "storage",
+  "entrypoint": "plugins.components:AgentEnvironmentPlugin",
+  "provides": [
+    "agent.environment"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {}
+}

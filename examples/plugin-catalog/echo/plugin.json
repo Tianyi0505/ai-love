@@ -1,0 +1,9 @@
+{
+  "id": "example.echo",
+  "name": "回声示例",
+  "description": "演示自动发现、资源托管与运行时启停。",
+  "host": "live-edge",
+  "entrypoint": "examples.plugin_echo:EchoPlugin",
+  "provides": ["example.echo"],
+  "enabled": false
+}

@@ -64,15 +64,20 @@ class ProactivePrivateService:
         self._proactive = proactive
         self._behavior_schedule = behavior_schedule
         self._send_response = send_response
+        self.stop_requested = False
+        self.active = False
 
     async def loop(self) -> None:
-        while True:
+        while not self.stop_requested:
             try:
+                self.active = True
                 await self.run_once()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 logger.warning("[ai-agent:%s] 主动私聊检查失败: %s", self._ai_id, exc)
+            finally:
+                self.active = False
             await asyncio.sleep(self._proactive.private_interval_sec)
 
     async def run_once(self, now: dt.datetime | None = None) -> bool:

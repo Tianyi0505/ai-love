@@ -1,0 +1,19 @@
+{
+  "id": "speech.clients",
+  "name": "语音适配",
+  "description": "智能体到语音合成服务的适配工厂。",
+  "host": "ai-agent",
+  "category": "speech",
+  "entrypoint": "plugins.factories:FactoryPlugin",
+  "provides": [
+    "speech.clients"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "entrypoint_group": "ai_love.tts",
+    "implementations": {
+      "gptsovits": "agent.speech.gpt_sovits_provider:GPTSoVITSProvider"
+    }
+  }
+}

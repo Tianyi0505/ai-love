@@ -1,0 +1,18 @@
+{
+  "id": "speech.server",
+  "name": "语音服务",
+  "description": "HTTP 与消息总线语音合成入口。",
+  "host": "gptsovits",
+  "category": "speech",
+  "entrypoint": "plugins.components:SpeechServerPlugin",
+  "provides": [
+    "speech.server"
+  ],
+  "requires": [
+    "speech.engines"
+  ],
+  "enabled": true,
+  "config": {
+    "implementation": "gptsovits.gpt_sovits_service:GPTSoVITSService"
+  }
+}

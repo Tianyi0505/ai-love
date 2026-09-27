@@ -8,6 +8,7 @@ import { SelfMemoryPage } from "./features/memory/self_page";
 import { OverviewPage } from "./features/overview/page";
 import { PersonalityPage } from "./features/personality/page";
 import { SettingsPage } from "./features/settings/page";
+import { PluginsPage } from "./features/plugins/page";
 import { PanelShell } from "./layout/shell";
 import { PageError, PageLoading } from "./shared/page_state";
 
@@ -58,6 +59,7 @@ export function App() {
         <Route path="memory/people" element={<PeopleMemoryPage />} />
         <Route path="memory/people/:personId" element={<PersonMemoryPage />} />
         <Route path="settings" element={<SettingsPage onCredentialsChanged={signedOut} />} />
+        <Route path="plugins" element={<PluginsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

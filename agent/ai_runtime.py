@@ -65,9 +65,12 @@ class AIRuntime:
         self._account_ids = account_ids
         self._tasks: list[asyncio.Task] = []
         self._in_flight = 0
+        self._draining = False
 
     # 启动服务
     async def start(self) -> None:
+        context = getattr(self._host, "plugin_context", None)
+        model_factory = context.require("model.factory") if context else create_chat_model
         self.ai_id = self.definition.ai_id
         self.private_jobs = PrivateInteractionRepository(self._host._db)
         self.private_replies = PrivateReplyService(self, self.private_jobs, self._host._settings.private_reply)
@@ -138,8 +141,12 @@ class AIRuntime:
             self.ai_id,
             self._timeouts,
         )
+
+        async def current_tools():
+            return await load_toolset(self.bus, self.ai_id, self._timeouts)
+
         def build_chat_agent(model_id: str) -> ChatAgent:
-            model = create_chat_model(
+            model = model_factory(
                 model_id,
                 models=llm_config.models,
                 max_tokens=llm_config.max_tokens,
@@ -157,6 +164,7 @@ class AIRuntime:
                 retry_count=llm_config.retry_count,
                 tool_retry_count=llm_config.tool_retry_count,
                 observability=self.settings.observability,
+                tool_loader=current_tools if context else None,
             )
 
         fallback_model_id = self.definition.model_profile.model_id
@@ -187,15 +195,16 @@ class AIRuntime:
         )
         tts_config = self.settings.tts
         self._tts_http_client = httpx.AsyncClient(timeout=self._timeouts.tts_request_sec)
-        self.tts = DriverManager(
+        tts_arguments = {
+            "ai_id": self.ai_id,
+            "base_url": tts_config.base_url,
+            "http_client": self._tts_http_client,
+        }
+        self.tts = context.require("speech.clients").create(tts_config.provider, **tts_arguments) if context else DriverManager(
             namespace="ai_love.tts",
             name=tts_config.provider,
             invoke_on_load=True,
-            invoke_kwds={
-                "ai_id": self.ai_id,
-                "base_url": tts_config.base_url,
-                "http_client": self._tts_http_client,
-            },
+            invoke_kwds=tts_arguments,
             conflict_resolver=error_on_conflict,
         ).driver
 
@@ -223,7 +232,7 @@ class AIRuntime:
         )
         group_repeat_max_tokens = min(llm_config.max_tokens, 256)
         self.group_repeat_judge = GroupRepeatJudge(
-            model=create_chat_model(
+            model=model_factory(
                 group_repeat_model_id,
                 models=llm_config.models,
                 max_tokens=group_repeat_max_tokens,
@@ -302,7 +311,11 @@ class AIRuntime:
 
     # 等待在途任务完成
     async def drain(self) -> None:
-        while self._in_flight:
+        self._draining = True
+        proactive = getattr(self, "proactive_private", None)
+        if proactive is not None:
+            proactive.stop_requested = True
+        while self._in_flight or (proactive is not None and proactive.active):
             await asyncio.sleep(self.settings.social.drain_poll_interval_sec)
 
     # 停止服务
@@ -313,9 +326,10 @@ class AIRuntime:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
-        await self._vision_fetch_client.aclose()
-        await self._vision_model_http_client.aclose()
-        await self._tts_http_client.aclose()
+        for name in ("_vision_fetch_client", "_vision_model_http_client", "_tts_http_client"):
+            client = getattr(self, name, None)
+            if client is not None:
+                await client.aclose()
 
     # 创建后台任务
     def spawn(self, coro) -> asyncio.Task:
@@ -333,6 +347,8 @@ class AIRuntime:
 
     # 处理社交
     async def handle_social(self, message: SocialMessage) -> None:
+        if self._draining:
+            raise RuntimeError("智能体正在排空")
         if message.chat.chat_type.value == "private":
             if not message.meta.get("private_reply_job_id"):
                 logger.error("私聊消息缺少持久任务: message_id=%s", message.message_id)

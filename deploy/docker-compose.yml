@@ -57,7 +57,10 @@ services:
   gateway:
     build: { context: .., dockerfile: deploy/Dockerfile, target: gateway }
     container_name: ailove-gateway
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -81,7 +84,10 @@ services:
   director:
     build: { context: .., dockerfile: deploy/Dockerfile, target: director }
     container_name: ailove-director
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -97,7 +103,10 @@ services:
   ai-agent:
     build: { context: .., dockerfile: deploy/Dockerfile, target: ai-agent }
     container_name: ailove-ai-agent
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - AGNES_API_KEY=${AGNES_API_KEY:-}
@@ -129,7 +138,10 @@ services:
   gptsovits:
     build: { context: .., dockerfile: deploy/Dockerfile, target: gptsovits }
     container_name: ailove-gptsovits
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -145,7 +157,10 @@ services:
   live-edge:
     build: { context: .., dockerfile: deploy/Dockerfile, target: live-edge }
     container_name: ailove-live-edge
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -163,7 +178,10 @@ services:
   extension-host:
     build: { context: .., dockerfile: deploy/Dockerfile, target: extension-host }
     container_name: ailove-extension-host
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - AILOVE_NACOS_ADDRS=nacos:8848
       - AILOVE_NACOS_GROUP=DEFAULT_GROUP
       - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
@@ -179,9 +197,14 @@ services:
   mcp:
     build: { context: .., dockerfile: deploy/Dockerfile, target: mcp }
     container_name: ailove-mcp
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_BUS_URL=nats://nats:4222
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - QWEATHER_API_KEY=${QWEATHER_API_KEY:?}
       - QWEATHER_API_HOST=${QWEATHER_API_HOST:?}
+    depends_on: [nats]
     expose:
       - "8011"
     networks: [ailove]
@@ -191,5 +214,6 @@ networks:
     driver: bridge
 
 volumes:
+  plugin-state:
   postgres-data:
   nats-data:

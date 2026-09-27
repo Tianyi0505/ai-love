@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import AsyncExitStack
 
 import httpx
 import uvicorn
@@ -27,6 +28,7 @@ class GPTSoVITSService(BaseService):
 
     # 启动服务
     async def on_start(self) -> None:
+        self._cleanup = AsyncExitStack()
         cfg = await self.cfg.section(GPTSoVITSSettings)
         engine_config = cfg.engine.model_dump()
         engine_name = str(engine_config.pop("provider"))
@@ -35,13 +37,16 @@ class GPTSoVITSService(BaseService):
         }
         request_timeout_sec = float(engine_config.pop("request_timeout_sec"))
         engine_config["http_client"] = httpx.AsyncClient(timeout=request_timeout_sec)
-        self._engine = DriverManager(
+        self._cleanup.push_async_callback(engine_config["http_client"].aclose)
+        context = getattr(self, "plugin_context", None)
+        self._engine = context.require("speech.engines").create(engine_name, **engine_config) if context else DriverManager(
             namespace="ai_love.gptsovits",
             name=engine_name,
             invoke_on_load=True,
             invoke_kwds=engine_config,
             conflict_resolver=error_on_conflict,
         ).driver
+        self._cleanup.push_async_callback(self._engine.close)
         self._synthesis = SynthesisService(
             self._engine,
             cfg.output,
@@ -65,7 +70,8 @@ class GPTSoVITSService(BaseService):
 
     # 停止服务
     async def on_stop(self) -> None:
-        await self._synthesis.close()
+        if hasattr(self, "_cleanup"):
+            await self._cleanup.aclose()
 
     async def serve(self) -> None:
         await self._http.serve()

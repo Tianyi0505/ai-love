@@ -27,6 +27,8 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
             - name: PANEL_PORT
               value: "8090"
             - name: AILOVE_DATABASE_POOL_MIN_SIZE

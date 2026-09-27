@@ -18,12 +18,14 @@ def create_chat_model(
     max_tokens: int,
     timeout_sec: float,
     max_retries: int,
+    strategies=None,
 ) -> BaseChatModel:
     model_config = models.get(model_id)
     if model_config is None:
         raise ValueError(f"未配置模型: {model_id}")
 
-    strategy = CHAT_MODEL_STRATEGIES.get(model_config.provider)
+    strategy = (strategies.create(model_config.provider) if strategies is not None
+                else CHAT_MODEL_STRATEGIES.get(model_config.provider))
     if strategy is None:
         raise ValueError(f"不支持的模型 provider: {model_config.provider}")
     api_key = os.getenv(model_config.api_key_env)

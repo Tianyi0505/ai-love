@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TypeVar
 
@@ -35,7 +36,7 @@ class ConfigProvider(ABC):
 
     # 监听配置变化
     @abstractmethod
-    async def watch(self, key: str, callback) -> None: ...
+    async def watch(self, key: str, callback) -> Callable[[], Awaitable[None]] | None: ...
 
     # 注册组件
     @abstractmethod
@@ -83,7 +84,7 @@ class NacosConfigProvider(ConfigProvider):
         return parsed
 
     # 监听配置变化
-    async def watch(self, key: str, callback) -> None:
+    async def watch(self, key: str, callback) -> Callable[[], Awaitable[None]]:
 
         # 监听配置变化事件
         async def _listener(tenant: str, group: str, data_id: str, content: str) -> None:
@@ -95,6 +96,12 @@ class NacosConfigProvider(ConfigProvider):
             await callback(data_id, parsed)
 
         await self._config_client.add_listener(key, self._settings.group, _listener)
+
+        async def remove_listener() -> None:
+            if self._config_client is not None:
+                await self._config_client.remove_listener(key, self._settings.group, _listener)
+
+        return remove_listener
 
     # 注册组件
     async def register(self, service_name: str, instance_id: str, addr: str) -> None:
@@ -138,31 +145,35 @@ class ServiceConfig:
     @classmethod
     async def load(cls, service_name: str) -> "ServiceConfig":
         provider = NacosConfigProvider()
-        await provider.connect()
-        connection = ServiceConnectionSettings()
-        section = None
-        for attempt in range(connection.config_retry_count):
-            try:
-                section = await provider.get(f"service.{service_name}")
-                break
-            except KeyError:
-                if attempt + 1 == connection.config_retry_count:
-                    raise
-                await asyncio.sleep(connection.config_retry_interval_sec)
-        if section is None:
-            raise RuntimeError(f"配置重试次数必须大于零: service.{service_name}")
-        identity = ServiceIdentitySettings.model_validate(section)
-        cfg = cls(
-            service_name=service_name,
-            nacos=provider,
-            bus_url=connection.bus_url,
-            bus_token=connection.bus_token,
-            instance_addr=identity.instance_addr,
-        )
-        cfg._section = section
-        cfg._section_key = f"service.{service_name}"
-        await cfg._subscribe()
-        return cfg
+        try:
+            await provider.connect()
+            connection = ServiceConnectionSettings()
+            section = None
+            for attempt in range(connection.config_retry_count):
+                try:
+                    section = await provider.get(f"service.{service_name}")
+                    break
+                except KeyError:
+                    if attempt + 1 == connection.config_retry_count:
+                        raise
+                    await asyncio.sleep(connection.config_retry_interval_sec)
+            if section is None:
+                raise RuntimeError(f"配置重试次数必须大于零: service.{service_name}")
+            identity = ServiceIdentitySettings.model_validate(section)
+            cfg = cls(
+                service_name=service_name,
+                nacos=provider,
+                bus_url=connection.bus_url,
+                bus_token=connection.bus_token,
+                instance_addr=identity.instance_addr,
+            )
+            cfg._section = section
+            cfg._section_key = f"service.{service_name}"
+            await cfg._subscribe()
+            return cfg
+        except BaseException:
+            await provider.close()
+            raise
 
     # 订阅消息
     async def _subscribe(self) -> None:

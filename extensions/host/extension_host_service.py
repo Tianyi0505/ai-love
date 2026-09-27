@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 from extensions.host.grounding_tool_provider import GroundingToolProvider
@@ -34,6 +36,7 @@ class ExtensionHostService(BaseService):
         self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
         self._fingerprint: str | None = None
         self._mcp_providers: list[MCPToolProvider] = []
+        self._reload_lock = asyncio.Lock()
         await self._reload_bindings()
         await self.bus.reply_model(
             "tool.list.request", ToolListRequest, ToolListResponse, self._on_list
@@ -54,11 +57,14 @@ class ExtensionHostService(BaseService):
 
     # 重新加载账号绑定
     async def _reload_bindings(self) -> None:
+        async with self._reload_lock:
+            await self._load_bindings()
+
+    async def _load_bindings(self) -> None:
         definitions = await self._definitions.list_active()
         await self._discover_mcp()
-        mcp_fingerprint = "|".join(
-            f"{provider.provider_id}:{','.join(item.tool_id for item in provider.definitions())}"
-            for provider in self._mcp_providers
+        mcp_fingerprint = json.dumps(
+            [asdict(item) for provider in self._mcp_providers for item in provider.definitions()], sort_keys=True,
         )
         fingerprint = "|".join(f"{item.ai_id}:{item.fingerprint}" for item in definitions) + mcp_fingerprint
         if fingerprint == self._fingerprint:
@@ -85,14 +91,20 @@ class ExtensionHostService(BaseService):
 
     # 发现MCP工具
     async def _discover_mcp(self) -> None:
-        if self._mcp_providers:
-            return
         mcp_url = self._service_config.mcp_url
-        self._mcp_providers = [await MCPToolProvider.discover("mcp.ailove", mcp_url)]
-        logger.info("[extension-host] MCP 已连接: ailove")
+        try:
+            async with asyncio.timeout(self._service_config.mcp_discovery_timeout_sec):
+                provider = await MCPToolProvider.discover("mcp.ailove", mcp_url)
+        except Exception as exc:
+            # A stopped MCP plugin withdraws its tools without taking local tools offline.
+            self._mcp_providers = []
+            logger.warning("[extension-host] MCP 暂不可用，撤销远程工具: %s", type(exc).__name__)
+        else:
+            self._mcp_providers = [provider]
 
     # 处理列表请求
     async def _on_list(self, request: ToolListRequest) -> ToolListResponse:
+        await self._reload_bindings()
         tools = [
             ToolDescriptor(
                 name=item.tool_id,

@@ -1,0 +1,16 @@
+{
+  "id": "tools",
+  "name": "工具网关",
+  "description": "工具发现、权限绑定与调用。",
+  "host": "extension-host",
+  "category": "tool",
+  "entrypoint": "plugins.components:ServicePlugin",
+  "provides": [
+    "tools.gateway"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "implementation": "extensions.host.extension_host_service:ExtensionHostService"
+  }
+}

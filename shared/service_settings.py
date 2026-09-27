@@ -59,6 +59,7 @@ class DirectorSettings(ServiceSettings):
 
 
 class ExtensionHostSettings(ServiceSettings):
+    mcp_discovery_timeout_sec: float = Field(default=3, gt=0)
     binding_poll_interval_sec: float
     grounding_timeout_sec: float
     mcp_url: str
