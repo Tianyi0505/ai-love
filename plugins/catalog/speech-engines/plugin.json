@@ -1,0 +1,20 @@
+{
+  "id": "speech.engines",
+  "name": "语音引擎",
+  "description": "GPT-SoVITS、MIMO 及外部合成引擎工厂。",
+  "host": "gptsovits",
+  "category": "speech",
+  "entrypoint": "plugins.factories:FactoryPlugin",
+  "provides": [
+    "speech.engines"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "entrypoint_group": "ai_love.gptsovits",
+    "implementations": {
+      "gptsovits": "gptsovits.gpt_sovits_engine:GPTSoVITSEngine",
+      "mimo": "gptsovits.mimo_engine:MimoEngine"
+    }
+  }
+}

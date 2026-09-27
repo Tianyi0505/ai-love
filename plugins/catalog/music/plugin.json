@@ -1,0 +1,18 @@
+{
+  "id": "music",
+  "name": "音乐指令",
+  "description": "接收音乐控制意图；播放器仍待接入。",
+  "host": "mcp",
+  "category": "tool",
+  "entrypoint": "plugins.mcp:MCPToolPlugin",
+  "provides": [
+    "tools.music"
+  ],
+  "requires": [
+    "mcp.server"
+  ],
+  "enabled": true,
+  "config": {
+    "registration": "extensions.mcp.music.music_tool:register_music"
+  }
+}

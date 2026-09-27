@@ -1,0 +1,17 @@
+{
+  "id": "stream",
+  "name": "推流控制",
+  "description": "接收 OBS 控制指令；沿用现有记录实现。",
+  "host": "live-edge",
+  "category": "live",
+  "entrypoint": "plugins.components:ModulePlugin",
+  "provides": [
+    "live.stream"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "implementation": "live.stream.stream_module:StreamModule",
+    "settings": "shared.service_settings:LiveEdgeSettings"
+  }
+}

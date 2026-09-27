@@ -1,0 +1,19 @@
+{
+  "id": "channels",
+  "name": "平台渠道",
+  "description": "QQ 与外部渠道适配器的发现和创建。",
+  "host": "gateway",
+  "category": "channel",
+  "entrypoint": "plugins.factories:FactoryPlugin",
+  "provides": [
+    "platform.channels"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "entrypoint_group": "ai_love.channels",
+    "implementations": {
+      "qq": "gateway.qq_channel:QQChannel"
+    }
+  }
+}

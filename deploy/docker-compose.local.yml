@@ -4,7 +4,10 @@ services:
   live-edge:
     image: ailove/live-edge
     container_name: ailove-live-edge-local
+    volumes:
+      - plugin-state:/app/plugin-state
     environment:
+      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
       - AILOVE_NACOS_ADDRS=${AILOVE_NACOS_ADDRS:?}
       - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
       - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
@@ -31,3 +34,6 @@ services:
 networks:
   ailove:
     driver: bridge
+
+volumes:
+  plugin-state:

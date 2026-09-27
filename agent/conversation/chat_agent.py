@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+import json
+from collections.abc import Awaitable, Callable, Sequence
 from typing import cast
 
 from langchain.agents import create_agent
@@ -39,11 +40,13 @@ class ChatAgent:
         retry_count: int,
         tool_retry_count: int,
         observability: ObservabilitySettings,
+        tool_loader: Callable[[], Awaitable[list[BaseTool]]] | None = None,
     ) -> None:
         self._model_name = model_name
         self._max_tokens = max_tokens
         self._output_policy = output_policy
         self._observability = observability
+        self._tool_loader = tool_loader
         self._plan_model = structured_output_runnable(
             model,
             ResponsePlan,
@@ -65,16 +68,44 @@ class ChatAgent:
                     jitter=False,
                 )
             )
-        self._agent = create_agent(
-            model=model,
-            tools=tools,
-            middleware=middleware,
-            response_format=ToolStrategy(
-                ResponsePlan,
-                handle_errors=retry_count > 0,
-            ),
-            context_schema=ToolExecutionContext,
+
+        def build_agent(current_tools):
+            return create_agent(
+                model=model,
+                tools=current_tools,
+                middleware=middleware,
+                response_format=ToolStrategy(ResponsePlan, handle_errors=retry_count > 0),
+                context_schema=ToolExecutionContext,
+            )
+
+        self._build_agent = build_agent
+        self._tool_signature = self._signature(tools)
+        self._agent = build_agent(tools)
+
+    @staticmethod
+    def _signature(tools: list[BaseTool]) -> str:
+        return json.dumps(
+            [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "schema": tool.args_schema
+                    if isinstance(tool.args_schema, dict)
+                    else tool.get_input_schema().model_json_schema(),
+                }
+                for tool in tools
+            ],
+            sort_keys=True,
         )
+
+    async def _current_agent(self):
+        if self._tool_loader is not None:
+            tools = await self._tool_loader()
+            signature = self._signature(tools)
+            if signature != self._tool_signature:
+                self._agent = self._build_agent(tools)
+                self._tool_signature = signature
+        return self._agent
 
     async def generate_plan(
         self,
@@ -96,7 +127,8 @@ class ChatAgent:
             {"max_tokens": self._max_tokens},
         ) as span:
             if allow_tools:
-                state = await self._agent.ainvoke(
+                graph = await self._current_agent()
+                state = await graph.ainvoke(
                     {"messages": messages},
                     context=tool_context or ToolExecutionContext(),
                 )
@@ -150,7 +182,10 @@ def _human_message(user_prompt: str, images: Sequence[ImageAttachment]) -> Human
     for image in images:
         content.extend(
             [
-                {"type": "text", "text": image.attribution if image.is_group else f"\n下图对应消息：{image.attribution}"},
+                {
+                    "type": "text",
+                    "text": image.attribution if image.is_group else f"\n下图对应消息：{image.attribution}",
+                },
                 {"type": "image_url", "image_url": {"url": image.data_url}},
             ]
         )

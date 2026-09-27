@@ -355,9 +355,20 @@ spec:
             - secretRef:
                 name: ailove-secrets
           env:
+            - name: AILOVE_BUS_URL
+              value: nats://127.0.0.1:14222
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 300m, memory: 192Mi}
+          volumeMounts:
+            - name: plugin-state
+              mountPath: /app/data/plugins
+      volumes:
+        - name: plugin-state
+          hostPath:
+            path: /opt/ailove/data/plugins
+            type: DirectoryOrCreate
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -409,3 +420,12 @@ spec:
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 300m, memory: 192Mi}
+
+          volumeMounts:
+            - name: plugin-state
+              mountPath: /app/data/plugins
+      volumes:
+        - name: plugin-state
+          hostPath:
+            path: /opt/ailove/data/plugins
+            type: DirectoryOrCreate

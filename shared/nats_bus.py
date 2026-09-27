@@ -52,6 +52,13 @@ class Subscription(ABC):
     @abstractmethod
     def unsubscribe(self) -> None: ...
 
+    async def pause(self) -> None:
+        """Stop broker ingress before a plugin drains its current callbacks."""
+        self.unsubscribe()
+
+    async def close(self) -> None:
+        self.unsubscribe()
+
 
 # 定义消息总线接口
 class Bus(ABC):
@@ -179,6 +186,8 @@ class NATSBus(Bus):
 
     # 建立连接
     async def connect(self) -> None:
+        if self._conn is not None and not self._conn.is_closed:
+            return
         if self._token:
             self._conn = await nats.connect(self._url, token=self._token)
         else:
@@ -233,7 +242,7 @@ class NATSBus(Bus):
                         await msg.respond(result)
 
         task = asyncio.create_task(pump())
-        return _SubWrapper(task)
+        return _SubWrapper(task, sub)
 
     # 发送请求
     async def request(self, subject: str, payload: bytes, timeout: float) -> bytes:
@@ -293,18 +302,32 @@ class NATSBus(Bus):
                     await handler(msg.data)
                     await msg.ack()
 
-        return _SubWrapper(asyncio.create_task(pump()))
+        return _SubWrapper(asyncio.create_task(pump()), sub)
 
 
 # 封装消息订阅回调
 class _SubWrapper(Subscription):
     # 初始化当前实例
-    def __init__(self, task) -> None:
+    def __init__(self, task, subscription) -> None:
         self._task = task
+        self._subscription = subscription
+        self._closing_task: asyncio.Task | None = None
+        self._paused = False
 
     # 取消消息订阅
     def unsubscribe(self) -> None:
+        if self._closing_task is None:
+            self._closing_task = asyncio.create_task(self.close())
+
+    async def pause(self) -> None:
+        if not self._paused:
+            await self._subscription.unsubscribe()
+            self._paused = True
+
+    async def close(self) -> None:
+        await self.pause()
         self._task.cancel()
+        await asyncio.gather(self._task, return_exceptions=True)
 
 
 # 创建消息总线

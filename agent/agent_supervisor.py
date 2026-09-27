@@ -58,7 +58,11 @@ class AgentSupervisor:
                 if current and current.definition.fingerprint == definition.fingerprint:
                     continue
                 replacement = await self._runtime_factory(definition)
-                await replacement.start()
+                try:
+                    await replacement.start()
+                except BaseException:
+                    await replacement.stop()
+                    raise
                 self._runtimes[ai_id] = replacement
                 if current:
                     await current.drain()
@@ -104,6 +108,10 @@ class AgentSupervisor:
         return runtime
 
     # 停止服务
+    async def drain(self) -> None:
+        async with self._lock:
+            await asyncio.gather(*(runtime.drain() for runtime in self._runtimes.values()))
+
     async def stop(self) -> None:
         async with self._lock:
             runtimes = list(self._runtimes.values())

@@ -1,0 +1,16 @@
+{
+  "id": "director",
+  "name": "直播导演",
+  "description": "直播阵容与发言调度。",
+  "host": "director",
+  "category": "live",
+  "entrypoint": "plugins.components:ServicePlugin",
+  "provides": [
+    "live.director"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "implementation": "live.director.director_service:DirectorService"
+  }
+}

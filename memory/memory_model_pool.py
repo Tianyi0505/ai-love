@@ -29,10 +29,12 @@ class MemoryModelPool:
         definitions,
         config: LLMSettings,
         observability: ObservabilitySettings,
+        model_factory=None,
     ) -> None:
         self._definitions = definitions
         self._config = config
         self._observability = observability
+        self._model_factory = model_factory
         self._models: dict[str, tuple[str, BaseChatModel]] = {}
         self._outputs: dict[tuple[str, type[BaseModel]], tuple[str, Runnable]] = {}
 
@@ -43,7 +45,7 @@ class MemoryModelPool:
         definition = await self._definitions.load(ai_id)
         cached_model = self._models.get(ai_id)
         if cached_model is None or cached_model[0] != definition.fingerprint:
-            model = create_chat_model(
+            model = (self._model_factory or create_chat_model)(
                 definition.model_profile.model_id,
                 models=self._config.models,
                 max_tokens=self._config.memory_max_tokens,

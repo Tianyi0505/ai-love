@@ -33,6 +33,9 @@ logs/
 *.log
 memory_db/
 chroma/
+output/plugin-validation/
+output/playwright/
+.playwright-cli/
 *.db
 *.sqlite3
 

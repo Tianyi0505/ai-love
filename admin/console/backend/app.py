@@ -15,9 +15,11 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 from v2.nacos import NacosException
 
+from plugin_runtime.control import PluginControlClient
 from shared.contracts.agent import AgentDefinitionError
 from shared.database import Database
 from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.nats_bus import create_bus
 from shared.service_config import NacosConfigProvider
 
 from .auth.credentials import CredentialRepository, CredentialService
@@ -28,6 +30,7 @@ from .observability.people_memory import PeopleMemoryReader
 from .observability.personality import PersonalityReader
 from .observability.router import router as observability_router
 from .observability.self_memory import SelfMemoryReader
+from .plugins.router import router as plugins_router
 
 logger = logging.getLogger("ailove.panel")
 
@@ -52,6 +55,9 @@ class PanelConfig(BaseSettings):
     )
     redis_url: str = Field(validation_alias="AILOVE_REDIS_URL")
     redis_password: str = Field(validation_alias="AILOVE_REDIS_PASSWORD")
+    bus_url: str = Field(default="nats://nats:4222", validation_alias="AILOVE_BUS_URL")
+    bus_token: str | None = Field(default=None, validation_alias="AILOVE_BUS_TOKEN")
+    plugin_hosts: tuple[str, ...] = ("gateway", "ai-agent", "extension-host", "mcp", "gptsovits", "director", "live-edge")
 
 
 def create_app(
@@ -68,13 +74,13 @@ def create_app(
             decode_responses=True,
         )
         nacos = NacosConfigProvider()
+        plugin_control = PluginControlClient(create_bus(config.bus_url, config.bus_token), config.plugin_hosts)
         try:
             await database.connect()
             await redis.ping()
             await nacos.connect()
 
             agent_store = NacosAgentDefinitionStore(nacos)
-            await agent_store.load(config.ai_id)
 
             password_hasher = PasswordHasher()
             sessions = RedisSessionStore(redis)
@@ -90,6 +96,7 @@ def create_app(
                 )
 
             app.state.config = config
+            app.state.plugin_control = plugin_control
             app.state.session_store = sessions
             app.state.login_service = LoginService(credentials, sessions, password_hasher)
             app.state.credential_service = CredentialService(
@@ -106,6 +113,7 @@ def create_app(
             logger.info("[panel] ai-love 已就绪，当前 AI: %s", config.ai_id)
             yield
         finally:
+            await plugin_control.close()
             await nacos.close()
             await redis.aclose()
             await database.close()
@@ -125,6 +133,7 @@ def create_app(
         app.add_exception_handler(exception_type, dependency_unavailable)
     app.include_router(auth_router)
     app.include_router(observability_router)
+    app.include_router(plugins_router)
     frontend = static_directory or Path(__file__).resolve().parents[1] / "frontend" / "dist"
     app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
     return app

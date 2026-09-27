@@ -24,11 +24,13 @@ class BaseService(ABC):
         self.bus = bus if bus is not None else create_bus(cfg.bus_url, cfg.bus_token)
         self._tasks: list[asyncio.Task] = []
         self.scheduler = AsyncIOScheduler()
-        self.telemetry = TelemetryRuntime(self.name)
+        self.telemetry: TelemetryRuntime | None = None
 
     # 启动服务
     async def start(self) -> None:
         logger.info("[%s] 启动中 ...", self.name)
+        if self.telemetry is None:
+            self.telemetry = TelemetryRuntime(self.name)
         self.telemetry.start()
         await self.bus.connect()
         await self._register_to_discovery()
@@ -45,7 +47,8 @@ class BaseService(ABC):
         await self.on_stop()
         await self.cfg.nacos.close()
         await self.bus.close()
-        self.telemetry.stop()
+        if self.telemetry is not None:
+            self.telemetry.stop()
         logger.info("[%s] 已停止", self.name)
 
     # 持续运行服务

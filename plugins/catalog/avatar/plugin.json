@@ -1,0 +1,16 @@
+{
+  "id": "avatar",
+  "name": "形象指令",
+  "description": "接收形象指令；沿用现有记录实现。",
+  "host": "live-edge",
+  "category": "live",
+  "entrypoint": "plugins.components:ModulePlugin",
+  "provides": [
+    "live.avatar"
+  ],
+  "requires": [],
+  "enabled": true,
+  "config": {
+    "implementation": "live.avatar.avatar_module:AvatarModule"
+  }
+}

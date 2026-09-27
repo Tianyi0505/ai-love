@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import AsyncExitStack
 from datetime import datetime, timezone
 
 import httpx
@@ -56,10 +57,13 @@ class GatewayService(BaseService):
     name = "gateway"
 
     async def on_start(self) -> None:
+        self._cleanup = AsyncExitStack()
         section = await self.cfg.section(GatewaySettings)
         settings = await GlobalSettingsStore(self.cfg.nacos).load()
         self._http_client = httpx.AsyncClient()
+        self._cleanup.push_async_callback(self._http_client.aclose)
         self._db = Database()
+        self._cleanup.push_async_callback(self._db.close)
         await self._db.connect()
 
         router = SocialRouter(AccountOwnershipRepository(self._db))
@@ -108,7 +112,10 @@ class GatewayService(BaseService):
                     message_timeout_sec=settings.timeouts.qq_message_sec,
                     forward_timeout_sec=settings.timeouts.qq_forward_sec,
                 )
-            channel = DriverManager(
+            context = getattr(self, "plugin_context", None)
+            channel = context.require("platform.channels").create(
+                spec.adapter, channel_config, self._http_client,
+            ) if context else DriverManager(
                 namespace="ai_love.channels",
                 name=spec.adapter,
                 invoke_on_load=True,
@@ -116,6 +123,8 @@ class GatewayService(BaseService):
                 conflict_resolver=error_on_conflict,
             ).driver
             channel.set_message_handler(message_handler.handle)
+            if context:
+                context.resources.on_quiesce(channel.stop)
             self._channels[spec.account_id] = channel
             account_configs[spec.account_id] = channel_config
             self.spawn(channel.start())
@@ -177,10 +186,10 @@ class GatewayService(BaseService):
             )
 
     async def on_stop(self) -> None:
-        for channel in self._channels.values():
+        for channel in getattr(self, "_channels", {}).values():
             await channel.stop()
-        await self._http_client.aclose()
-        await self._db.close()
+        if hasattr(self, "_cleanup"):
+            await self._cleanup.aclose()
 
     async def _schedule_qzone(
         self,

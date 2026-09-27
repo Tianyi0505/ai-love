@@ -2,6 +2,7 @@ import {
   Brain,
   House,
   Settings,
+  Plug,
   Sparkles,
   UsersRound,
   type LucideIcon,
@@ -20,4 +21,5 @@ export const navigation: NavigationItem[] = [
   { label: "心事手账", caption: "她记得自己", path: "/memory/self", icon: Brain },
   { label: "羁绊图鉴", caption: "她记得的人", path: "/memory/people", icon: UsersRound },
   { label: "小窝设置", caption: "守护与钥匙", path: "/settings", icon: Settings },
+  { label: "能力工坊", caption: "装配与生长", path: "/plugins", icon: Plug },
 ];
