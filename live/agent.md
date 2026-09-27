@@ -2,7 +2,7 @@
 
 **Live Edge Service** (`live/edge_service.py`):
 
-- 进程入口是 `python -m live.edge_service`；`LiveEdgeService` 继承 `BaseService`，以 `live-edge` 注册到 Nacos，并在一个 edge 侧进程内组合 avatar 与 stream。
+- 进程入口是 `python -m live.edge_service`；`LiveEdgeService` 继承 `BaseService`，以 `live-edge` 使用 Kubernetes 挂载配置，并在一个 edge 侧进程内组合 avatar 与 stream。
 - 模块按 `AvatarModule`、`StreamModule` 顺序启动，按相反顺序停止。任一模块启动失败时必须清理已经启动的模块，不能留下部分可用的 edge 进程。
 - `live-edge` 是部署边界；`live/avatar` 与 `live/stream` 是进程内模块，不应恢复成独立服务或各自创建 NATS 连接。
 
@@ -18,6 +18,6 @@
 
 **Runtime Configuration** (`service.live-edge`):
 
-- `instance_addr`：Nacos 注册地址。
+- `instance_addr`：Kubernetes 挂载配置 注册地址。
 - `obs_ws_url`：OBS WebSocket 地址。
-- `stream_key`：推流密钥；只能通过部署环境注入 Nacos 模板值，不能提交真实值。
+- `stream_key`：推流密钥；只能通过部署环境注入 Kubernetes 挂载配置 模板值，不能提交真实值。

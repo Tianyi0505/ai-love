@@ -105,7 +105,7 @@ class ScopedConfigProvider:
 class ScopedServiceConfig:
     def __init__(self, config, scope: ResourceScope) -> None:
         self._config = config
-        self.nacos = ScopedConfigProvider(config.nacos, scope)
+        self.config_provider = ScopedConfigProvider(config.config_provider, scope)
 
     def __getattr__(self, name):
         # Delegate reads to the live configuration instead of copying its current snapshot.

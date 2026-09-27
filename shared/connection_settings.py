@@ -4,17 +4,6 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class NacosConnectionSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AILOVE_NACOS_", extra="ignore")
-
-    addrs: str
-    grpc_timeout_ms: int
-    namespace: str | None = None
-    group: str
-    user: str | None = None
-    password: str | None = None
-
-
 class ServiceConnectionSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AILOVE_", extra="ignore")
 

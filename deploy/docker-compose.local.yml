@@ -1,39 +1,36 @@
-# 部署本地直播服务
-
 services:
   live-edge:
     image: ailove/live-edge
     container_name: ailove-live-edge-local
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - AILOVE_NACOS_ADDRS=${AILOVE_NACOS_ADDRS:?}
-      - AILOVE_NACOS_GROUP=${AILOVE_NACOS_GROUP:?}
-      - AILOVE_NACOS_USER=${AILOVE_NACOS_USER:?}
-      - AILOVE_NACOS_PASSWORD=${AILOVE_NACOS_PASSWORD:?}
-      - AILOVE_BUS_URL=${AILOVE_BUS_URL:?}
-      - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - AILOVE_BUS_URL=${AILOVE_BUS_URL:?}
+    - AILOVE_BUS_TOKEN=${AILOVE_BUS_TOKEN:?}
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
     ports:
-      - "8081:8081"
+    - 8081:8081
     restart: unless-stopped
-    networks: [ailove]
-
+    networks:
+    - ailove
   gpt-sovits:
-    image: ${GPT_SOVITS_IMAGE:?}   # 必须显式给出明确 tag/digest（ghcr 需登录），禁止 latest
+    image: ${GPT_SOVITS_IMAGE:?}
     container_name: ailove-gpt-sovits
     environment:
-      - GPT_SOVITS_URL=http://127.0.0.1:9880
+    - GPT_SOVITS_URL=http://127.0.0.1:9880
     ports:
-      - "9880:9880"
+    - 9880:9880
     volumes:
-      - ./sounds:/sounds
+    - ./sounds:/sounds
     restart: unless-stopped
-    networks: [ailove]
-
+    networks:
+    - ailove
 networks:
   ailove:
     driver: bridge
-
 volumes:
-  plugin-state:
+  plugin-state: null

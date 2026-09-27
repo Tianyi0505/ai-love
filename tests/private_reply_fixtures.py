@@ -87,12 +87,12 @@ async def build_flow(db):
     from gateway.gateway_message_handler import GatewayMessageHandler
     from gateway.qq_channel import QQChannel
     from gateway.social_send_handler import SocialSendHandler
+    from shared.agent_definition_store import AgentDefinitionStore
     from shared.contracts.rpc.memory import MemoryContextResponse
     from shared.contracts.rpc.relationship import RelationshipSummaryResponse
     from shared.conversation_repository import ConversationRepository
     from shared.global_settings_store import GlobalSettingsStore
     from shared.identity_repository import IdentityRepository
-    from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
     from shared.private_interaction_repository import PrivateInteractionRepository
     from shared.service_settings import PrivateReplySettings
     from shared.social_delivery_repository import SocialDeliveryRepository
@@ -102,12 +102,12 @@ async def build_flow(db):
             pass
 
         async def get(self, key):
-            data = yaml.safe_load((Path(__file__).parents[1] / 'deploy/nacos' / (key + '.yaml')).read_text(encoding='utf-8'))
+            data = yaml.safe_load((Path(__file__).parents[1] / 'deploy/config' / (key + '.yaml')).read_text(encoding='utf-8'))
             if key == 'ailove.config':
                 data['qq']['whitelist'] = [str(value) for value in range(20000,20010)]
             return data
 
-    definition = await NacosAgentDefinitionStore(Config()).load('ai_luoyu')
+    definition = await AgentDefinitionStore(Config()).load('ai_luoyu')
     settings = await GlobalSettingsStore(Config()).load()
     bus = LocalBus()
     calls = []

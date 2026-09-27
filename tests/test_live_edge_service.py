@@ -77,7 +77,7 @@ class LiveEdgeServiceLifecycleTests(unittest.IsolatedAsyncioTestCase):
             close=AsyncMock(),
             subscribe_model=AsyncMock(side_effect=subscriptions),
         )
-        nacos = SimpleNamespace(register=AsyncMock(), close=AsyncMock())
+        config_provider = SimpleNamespace(register=AsyncMock(), close=AsyncMock())
         cfg = SimpleNamespace(
             section=AsyncMock(
                 return_value=LiveEdgeSettings(
@@ -86,7 +86,7 @@ class LiveEdgeServiceLifecycleTests(unittest.IsolatedAsyncioTestCase):
                     stream_key="stream-key",
                 )
             ),
-            nacos=nacos,
+            config_provider=config_provider,
             bus_url="nats://127.0.0.1:4222",
             bus_token=None,
             instance_id="live-edge-1",
@@ -99,15 +99,12 @@ class LiveEdgeServiceLifecycleTests(unittest.IsolatedAsyncioTestCase):
         await service.stop()
 
         bus.connect.assert_awaited_once_with()
-        nacos.register.assert_awaited_once_with(
-            "live-edge", "live-edge-1", "127.0.0.1:0"
-        )
         service.telemetry.start.assert_called_once_with()
         service.telemetry.stop.assert_called_once_with()
         self.assertEqual(2, bus.subscribe_model.await_count)
         for subscription in subscriptions:
             subscription.unsubscribe.assert_called_once_with()
-        nacos.close.assert_awaited_once_with()
+        config_provider.close.assert_awaited_once_with()
         bus.close.assert_awaited_once_with()
 
 

@@ -1,4 +1,3 @@
-# 使用 AILOVE_DATABASE_URL 连接阿里云 RDS
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,9 +6,9 @@ spec:
   selector:
     app: redis
   ports:
-    - name: redis
-      port: 6379
-      targetPort: 6379
+  - name: redis
+    port: 6379
+    targetPort: 6379
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,124 +29,40 @@ spec:
       nodeSelector:
         ailove.role: core
       containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        args:
+        - redis-server
+        - --save
+        - ''
+        - --appendonly
+        - 'no'
+        - --requirepass
+        - $(AILOVE_REDIS_PASSWORD)
+        env:
+        - name: AILOVE_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ailove-secrets
+              key: AILOVE_REDIS_PASSWORD
+        ports:
         - name: redis
-          image: redis:7-alpine
-          imagePullPolicy: IfNotPresent
-          args: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "$(AILOVE_REDIS_PASSWORD)"]
-          env:
-            - name: AILOVE_REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: AILOVE_REDIS_PASSWORD
-          ports:
-            - name: redis
-              containerPort: 6379
-              hostPort: 16379
-              hostIP: 127.0.0.1
-          readinessProbe:
-            tcpSocket:
-              port: 6379
-            initialDelaySeconds: 2
-            periodSeconds: 5
-          resources:
-            requests:
-              cpu: 10m
-              memory: 24Mi
-            limits:
-              cpu: 200m
-              memory: 96Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nacos
-spec:
-  selector:
-    app: nacos
-  ports:
-    - name: http
-      port: 8848
-      targetPort: 8848
-    - name: grpc
-      port: 9848
-      targetPort: 9848
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nacos
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: nacos
-  template:
-    metadata:
-      labels:
-        app: nacos
-    spec:
-      nodeSelector:
-        ailove.role: core
-      containers:
-        - name: nacos
-          image: nacos/nacos-server:v2.3.2
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: MODE
-              value: standalone
-            - name: NACOS_AUTH_ENABLE
-              value: "true"
-            - name: NACOS_AUTH_IDENTITY_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: NACOS_AUTH_IDENTITY_KEY
-            - name: NACOS_AUTH_IDENTITY_VALUE
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: NACOS_AUTH_IDENTITY_VALUE
-            - name: NACOS_AUTH_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: NACOS_AUTH_TOKEN
-            - name: JVM_XMS
-              value: 96m
-            - name: JVM_XMX
-              value: 320m
-            - name: JVM_XMN
-              value: 64m
-          ports:
-            - name: http
-              containerPort: 8848
-              hostPort: 8848
-            - name: grpc
-              containerPort: 9848
-              hostPort: 9848
-          readinessProbe:
-            tcpSocket:
-              port: 8848
-            initialDelaySeconds: 15
-            periodSeconds: 5
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: "1"
-              memory: 600Mi
-          volumeMounts:
-            - name: data
-              mountPath: /home/nacos/data
-      volumes:
-        - name: data
-          hostPath:
-            path: /var/lib/docker/volumes/deploy_nacos-data/_data
-            type: Directory
+          containerPort: 6379
+          hostPort: 16379
+          hostIP: 127.0.0.1
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 10m
+            memory: 24Mi
+          limits:
+            cpu: 200m
+            memory: 96Mi
 ---
 apiVersion: v1
 kind: Service
@@ -157,12 +72,12 @@ spec:
   selector:
     app: nats
   ports:
-    - name: client
-      port: 4222
-      targetPort: 4222
-    - name: monitor
-      port: 8222
-      targetPort: 8222
+  - name: client
+    port: 4222
+    targetPort: 4222
+  - name: monitor
+    port: 8222
+    targetPort: 8222
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -183,39 +98,46 @@ spec:
       nodeSelector:
         ailove.role: core
       containers:
-        - name: nats
-          image: nats:2.10.29-alpine
-          imagePullPolicy: IfNotPresent
-          args: ["-js", "-sd", "/data", "-m", "8222", "-auth", "$(AILOVE_BUS_TOKEN)"]
-          env:
-            - name: AILOVE_BUS_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: AILOVE_BUS_TOKEN
-          ports:
-            - name: client
-              containerPort: 4222
-              hostPort: 4222
-            - name: monitor
-              containerPort: 8222
-          readinessProbe:
-            tcpSocket:
-              port: 4222
-            initialDelaySeconds: 3
-            periodSeconds: 5
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              cpu: 250m
-              memory: 128Mi
-          volumeMounts:
-            - name: data
-              mountPath: /data
-      volumes:
+      - name: nats
+        image: nats:2.10.29-alpine
+        imagePullPolicy: IfNotPresent
+        args:
+        - -js
+        - -sd
+        - /data
+        - -m
+        - '8222'
+        - -auth
+        - $(AILOVE_BUS_TOKEN)
+        env:
+        - name: AILOVE_BUS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ailove-secrets
+              key: AILOVE_BUS_TOKEN
+        ports:
+        - name: client
+          containerPort: 4222
+          hostPort: 4222
+        - name: monitor
+          containerPort: 8222
+        readinessProbe:
+          tcpSocket:
+            port: 4222
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+        volumeMounts:
         - name: data
-          hostPath:
-            path: /opt/ailove/k8s-data/nats
-            type: Directory
+          mountPath: /data
+      volumes:
+      - name: data
+        hostPath:
+          path: /opt/ailove/k8s-data/nats
+          type: Directory

@@ -11,10 +11,10 @@ from agent.conversation.multimodal_input import DirectVisionMessageInputBuilder
 from agent.conversation.prompt_assembler import PromptAssembler, PromptContext
 from agent.conversation.response_plan import ParticipationDecision
 from agent.social.group_participation_service import GroupParticipationService
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.contracts.rpc.relationship import GroupRelationshipData, GroupRelationshipResponse
 from shared.contracts.social import Chat, ChatType, ContentType, SocialMessage, SocialSender
 from shared.global_settings import GlobalSettings
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.service_settings import PrivateReplySettings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,16 +24,16 @@ ROOT = Path(__file__).resolve().parents[1]
 class FileConfigProvider:
     # 获取数据
     async def get(self, key: str) -> dict:
-        path = ROOT / "deploy" / "nacos" / f"{key}.yaml"
+        path = ROOT / "deploy" / "config" / f"{key}.yaml"
         return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
 # 验证智能体提示词配置
 class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
     async def test_private_reply_runtime_defaults_and_proactive_cooldown(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
-        gateway = yaml.safe_load((ROOT / "deploy" / "nacos" / "service.gateway.yaml").read_text(encoding="utf-8"))
-        ai_agent = yaml.safe_load((ROOT / "deploy" / "nacos" / "service.ai-agent.yaml").read_text(encoding="utf-8"))
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        gateway = yaml.safe_load((ROOT / "deploy" / "config" / "service.gateway.yaml").read_text(encoding="utf-8"))
+        ai_agent = yaml.safe_load((ROOT / "deploy" / "config" / "service.ai-agent.yaml").read_text(encoding="utf-8"))
 
         assert PrivateReplySettings.model_validate(gateway["private_reply"]) == PrivateReplySettings()
         assert PrivateReplySettings.model_validate(ai_agent["private_reply"]) == PrivateReplySettings()
@@ -41,7 +41,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
     # 验证检索上下文位于用户问题前且标签含义写入系统提示词
     async def test_retrieved_context_precedes_user_question_with_documented_xml_tags(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         prompts = PromptAssembler(definition)
         context = PromptContext(
             scene="social-private",
@@ -64,7 +64,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
     # 验证真实配置加载后保留消息分隔符
     async def test_message_separator_survives_real_config_loading(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         prompts = PromptAssembler(definition)
         understanding = MessageUnderstanding(
             prompts,
@@ -85,7 +85,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("联系人: 扩展内容\n联系人: 晚上好", result)
 
     async def test_legacy_message_understanding_keeps_separate_vision_path(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         describer = SimpleNamespace(
             describe=AsyncMock(return_value=SimpleNamespace(description="旧视觉模型识别结果"))
         )
@@ -103,7 +103,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         describer.describe.assert_awaited_once_with("https://example.com/legacy.jpg")
 
     async def test_forwarded_images_keep_sender_attribution(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         image_fetcher = SimpleNamespace(
             data_urls=AsyncMock(
                 return_value=(
@@ -161,7 +161,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_default_agent_uses_free_agnes_with_separate_vision(self) -> None:
         provider = FileConfigProvider()
-        definition = await NacosAgentDefinitionStore(provider).load("ai_luoyu")
+        definition = await AgentDefinitionStore(provider).load("ai_luoyu")
         global_config = await provider.get("ailove.config")
         global_config["qq"]["whitelist"] = []
         settings = GlobalSettings.model_validate(global_config)
@@ -182,7 +182,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
     # 验证被点名消息进入群聊参与决策
     async def test_addressed_group_message_reaches_participation_model(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         conversation = SimpleNamespace(
             window=lambda _chat_type, _chat_id: [
                 (
@@ -238,7 +238,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("只输出合法 JSON", system_prompt)
 
     async def test_active_group_topic_uses_relaxed_participation_prompt(self) -> None:
-        definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         conversation = SimpleNamespace(
             window=lambda _chat_type, _chat_id: [
                 (

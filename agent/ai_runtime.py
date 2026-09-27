@@ -75,7 +75,7 @@ class AIRuntime:
         self.private_jobs = PrivateInteractionRepository(self._host._db)
         self.private_replies = PrivateReplyService(self, self.private_jobs, self._host._settings.private_reply)
 
-        self.settings = await GlobalSettingsStore(self.cfg.nacos).load()
+        self.settings = await GlobalSettingsStore(self.cfg.config_provider).load()
         self._timeouts = self.settings.timeouts
         self.persona = Persona.from_definition(self.definition, self.settings.social)
         llm_config = self.settings.llm

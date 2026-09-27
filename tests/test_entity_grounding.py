@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def global_settings():
-    config = yaml.safe_load((ROOT / "deploy" / "nacos" / "ailove.config.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load((ROOT / "deploy" / "config" / "ailove.config.yaml").read_text(encoding="utf-8"))
     config["qq"]["whitelist"] = []
     return GlobalSettings.model_validate(config)
 

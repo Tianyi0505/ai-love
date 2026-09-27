@@ -21,7 +21,7 @@ from shared.global_settings import StickerSettings
 
 
 def sticker_service():
-    config_path = Path(__file__).resolve().parents[1] / "deploy/nacos/ailove.config.yaml"
+    config_path = Path(__file__).resolve().parents[1] / "deploy/config/ailove.config.yaml"
     settings = StickerSettings.model_validate(yaml.safe_load(config_path.read_text(encoding="utf-8"))["sticker"])
     stickers = [
         {

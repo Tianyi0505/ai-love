@@ -72,13 +72,7 @@ class PluginHost:
                 else:
                     from shared.service_config import ServiceConfig
 
-                    config = await ServiceConfig.load(self.role)
-                    try:
-                        await config.nacos.register(self.role, config.instance_id, config.instance_addr)
-                    except BaseException:
-                        await config.nacos.close()
-                        raise
-                    self._config = config
+                    self._config = await ServiceConfig.load(self.role)
             return self._config
 
     async def start(self) -> None:
@@ -116,7 +110,7 @@ class PluginHost:
                 if self.scheduler.running:
                     self.scheduler.shutdown(wait=True)
                 if self._config:
-                    await self._config.nacos.close()
+                    await self._config.config_provider.close()
                 await self.bus.close()
             finally:
                 if self.manager:

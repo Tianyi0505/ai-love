@@ -21,6 +21,7 @@ from gateway.social_router import SocialRouter
 from gateway.social_send_handler import SocialSendHandler
 from shared import private_reply_observability as private_metrics
 from shared.account_ownership_repository import AccountOwnershipRepository
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.base_service import BaseService
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.rpc.grounding import (
@@ -43,7 +44,6 @@ from shared.global_settings import GlobalSettings
 from shared.global_settings_store import GlobalSettingsStore
 from shared.identity_repository import IdentityRepository
 from shared.lfu import LazyLFU, LFUConfig
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.private_interaction_repository import PrivateInteractionRepository
 from shared.relationship_repository import RelationshipRepository
 from shared.service_config import ServiceConfig
@@ -59,7 +59,7 @@ class GatewayService(BaseService):
     async def on_start(self) -> None:
         self._cleanup = AsyncExitStack()
         section = await self.cfg.section(GatewaySettings)
-        settings = await GlobalSettingsStore(self.cfg.nacos).load()
+        settings = await GlobalSettingsStore(self.cfg.config_provider).load()
         self._http_client = httpx.AsyncClient()
         self._cleanup.push_async_callback(self._http_client.aclose)
         self._db = Database()
@@ -201,7 +201,7 @@ class GatewayService(BaseService):
         owner_ai_id = await router.owner_for(account_id)
         if owner_ai_id is None:
             raise LookupError(f"QQ 账号尚未绑定 AI: {account_id}")
-        definition = await NacosAgentDefinitionStore(self.cfg.nacos).load(owner_ai_id)
+        definition = await AgentDefinitionStore(self.cfg.config_provider).load(owner_ai_id)
         proactive_schedule = BehaviorSchedule.from_config(definition.behavior_policy)
         context = QZoneContextProvider(
             account_id,

@@ -2,7 +2,7 @@
 
 **Director Service** (`live/director/director_service.py`):
 
-- 进程入口是 `python -m live.director.director_service`；`DirectorService` 继承 `BaseService`，以 `director` 注册到 Nacos。
+- 进程入口是 `python -m live.director.director_service`；`DirectorService` 继承 `BaseService`，以 `director` 使用 Kubernetes 挂载配置。
 - 服务读取 `service.director` 中的 `session_id`，再加载对应的 `director.<session_id>` 场次配置；场次里的 actors 是允许被调度的 AI 集合。
 - Director 订阅 `live.events`，为每个互动选择目标 AI，写入 `session_id`、`target_ai_id` 和 `active_actors`，再发布到 `agent.live.{ai_id}`。Agent 只消费已经完成归属的事件。
 

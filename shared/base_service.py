@@ -33,7 +33,6 @@ class BaseService(ABC):
             self.telemetry = TelemetryRuntime(self.name)
         self.telemetry.start()
         await self.bus.connect()
-        await self._register_to_discovery()
         await self.on_start()
         self.scheduler.start()
         logger.info("[%s] 启动完成", self.name)
@@ -45,7 +44,7 @@ class BaseService(ABC):
         for task in list(self._tasks):
             task.cancel()
         await self.on_stop()
-        await self.cfg.nacos.close()
+        await self.cfg.config_provider.close()
         await self.bus.close()
         if self.telemetry is not None:
             self.telemetry.stop()
@@ -67,11 +66,6 @@ class BaseService(ABC):
             pass
 
         await stop_event.wait()
-
-    # 注册服务发现信息
-    async def _register_to_discovery(self) -> None:
-        await self.cfg.nacos.register(self.name, self.cfg.instance_id, self.cfg.instance_addr)
-        logger.info("[%s] 已注册到 Nacos (instance=%s)", self.name, self.cfg.instance_id)
 
     # 启动服务
     @abstractmethod

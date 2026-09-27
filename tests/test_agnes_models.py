@@ -12,16 +12,16 @@ from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.response_output_policy import ResponseOutputPolicy
 from memory.memory_generation_output import MemoryExtractionOutput
 from memory.memory_model_pool import MemoryModelPool
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.chat_model_factory import create_chat_model
 from shared.global_settings import ChatModelSettings, GlobalSettings
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ("agnes-2.5-flash", "agnes-3.0-flash")
 
 
 def settings() -> GlobalSettings:
-    data = yaml.safe_load((ROOT / "deploy/nacos/ailove.config.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load((ROOT / "deploy/config/ailove.config.yaml").read_text(encoding="utf-8"))
     # Deployment normally replaces this unrelated personal-data placeholder.
     data["qq"]["whitelist"] = []
     return GlobalSettings.model_validate(data)
@@ -67,7 +67,7 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
 
     class FileConfigProvider:
         async def get(self, key):
-            data = yaml.safe_load((ROOT / "deploy/nacos" / f"{key}.yaml").read_text(encoding="utf-8"))
+            data = yaml.safe_load((ROOT / "deploy/config" / f"{key}.yaml").read_text(encoding="utf-8"))
             if key == "agent.default":
                 data["model_config"] = {
                     "model_id": model_id,
@@ -82,7 +82,7 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
             return BaseChatOpenAI(**kwargs, http_async_client=client)
 
         monkeypatch.setattr("shared.chat_model_strategy.BaseChatOpenAI", make_model)
-        definitions = NacosAgentDefinitionStore(FileConfigProvider())
+        definitions = AgentDefinitionStore(FileConfigProvider())
         definition = await definitions.load("ai_luoyu")
         assert not definition.model_profile.multimodal_model_ids
         model = create_chat_model(

@@ -2,7 +2,7 @@
 
 **Gateway Service** (`gateway/gateway_service.py`):
 
-- 进程入口是 `python -m gateway.gateway_service`；`GatewayService` 继承 `BaseService`，以 `gateway` 注册到 Nacos，并复用统一的 NATS、调度器与遥测生命周期。
+- 进程入口是 `python -m gateway.gateway_service`；`GatewayService` 继承 `BaseService`，以 `gateway` 使用 Kubernetes 挂载配置，并复用统一的 NATS、调度器与遥测生命周期。
 - 启动时读取 `service.gateway` 和 `ailove.config`，连接 PostgreSQL，创建共享 HTTP client，并为每个账号按 `ai_love.channels` entry point 加载平台适配器。新增平台应实现 `Channel` 契约，不应把平台协议分支塞进 Agent。
 - Gateway 只负责平台接入、消息归一化、账号归属与投递。图片和语音在这里保留为 URL；理解、生成和回复决策属于 `ai-agent`。
 

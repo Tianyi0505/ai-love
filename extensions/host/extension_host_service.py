@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from extensions.host.grounding_tool_provider import GroundingToolProvider
 from extensions.host.mcp_tool_provider import MCPToolProvider
 from extensions.host.tool_gateway import PermissionLevel, ToolGateway, ToolGrant, ToolInvocation
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.base_service import BaseService
 from shared.contracts.rpc.tools import (
     ToolDescriptor,
@@ -19,7 +20,6 @@ from shared.contracts.rpc.tools import (
     ToolListResponse,
 )
 from shared.contracts.tools import ToolExecutionContext
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.service_config import ServiceConfig
 from shared.service_settings import ExtensionHostSettings
 
@@ -33,7 +33,7 @@ class ExtensionHostService(BaseService):
     # 启动服务
     async def on_start(self) -> None:
         self._service_config = await self.cfg.section(ExtensionHostSettings)
-        self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
+        self._definitions = AgentDefinitionStore(self.cfg.config_provider)
         self._fingerprint: str | None = None
         self._mcp_providers: list[MCPToolProvider] = []
         self._reload_lock = asyncio.Lock()

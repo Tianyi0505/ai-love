@@ -22,3 +22,9 @@ README.md
 *.pem
 .pytest_cache
 .ruff_cache
+data/
+output/
+deploy/private/
+.agents/
+.specify/
+specs/

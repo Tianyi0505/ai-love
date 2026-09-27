@@ -13,14 +13,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
-from v2.nacos import NacosException
 
 from plugin_runtime.control import PluginControlClient
+from shared.agent_definition_store import AgentDefinitionStore
+from shared.config_provider import ConfigurationError
 from shared.contracts.agent import AgentDefinitionError
 from shared.database import Database
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.mounted_config_provider import MountedConfigProvider
 from shared.nats_bus import create_bus
-from shared.service_config import NacosConfigProvider
 
 from .auth.credentials import CredentialRepository, CredentialService
 from .auth.login import LoginService
@@ -44,9 +44,6 @@ class PanelConfig(BaseSettings):
     initial_username: str
     initial_password: str
     napcat_token: str
-    nacos_auth_token: str = Field(validation_alias="NACOS_AUTH_TOKEN")
-    nacos_url: str
-    nacos_sso_username: str = "nacos"
     napcat_url: str
     k8s_url: str
     k8s_internal_url: str = "https://127.0.0.1:30443"
@@ -73,14 +70,14 @@ def create_app(
             password=config.redis_password,
             decode_responses=True,
         )
-        nacos = NacosConfigProvider()
+        config_provider = MountedConfigProvider()
         plugin_control = PluginControlClient(create_bus(config.bus_url, config.bus_token), config.plugin_hosts)
         try:
             await database.connect()
             await redis.ping()
-            await nacos.connect()
+            await config_provider.connect()
 
-            agent_store = NacosAgentDefinitionStore(nacos)
+            agent_store = AgentDefinitionStore(config_provider)
 
             password_hasher = PasswordHasher()
             sessions = RedisSessionStore(redis)
@@ -114,7 +111,7 @@ def create_app(
             yield
         finally:
             await plugin_control.close()
-            await nacos.close()
+            await config_provider.close()
             await redis.aclose()
             await database.close()
 
@@ -129,7 +126,7 @@ def create_app(
         )
         return JSONResponse(status_code=503, content={"detail": "依赖服务暂时不可用"})
 
-    for exception_type in (RedisError, SQLAlchemyError, NacosException, AgentDefinitionError):
+    for exception_type in (RedisError, SQLAlchemyError, ConfigurationError, AgentDefinitionError):
         app.add_exception_handler(exception_type, dependency_unavailable)
     app.include_router(auth_router)
     app.include_router(observability_router)

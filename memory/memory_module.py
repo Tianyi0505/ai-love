@@ -56,8 +56,8 @@ from shared.relationship_repository import RelationshipRepository
 
 # 提供进程内记忆模块能力
 class MemoryModule:
-    def __init__(self, *, nacos, bus, scheduler, database, definitions, model_factory=None) -> None:
-        self._nacos = nacos
+    def __init__(self, *, config_provider, bus, scheduler, database, definitions, model_factory=None) -> None:
+        self._config_provider = config_provider
         self._bus = bus
         self._scheduler = scheduler
         self._db = database
@@ -67,7 +67,7 @@ class MemoryModule:
 
     # 启动模块
     async def start(self) -> None:
-        self._settings = await GlobalSettingsStore(self._nacos).load()
+        self._settings = await GlobalSettingsStore(self._config_provider).load()
         self._memory_config = self._settings.memory
         self._grounding_config = self._settings.grounding
 

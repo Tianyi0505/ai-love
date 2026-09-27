@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
-import hmac
-import json
 import os
 import unittest
 from datetime import datetime, timezone
@@ -28,8 +25,7 @@ from admin.console.backend.observability.schemas import (
     PersonSummary,
     SelfMemoryResponse,
 )
-from admin.console.backend.observability.sso import create_nacos_access_token
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
+from shared.agent_definition_store import AgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 8, 20, 9, 30, tzinfo=timezone.utc)
@@ -41,7 +37,7 @@ def _decode_segment(value: str) -> bytes:
 
 class FileConfigProvider:
     async def get(self, key: str) -> dict:
-        path = ROOT / "deploy" / "nacos" / f"{key}.yaml"
+        path = ROOT / "deploy" / "config" / f"{key}.yaml"
         return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
@@ -151,9 +147,6 @@ def create_observability_app(personality_reader: FixedPersonalityReader) -> Fast
     app = FastAPI()
     app.state.config = SimpleNamespace(
         ai_id="ai_luoyu",
-        nacos_url="/nacos/",
-        nacos_auth_token=base64.b64encode(b"n" * 48).decode(),
-        nacos_sso_username="nacos",
         napcat_url="/webui/",
         napcat_token="secret token",
         k8s_url="/dashboard/",
@@ -170,7 +163,7 @@ def create_observability_app(personality_reader: FixedPersonalityReader) -> Fast
 
 class ObservabilityRouteTests(unittest.TestCase):
     def test_personality_route_reads_current_agent_configuration(self) -> None:
-        reader = PersonalityReader(NacosAgentDefinitionStore(FileConfigProvider()))
+        reader = PersonalityReader(AgentDefinitionStore(FileConfigProvider()))
         with TestClient(create_observability_app(reader)) as client:
             client.cookies.set("ai_love_session", "valid-session")
             response = client.get("/ai-love-api/personality")
@@ -185,7 +178,7 @@ class ObservabilityRouteTests(unittest.TestCase):
                     data["model_config"]["model_id"] = {"sensitive": "do-not-expose"}
                 return data
 
-        reader = PersonalityReader(NacosAgentDefinitionStore(IncompatibleProvider()))
+        reader = PersonalityReader(AgentDefinitionStore(IncompatibleProvider()))
         with TestClient(create_observability_app(reader)) as client:
             client.cookies.set("ai_love_session", "valid-session")
             response = client.get("/ai-love-api/personality")
@@ -217,24 +210,12 @@ class ObservabilityRouteTests(unittest.TestCase):
             napcat = next(item for item in payload["entries"] if item["key"] == "napcat")
             self.assertEqual("/webui/?token=secret+token", napcat["url"])
             self.assertNotIn("token", payload)
-            self.assertEqual(
-                "/ai-love-api/sso/nacos",
-                next(item for item in payload["entries"] if item["key"] == "nacos")["url"],
-            )
+            self.assertEqual({"napcat", "k8s"}, {item["key"] for item in payload["entries"]})
             self.assertEqual(
                 "/ai-love-api/sso/dashboard",
                 next(item for item in payload["entries"] if item["key"] == "k8s")["url"],
             )
 
-    def test_nacos_sso_writes_short_lived_token_and_redirects(self) -> None:
-        with TestClient(create_observability_app(FixedPersonalityReader())) as client:
-            client.cookies.set("ai_love_session", "valid-session")
-            response = client.get("/ai-love-api/sso/nacos")
-
-        self.assertEqual(200, response.status_code)
-        self.assertIn("localStorage.setItem('token'", response.text)
-        self.assertIn("location.replace(\"/nacos/\")", response.text)
-        self.assertEqual("no-store", response.headers["cache-control"])
 
     @patch(
         "admin.console.backend.observability.router.create_dashboard_session",
@@ -252,20 +233,6 @@ class ObservabilityRouteTests(unittest.TestCase):
         self.assertIn("Path=/dashboard/", response.headers["set-cookie"])
         exchange.assert_awaited_once()
 
-    def test_nacos_token_matches_selected_algorithm(self) -> None:
-        secret_bytes = b"n" * 48
-        token = create_nacos_access_token(
-            base64.b64encode(secret_bytes).decode(),
-            "nacos",
-            expires_in_seconds=60,
-            now=1000,
-        )
-        header, payload, signature = token.split(".")
-
-        self.assertEqual({"alg": "HS384"}, json.loads(_decode_segment(header)))
-        self.assertEqual({"sub": "nacos", "exp": 1060}, json.loads(_decode_segment(payload)))
-        expected = hmac.new(secret_bytes, f"{header}.{payload}".encode(), hashlib.sha384).digest()
-        self.assertEqual(expected, _decode_segment(signature))
 
 
 class PanelConfigTests(unittest.TestCase):
@@ -280,8 +247,6 @@ class PanelConfigTests(unittest.TestCase):
             "PANEL_INITIAL_USERNAME": "admin",
             "PANEL_INITIAL_PASSWORD": "panel-password",
             "PANEL_NAPCAT_TOKEN": "napcat-token",
-            "NACOS_AUTH_TOKEN": base64.b64encode(b"n" * 48).decode(),
-            "PANEL_NACOS_URL": "/nacos/",
             "PANEL_NAPCAT_URL": "/webui/",
             "PANEL_K8S_URL": "/dashboard/",
         },
@@ -294,8 +259,8 @@ class PanelConfigTests(unittest.TestCase):
 
 
 class ObservabilityReaderTests(unittest.IsolatedAsyncioTestCase):
-    async def test_personality_reader_uses_merged_real_nacos_definition(self) -> None:
-        reader = PersonalityReader(NacosAgentDefinitionStore(FileConfigProvider()))
+    async def test_personality_reader_uses_merged_real_config_provider_definition(self) -> None:
+        reader = PersonalityReader(AgentDefinitionStore(FileConfigProvider()))
 
         result = await reader.read("ai_luoyu")
 

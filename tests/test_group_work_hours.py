@@ -20,6 +20,7 @@ from agent.persona import Persona
 from agent.social.group_participation_service import GroupParticipationService
 from agent.social.social_message_handler import handle_social
 from gateway.qq_channel import QQChannel
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.contracts.behavior import BehaviorSchedule
 from shared.contracts.entity import EntityContext
 from shared.contracts.rpc.relationship import (
@@ -28,7 +29,6 @@ from shared.contracts.rpc.relationship import (
     RelationshipSummaryResponse,
 )
 from shared.global_settings import GlobalSettings
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 
 class MemoryRedis:
@@ -75,7 +75,7 @@ async def test_group_schedule_through_napcat_and_reply_handler(
     whitelisted, hour, enabled, cooling, message_count, score, model_agrees, expected,
 ):
     provider = FileConfigProvider()
-    definition = await NacosAgentDefinitionStore(provider).load("ai_luoyu")
+    definition = await AgentDefinitionStore(provider).load("ai_luoyu")
     config = await provider.get("ailove.config")
     config["qq"]["whitelist"] = []
     settings = GlobalSettings.model_validate(config)

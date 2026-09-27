@@ -18,9 +18,9 @@ class AIAgentServiceMemoryLifecycleTests(unittest.IsolatedAsyncioTestCase):
         accounts = MagicMock()
         supervisor = SimpleNamespace(reconcile=AsyncMock(), stop=AsyncMock())
         memory_module = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
-        nacos = SimpleNamespace(watch=AsyncMock())
+        config_provider = SimpleNamespace(watch=AsyncMock())
         cfg = SimpleNamespace(
-            nacos=nacos,
+            config_provider=config_provider,
             section=AsyncMock(
                 return_value=AIAgentSettings(
                     instance_addr="127.0.0.1:0",
@@ -52,7 +52,7 @@ class AIAgentServiceMemoryLifecycleTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("agent.ai_agent_service.Database", return_value=database),
             patch(
-                "agent.ai_agent_service.NacosAgentDefinitionStore",
+                "agent.ai_agent_service.AgentDefinitionStore",
                 return_value=definitions,
             ),
             patch("agent.ai_agent_service.AIProfileRepository", return_value=profiles),
@@ -66,7 +66,7 @@ class AIAgentServiceMemoryLifecycleTests(unittest.IsolatedAsyncioTestCase):
             await service.on_start()
 
             memory_type.assert_called_once_with(
-                nacos=nacos,
+                config_provider=config_provider,
                 bus=bus,
                 scheduler=service.scheduler,
                 database=database,
@@ -100,7 +100,7 @@ class MemoryModuleLifecycleTests(unittest.IsolatedAsyncioTestCase):
         first = MagicMock()
         second = MagicMock()
         module = MemoryModule(
-            nacos=MagicMock(),
+            config_provider=MagicMock(),
             bus=MagicMock(),
             scheduler=MagicMock(),
             database=MagicMock(),

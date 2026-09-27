@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 
 from admin.console.backend.auth.router import require_session
@@ -22,7 +21,7 @@ from .schemas import (
     SelfMemoryResponse,
 )
 from .self_memory import SelfMemoryReader
-from .sso import create_dashboard_session, create_nacos_access_token
+from .sso import create_dashboard_session
 
 router = APIRouter(
     prefix="/ai-love-api",
@@ -38,12 +37,6 @@ async def entries(request: Request) -> QuickEntriesResponse:
     return QuickEntriesResponse(
         entries=[
             QuickEntry(
-                key="nacos",
-                name="Nacos",
-                description="配置中心",
-                url="/ai-love-api/sso/nacos",
-            ),
-            QuickEntry(
                 key="napcat",
                 name="NapCat",
                 description="QQ 连接与 WebUI",
@@ -52,40 +45,10 @@ async def entries(request: Request) -> QuickEntriesResponse:
             QuickEntry(
                 key="k8s",
                 name="Kubernetes",
-                description="集群工作负载",
+                description="配置与集群工作负载",
                 url="/ai-love-api/sso/dashboard",
             ),
         ]
-    )
-
-
-@router.get("/sso/nacos", response_class=HTMLResponse)
-async def nacos_sso(request: Request) -> HTMLResponse:
-    config = request.app.state.config
-    try:
-        token = create_nacos_access_token(
-            config.nacos_auth_token,
-            config.nacos_sso_username,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Nacos 自动登录配置不可用",
-        ) from exc
-
-    storage_value = json.dumps(
-        {"accessToken": token, "username": config.nacos_sso_username},
-        ensure_ascii=True,
-        separators=(",", ":"),
-    ).replace("<", "\\u003c")
-    redirect_url = json.dumps(config.nacos_url)
-    return HTMLResponse(
-        content=(
-            "<!doctype html><meta charset=utf-8><title>正在进入 Nacos</title>"
-            f"<script>localStorage.setItem('token',JSON.stringify({storage_value}));"
-            f"location.replace({redirect_url});</script>"
-        ),
-        headers={"Cache-Control": "no-store"},
     )
 
 

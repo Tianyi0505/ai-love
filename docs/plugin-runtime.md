@@ -57,7 +57,7 @@ $env:AILOVE_PLUGIN_STATE_DIR = 'data/plugins'
 python -m plugin_runtime --role live-edge
 ```
 
-其他角色分别为 `gateway`、`ai-agent`、`gptsovits`、`extension-host`、`mcp`、`director`。每个角色独立进程。同一 NATS 环境中每种角色只运行一个宿主。业务使用现有 Nacos、数据库、Redis 和密钥环境配置；基础设施未就绪时可在管理页看到启动失败。
+其他角色分别为 `gateway`、`ai-agent`、`gptsovits`、`extension-host`、`mcp`、`director`。每个角色独立进程。同一 NATS 环境中每种角色只运行一个宿主。业务使用Kubernetes 挂载配置、数据库、Redis 和密钥环境配置；基础设施未就绪时可在管理页看到启动失败。
 
 运行现有管理后端与前端，确保后端的 `AILOVE_BUS_URL` / `AILOVE_BUS_TOKEN` 与宿主一致。登录后进入“能力工坊”：
 

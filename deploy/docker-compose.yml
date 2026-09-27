@@ -1,219 +1,255 @@
 services:
-  nacos:
-    image: nacos/nacos-server:v2.3.2
-    container_name: ailove-nacos
-    environment:
-      - MODE=standalone
-      - NACOS_AUTH_ENABLE=false
-      - JVM_XMS=256m
-      - JVM_XMX=512m
-    ports:
-      - "8848:8848"
-      - "9848:9848"
-    networks: [ailove]
-
   nats:
     image: nats:2.10.29-alpine
     container_name: ailove-nats
-    command: ["-js", "-sd", "/data", "-m", "8222"]
+    command:
+    - -js
+    - -sd
+    - /data
+    - -m
+    - '8222'
     ports:
-      - "4222:4222"
-      - "8222:8222"
+    - 4222:4222
+    - 8222:8222
     volumes:
-      - nats-data:/data
-    networks: [ailove]
-
+    - nats-data:/data
+    networks:
+    - ailove
   jaeger:
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
     container_name: ailove-jaeger
     ports:
-      - "16686:16686"
-      - "4317:4317"
-    networks: [ailove]
-
+    - 16686:16686
+    - 4317:4317
+    networks:
+    - ailove
   redis:
     image: redis:8.2.1-alpine
     container_name: ailove-redis
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "${AILOVE_REDIS_PASSWORD:?}"]
-    networks: [ailove]
-
+    command:
+    - redis-server
+    - --save
+    - ''
+    - --appendonly
+    - 'no'
+    - --requirepass
+    - ${AILOVE_REDIS_PASSWORD:?}
+    networks:
+    - ailove
   postgres:
-    image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b  # PG 16.15
+    image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
     container_name: ailove-postgres
     environment:
-      - POSTGRES_DB=ailove
-      - POSTGRES_USER=ailove
-      - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?}
+    - POSTGRES_DB=ailove
+    - POSTGRES_USER=ailove
+    - POSTGRES_PASSWORD=${AILOVE_POSTGRES_PASSWORD:?}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./sql:/docker-entrypoint-initdb.d:ro
-      - ${AILOVE_PERSONAL_BOOTSTRAP_SQL:?}:/docker-entrypoint-initdb.d/002_bootstrap_personal.sql:ro
+    - postgres-data:/var/lib/postgresql/data
+    - ./sql:/docker-entrypoint-initdb.d:ro
+    - ${AILOVE_PERSONAL_BOOTSTRAP_SQL:?}:/docker-entrypoint-initdb.d/002_bootstrap_personal.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ailove -d ailove"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U ailove -d ailove
       interval: 5s
       timeout: 3s
       retries: 20
-    networks: [ailove]
+    networks:
+    - ailove
   gateway:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: gateway }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: gateway
     container_name: ailove-gateway
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=1
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
-      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
-      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
-      - AILOVE_DATABASE_POOL_RECYCLE_SEC=${AILOVE_DATABASE_POOL_RECYCLE_SEC:?}
-      - AILOVE_DATABASE_POOL_TIMEOUT_SEC=${AILOVE_DATABASE_POOL_TIMEOUT_SEC:?}
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+    - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+    - AILOVE_SNOWFLAKE_WORKER_ID=1
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    - OTEL_EXPORTER_OTLP_INSECURE=true
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+    - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+    - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
+    - AILOVE_DATABASE_POOL_RECYCLE_SEC=${AILOVE_DATABASE_POOL_RECYCLE_SEC:?}
+    - AILOVE_DATABASE_POOL_TIMEOUT_SEC=${AILOVE_DATABASE_POOL_TIMEOUT_SEC:?}
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
     depends_on:
-      nacos: { condition: service_started }
-      nats: { condition: service_started }
-      postgres: { condition: service_healthy }
-    networks: [ailove]
-
+    - nats
+    - postgres
+    networks:
+    - ailove
   director:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: director }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: director
     container_name: ailove-director
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=2
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_BUS_URL=nats://nats:4222
-    depends_on: [nacos, nats]
-    networks: [ailove]
-
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+    - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+    - AILOVE_SNOWFLAKE_WORKER_ID=2
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    - OTEL_EXPORTER_OTLP_INSECURE=true
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
+    depends_on:
+    - nats
+    networks:
+    - ailove
   ai-agent:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: ai-agent }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: ai-agent
     container_name: ailove-ai-agent
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - AGNES_API_KEY=${AGNES_API_KEY:-}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
-      - BAILIAN_API_KEY=${BAILIAN_API_KEY:?}
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=3
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
-      - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
-      - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
-      - AILOVE_DATABASE_POOL_RECYCLE_SEC=${AILOVE_DATABASE_POOL_RECYCLE_SEC:?}
-      - AILOVE_DATABASE_POOL_TIMEOUT_SEC=${AILOVE_DATABASE_POOL_TIMEOUT_SEC:?}
-      - AILOVE_REDIS_URL=redis://redis:6379/0
-      - AILOVE_REDIS_PASSWORD=${AILOVE_REDIS_PASSWORD:?}
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - AGNES_API_KEY=${AGNES_API_KEY:-}
+    - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?}
+    - BAILIAN_API_KEY=${BAILIAN_API_KEY:?}
+    - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+    - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+    - AILOVE_SNOWFLAKE_WORKER_ID=3
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    - OTEL_EXPORTER_OTLP_INSECURE=true
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_DATABASE_URL=postgresql://ailove:${AILOVE_POSTGRES_PASSWORD}@postgres:5432/ailove
+    - AILOVE_DATABASE_POOL_MIN_SIZE=${AILOVE_DATABASE_POOL_MIN_SIZE:?}
+    - AILOVE_DATABASE_POOL_MAX_SIZE=${AILOVE_DATABASE_POOL_MAX_SIZE:?}
+    - AILOVE_DATABASE_POOL_RECYCLE_SEC=${AILOVE_DATABASE_POOL_RECYCLE_SEC:?}
+    - AILOVE_DATABASE_POOL_TIMEOUT_SEC=${AILOVE_DATABASE_POOL_TIMEOUT_SEC:?}
+    - AILOVE_REDIS_URL=redis://redis:6379/0
+    - AILOVE_REDIS_PASSWORD=${AILOVE_REDIS_PASSWORD:?}
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
     depends_on:
-      nacos: { condition: service_started }
-      nats: { condition: service_started }
-      postgres: { condition: service_healthy }
-      redis: { condition: service_started }
-    networks: [ailove]
-
+    - nats
+    - postgres
+    - redis
+    networks:
+    - ailove
   gptsovits:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: gptsovits }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: gptsovits
     container_name: ailove-gptsovits
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=4
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_BUS_URL=nats://nats:4222
-    depends_on: [nacos, nats]
-    networks: [ailove]
-
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+    - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+    - AILOVE_SNOWFLAKE_WORKER_ID=4
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    - OTEL_EXPORTER_OTLP_INSECURE=true
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
+    depends_on:
+    - nats
+    networks:
+    - ailove
   live-edge:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: live-edge }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: live-edge
     container_name: ailove-live-edge
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=5
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+    - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+    - AILOVE_SNOWFLAKE_WORKER_ID=5
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    - OTEL_EXPORTER_OTLP_INSECURE=true
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
     ports:
-      - "8081:8081"
-    depends_on: [nacos, nats]
-    networks: [ailove]
-
+    - 8081:8081
+    depends_on:
+    - nats
+    networks:
+    - ailove
   extension-host:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: extension-host }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: extension-host
     container_name: ailove-extension-host
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - AILOVE_NACOS_ADDRS=nacos:8848
-      - AILOVE_NACOS_GROUP=DEFAULT_GROUP
-      - AILOVE_NACOS_GRPC_TIMEOUT_MS=${AILOVE_NACOS_GRPC_TIMEOUT_MS:?}
-      - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
-      - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
-      - AILOVE_SNOWFLAKE_WORKER_ID=7
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - AILOVE_BUS_URL=nats://nats:4222
-    depends_on: [nacos, nats, mcp]
-    networks: [ailove]
-
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - AILOVE_CONFIG_RETRY_COUNT=${AILOVE_CONFIG_RETRY_COUNT:?}
+    - AILOVE_CONFIG_RETRY_INTERVAL_SEC=${AILOVE_CONFIG_RETRY_INTERVAL_SEC:?}
+    - AILOVE_SNOWFLAKE_WORKER_ID=7
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    - OTEL_EXPORTER_OTLP_INSECURE=true
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
+    depends_on:
+    - nats
+    - mcp
+    networks:
+    - ailove
   mcp:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: mcp }
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: mcp
     container_name: ailove-mcp
     volumes:
-      - plugin-state:/app/plugin-state
+    - plugin-state:/app/plugin-state
+    - ./config:/app/config:ro
+    - ./private/config-secrets:/app/config-secrets:ro
     environment:
-      - AILOVE_BUS_URL=nats://nats:4222
-      - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
-      - QWEATHER_API_KEY=${QWEATHER_API_KEY:?}
-      - QWEATHER_API_HOST=${QWEATHER_API_HOST:?}
-    depends_on: [nats]
+    - AILOVE_BUS_URL=nats://nats:4222
+    - AILOVE_PLUGIN_STATE_DIR=/app/plugin-state
+    - QWEATHER_API_KEY=${QWEATHER_API_KEY:?}
+    - QWEATHER_API_HOST=${QWEATHER_API_HOST:?}
+    - AILOVE_CONFIG_DIRECTORY=/app/config
+    - AILOVE_CONFIG_SECRET_DIRECTORY=/app/config-secrets
+    depends_on:
+    - nats
     expose:
-      - "8011"
-    networks: [ailove]
-
+    - '8011'
+    networks:
+    - ailove
 networks:
   ailove:
     driver: bridge
-
 volumes:
-  plugin-state:
-  postgres-data:
-  nats-data:
+  plugin-state: null
+  postgres-data: null
+  nats-data: null

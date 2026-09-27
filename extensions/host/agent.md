@@ -2,7 +2,7 @@
 
 **Extension Host Service** (`extensions/host/extension_host_service.py`):
 
-- 进程入口是 `python -m extensions.host.extension_host_service`；`ExtensionHostService` 继承 `BaseService`，以 `extension-host` 注册到 Nacos，并响应 `tool.list.request` 与 `tool.execute.request`。
+- 进程入口是 `python -m extensions.host.extension_host_service`；`ExtensionHostService` 继承 `BaseService`，以 `extension-host` 使用 Kubernetes 挂载配置，并响应 `tool.list.request` 与 `tool.execute.request`。
 - 服务启动和定时轮询时读取所有启用的 Agent 定义，发现统一 MCP 服务，并据此重建工具 provider、授权 binding 与 fingerprint。
 - Extension Host 是 Agent 与具体工具之间唯一的授权边界。Agent 不能绕过它直接调用 MCP，MCP 也不负责理解 AI 身份或授权策略。
 

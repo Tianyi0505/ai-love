@@ -785,10 +785,6 @@ input:focus-visible {
   transform: rotate(-3deg);
 }
 
-.entry-card__icon--nacos {
-  color: #247ac4;
-  background: #e6f3ff;
-}
 
 .entry-card__icon--napcat {
   color: #eb6e9c;

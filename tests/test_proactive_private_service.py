@@ -11,26 +11,26 @@ import yaml
 from agent.conversation.prompt_assembler import PromptAssembler
 from agent.conversation.response_plan import Emotion, ResponsePlan, Speech
 from agent.social.proactive_private_service import ProactivePrivateService
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.contracts.rpc.memory import MemoryContextResponse
 from shared.contracts.rpc.relationship import (
     PersonRelationshipRecord,
     RelationshipListResponse,
 )
 from shared.contracts.rpc.social import SocialSendResponse, SocialSendStatusResponse
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class FileConfigProvider:
     async def get(self, key: str) -> dict:
-        path = ROOT / "deploy" / "nacos" / f"{key}.yaml"
+        path = ROOT / "deploy" / "config" / f"{key}.yaml"
         return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
 class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.definition = await NacosAgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
+        self.definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
         self.now = dt.datetime(2026, 8, 30, 12, tzinfo=dt.timezone.utc)
 
     def relationship(

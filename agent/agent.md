@@ -2,8 +2,8 @@
 
 **AI Agent Service** (`agent/ai_agent_service.py`):
 
-- 进程入口是 `python -m agent.ai_agent_service`；`AIAgentService` 继承 `BaseService`，以 `ai-agent` 注册到 Nacos，并在同一进程启动共享 Memory Module，再订阅 `social.chat.>`、`agent.live.>` 和相关 RPC。
-- 启动时从 PostgreSQL 读取启用的 AI，再通过 `NacosAgentDefinitionStore` 合并 `agent.default` 与 `agent.<ai_id>`。`agent.catalog`、默认定义或个体定义变化时，服务会重新 reconcile 运行时。
+- 进程入口是 `python -m agent.ai_agent_service`；`AIAgentService` 继承 `BaseService`，以 `ai-agent` 使用 Kubernetes 挂载配置，并在同一进程启动共享 Memory Module，再订阅 `social.chat.>`、`agent.live.>` 和相关 RPC。
+- 启动时从 PostgreSQL 读取启用的 AI，再通过 `AgentDefinitionStore` 合并 `agent.default` 与 `agent.<ai_id>`。`agent.catalog`、默认定义或个体定义变化时，服务会重新 reconcile 运行时。
 - 一个进程托管多个 AI。事件必须携带已经由 Gateway 或 Director 确定的 `ai_id`；服务不根据账号或直播事件自行猜测归属。
 
 **Agent Supervisor** (`agent/agent_supervisor.py`):
@@ -21,7 +21,7 @@
 
 **Memory Module** (`memory/memory_module.py`, `memory/memory_pipeline.py`):
 
-- `MemoryModule` 不是独立服务；它复用 `AIAgentService` 的 Nacos、NATS、调度器、Agent 定义存储和 PostgreSQL 连接，由 Agent 服务统一启动和停止。
+- `MemoryModule` 不是独立服务；它复用 `AIAgentService` 的 Kubernetes 挂载配置、NATS、调度器、Agent 定义存储和 PostgreSQL 连接，由 Agent 服务统一启动和停止。
 - 记忆、关系和表情仍通过既有 NATS RPC subject 提供，`memory.activity` 仍由 JetStream durable consumer 处理。保留该契约是为了隔离 Runtime 与持久化实现，不代表独立部署边界。
 - 联系人静默后提取 Episode 与原子记忆，达到阈值后再合并 person/self Markdown；KV claim、PostgreSQL 事实来源、输出策略和容量淘汰不因部署合并而改变。
 - 停止顺序是先 drain Agent Runtime，再取消 Memory RPC/durable subscriptions，最后关闭 Redis、PostgreSQL 与共享 Bus。

@@ -4,7 +4,7 @@ from .schemas import PersonalityResponse
 
 
 class PersonalityReader:
-    """只负责读取 Nacos 中的生效人格定义。"""
+    """只负责读取 Kubernetes 配置 中的生效人格定义。"""
 
     def __init__(self, agent_store) -> None:
         self._agent_store = agent_store

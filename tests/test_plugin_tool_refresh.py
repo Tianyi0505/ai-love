@@ -55,7 +55,7 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
         mcp_url=f"http://127.0.0.1:{port}/mcp",
         messages={},
     )
-    configuration = SimpleNamespace(section=AsyncMock(return_value=settings), nacos=SimpleNamespace(close=AsyncMock()))
+    configuration = SimpleNamespace(section=AsyncMock(return_value=settings), config_provider=SimpleNamespace(close=AsyncMock()))
     extension = PluginHost(
         "extension-host",
         bus=bus,
@@ -93,7 +93,7 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
 
     try:
         with (
-            patch("extensions.host.extension_host_service.NacosAgentDefinitionStore") as store,
+            patch("extensions.host.extension_host_service.AgentDefinitionStore") as store,
             patch("agent.conversation.chat_agent.create_agent", side_effect=build_graph) as factory,
             patch("agent.conversation.chat_agent.structured_output_runnable"),
         ):

@@ -28,13 +28,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _settings(qq_whitelist: list[int] | None = None) -> GlobalSettings:
-    raw = yaml.safe_load((ROOT / "deploy" / "nacos" / "ailove.config.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((ROOT / "deploy" / "config" / "ailove.config.yaml").read_text(encoding="utf-8"))
     raw["qq"]["whitelist"] = qq_whitelist or []
     return GlobalSettings.model_validate(raw)
 
 
 def _relationship_config() -> RelationshipPolicyConfig:
-    raw = yaml.safe_load((ROOT / "deploy" / "nacos" / "agent.default.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((ROOT / "deploy" / "config" / "agent.default.yaml").read_text(encoding="utf-8"))
     return RelationshipPolicyConfig.model_validate(raw["relationship_policy"])
 
 

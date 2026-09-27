@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.contracts.relationship import PersonRelationship, RelationshipCeilings, RelationshipPolicy
 from shared.contracts.rpc.relationship import (
     GroupRelationshipRequest,
@@ -12,7 +13,6 @@ from shared.contracts.rpc.relationship import (
 )
 from shared.global_settings import GlobalSettings
 from shared.lfu import LazyLFU, LFUConfig
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.relationship_repository import RelationshipRepository
 
 
@@ -20,7 +20,7 @@ class RelationshipHandler:
     def __init__(
         self,
         repository: RelationshipRepository,
-        definitions: NacosAgentDefinitionStore,
+        definitions: AgentDefinitionStore,
         settings: GlobalSettings,
     ) -> None:
         self._repository = repository

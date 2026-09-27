@@ -20,75 +20,87 @@ spec:
       nodeSelector:
         ailove.role: core
       containers:
-        - name: ops-panel
-          image: ailove/ops-panel:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-            - name: PANEL_PORT
-              value: "8090"
-            - name: AILOVE_DATABASE_POOL_MIN_SIZE
-              value: "1"
-            - name: AILOVE_DATABASE_POOL_MAX_SIZE
-              value: "5"
-            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
-              value: "300"
-            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
-              value: "30"
-            - name: PANEL_AI_ID
-              value: ai_luoyu
-            - name: PANEL_PEOPLE_MEMORY_LIMIT
-              value: "300"
-            - name: PANEL_NACOS_URL
-              value: /nacos/
-            - name: PANEL_NAPCAT_URL
-              value: /webui/
-            - name: PANEL_K8S_URL
-              value: /dashboard/
-            - name: AILOVE_REDIS_URL
-              value: redis://127.0.0.1:16379/0
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:8848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: AILOVE_REDIS_PASSWORD
-            - name: PANEL_NAPCAT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: NAPCAT_WEBUI_TOKEN
-            - name: PANEL_INITIAL_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: PANEL_INITIAL_USERNAME
-            - name: PANEL_INITIAL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ailove-secrets
-                  key: PANEL_INITIAL_PASSWORD
-          ports:
-            - name: http
-              containerPort: 8090
-              hostPort: 8090
-          resources:
-            requests: {cpu: 20m, memory: 64Mi}
-            limits: {cpu: 300m, memory: 384Mi}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
+      - name: ops-panel
+        image: ailove/ops-panel:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: PANEL_PORT
+          value: '8090'
+        - name: AILOVE_DATABASE_POOL_MIN_SIZE
+          value: '1'
+        - name: AILOVE_DATABASE_POOL_MAX_SIZE
+          value: '5'
+        - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
+          value: '300'
+        - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
+          value: '30'
+        - name: PANEL_AI_ID
+          value: ai_luoyu
+        - name: PANEL_PEOPLE_MEMORY_LIMIT
+          value: '300'
+        - name: PANEL_NAPCAT_URL
+          value: /webui/
+        - name: PANEL_K8S_URL
+          value: /dashboard/
+        - name: AILOVE_REDIS_URL
+          value: redis://127.0.0.1:16379/0
+        - name: AILOVE_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ailove-secrets
+              key: AILOVE_REDIS_PASSWORD
+        - name: PANEL_NAPCAT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ailove-secrets
+              key: NAPCAT_WEBUI_TOKEN
+        - name: PANEL_INITIAL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ailove-secrets
+              key: PANEL_INITIAL_USERNAME
+        - name: PANEL_INITIAL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ailove-secrets
+              key: PANEL_INITIAL_PASSWORD
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        ports:
+        - name: http
+          containerPort: 8090
+          hostPort: 8090
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 300m
+            memory: 384Mi
+        volumeMounts:
         - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
+          mountPath: /app/data
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: data
+        hostPath:
+          path: /opt/ailove/data
+          type: Directory
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets

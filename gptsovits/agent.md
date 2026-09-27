@@ -2,7 +2,7 @@
 
 **GPT-SoVITS Service** (`gptsovits/gpt_sovits_service.py`):
 
-- 进程入口是 `python -m gptsovits.gpt_sovits_service`；`GPTSoVITSService` 继承 `BaseService`，以 `gptsovits` 注册到 Nacos，同时承载 FastAPI HTTP 接口和 NATS 语音请求订阅。
+- 进程入口是 `python -m gptsovits.gpt_sovits_service`；`GPTSoVITSService` 继承 `BaseService`，以 `gptsovits` 使用 Kubernetes 挂载配置，同时承载 FastAPI HTTP 接口和 NATS 语音请求订阅。
 - 引擎按 `ai_love.gptsovits` entry point 动态加载。`provider` 决定具体引擎，语音引用按 `ai_id` 注入；新增引擎应实现 `SpeechEngine`，不要修改服务编排入口。
 - `serve()` 由 Uvicorn 驱动，退出时必须调用 `stop()`，由 `SynthesisService.close()` 继续关闭引擎和它持有的 HTTP client。
 

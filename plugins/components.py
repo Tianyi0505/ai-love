@@ -42,10 +42,10 @@ class AgentEnvironmentPlugin(Plugin):
         from redis.asyncio import Redis
 
         from shared.account_ownership_repository import AccountOwnershipRepository
+        from shared.agent_definition_store import AgentDefinitionStore
         from shared.ai_profile_repository import AIProfileRepository
         from shared.connection_settings import RedisConnectionSettings
         from shared.database import Database
-        from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 
         self.config = await context.ports["configuration"]()
         settings = RedisConnectionSettings()
@@ -55,7 +55,7 @@ class AgentEnvironmentPlugin(Plugin):
         self._cleanup.push_async_callback(self.database.close)
         await self.redis.ping()
         await self.database.connect()
-        self.definitions = NacosAgentDefinitionStore(self.config.nacos)
+        self.definitions = AgentDefinitionStore(self.config.config_provider)
         self.profiles = AIProfileRepository(self.database)
         self.accounts = AccountOwnershipRepository(self.database)
 
@@ -73,7 +73,7 @@ class MemoryPlugin(Plugin):
 
         environment = context.require("agent.environment")
         self.module = MemoryModule(
-            nacos=scoped_config(environment.config, context.resources).nacos,
+            config_provider=scoped_config(environment.config, context.resources).config_provider,
             bus=ScopedBus(context.ports["bus"], context.resources),
             scheduler=ScopedScheduler(context.ports["scheduler"], context.resources),
             database=environment.database,

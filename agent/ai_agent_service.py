@@ -10,6 +10,7 @@ from agent.agent_supervisor import AgentSupervisor
 from agent.ai_runtime import AIRuntime
 from memory.memory_module import MemoryModule
 from shared.account_ownership_repository import AccountOwnershipRepository
+from shared.agent_definition_store import AgentDefinitionStore
 from shared.ai_profile_repository import AIProfileRepository
 from shared.base_service import BaseService
 from shared.connection_settings import RedisConnectionSettings
@@ -17,7 +18,6 @@ from shared.contracts.live import InteractionEvent
 from shared.contracts.rpc.social import CommentRequest, CommentResponse
 from shared.contracts.social import SocialMessage
 from shared.database import Database
-from shared.nacos_agent_definition_store import NacosAgentDefinitionStore
 from shared.service_config import ServiceConfig
 from shared.service_settings import AIAgentSettings
 
@@ -56,14 +56,14 @@ class AIAgentService(BaseService):
             decode_responses=True,
         )
         await self._redis.ping()
-        self._definitions = NacosAgentDefinitionStore(self.cfg.nacos)
+        self._definitions = AgentDefinitionStore(self.cfg.config_provider)
         self._settings = await self.cfg.section(AIAgentSettings)
         self._db = Database()
         await self._db.connect()
         self._profiles = AIProfileRepository(self._db)
         self._accounts = AccountOwnershipRepository(self._db)
         self._memory_module = MemoryModule(
-            nacos=self.cfg.nacos,
+            config_provider=self.cfg.config_provider,
             bus=self.bus,
             scheduler=self.scheduler,
             database=self._db,
@@ -117,9 +117,9 @@ class AIAgentService(BaseService):
 
         definitions = await self._active_definitions()
         for definition in definitions:
-            await self.cfg.nacos.watch(f"agent.{definition.ai_id}", _reload)
-        await self.cfg.nacos.watch("agent.default", _reload)
-        await self.cfg.nacos.watch("agent.catalog", _reload)
+            await self.cfg.config_provider.watch(f"agent.{definition.ai_id}", _reload)
+        await self.cfg.config_provider.watch("agent.default", _reload)
+        await self.cfg.config_provider.watch("agent.catalog", _reload)
 
     # 加载已启用的智能体定义
     async def _active_definitions(self):

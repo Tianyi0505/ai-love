@@ -18,52 +18,67 @@ spec:
       nodeSelector:
         ailove.role: app
       containers:
-        - name: gateway
-          image: ailove/gateway:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "1"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-            - name: AILOVE_DATABASE_POOL_MIN_SIZE
-              value: "1"
-            - name: AILOVE_DATABASE_POOL_MAX_SIZE
-              value: "10"
-            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
-              value: "300"
-            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
-              value: "30"
-          resources:
-            requests: {cpu: 20m, memory: 48Mi}
-            limits: {cpu: 500m, memory: 256Mi}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
+      - name: gateway
+        image: ailove/gateway:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_CONFIG_RETRY_COUNT
+          value: '5'
+        - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+          value: '2'
+        - name: AILOVE_SNOWFLAKE_WORKER_ID
+          value: '1'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://jaeger:4317
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: 'true'
+        - name: OTEL_SDK_DISABLED
+          value: 'true'
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: AILOVE_DATABASE_POOL_MIN_SIZE
+          value: '1'
+        - name: AILOVE_DATABASE_POOL_MAX_SIZE
+          value: '10'
+        - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
+          value: '300'
+        - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
+          value: '30'
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 20m
+            memory: 48Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        volumeMounts:
         - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
+          mountPath: /app/data
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: data
+        hostPath:
+          path: /opt/ailove/data
+          type: Directory
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
+      dnsPolicy: ClusterFirstWithHostNet
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -85,44 +100,59 @@ spec:
       nodeSelector:
         ailove.role: app
       containers:
-        - name: director
-          image: ailove/director:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "2"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 300m, memory: 192Mi}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
+      - name: director
+        image: ailove/director:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_CONFIG_RETRY_COUNT
+          value: '5'
+        - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+          value: '2'
+        - name: AILOVE_SNOWFLAKE_WORKER_ID
+          value: '2'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://jaeger:4317
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: 'true'
+        - name: OTEL_SDK_DISABLED
+          value: 'true'
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 300m
+            memory: 192Mi
+        volumeMounts:
         - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
+          mountPath: /app/data
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: data
+        hostPath:
+          path: /opt/ailove/data
+          type: Directory
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
+      dnsPolicy: ClusterFirstWithHostNet
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -144,54 +174,69 @@ spec:
       nodeSelector:
         ailove.role: app
       containers:
-        - name: ai-agent
-          image: ailove/ai-agent:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_REDIS_URL
-              value: redis://127.0.0.1:16379/0
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "3"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-            - name: AILOVE_DATABASE_POOL_MIN_SIZE
-              value: "1"
-            - name: AILOVE_DATABASE_POOL_MAX_SIZE
-              value: "10"
-            - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
-              value: "300"
-            - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
-              value: "30"
-          resources:
-            requests: {cpu: 45m, memory: 112Mi}
-            limits: {cpu: 1500m, memory: 640Mi}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
+      - name: ai-agent
+        image: ailove/ai-agent:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_REDIS_URL
+          value: redis://127.0.0.1:16379/0
+        - name: AILOVE_CONFIG_RETRY_COUNT
+          value: '5'
+        - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+          value: '2'
+        - name: AILOVE_SNOWFLAKE_WORKER_ID
+          value: '3'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://jaeger:4317
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: 'true'
+        - name: OTEL_SDK_DISABLED
+          value: 'true'
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: AILOVE_DATABASE_POOL_MIN_SIZE
+          value: '1'
+        - name: AILOVE_DATABASE_POOL_MAX_SIZE
+          value: '10'
+        - name: AILOVE_DATABASE_POOL_RECYCLE_SEC
+          value: '300'
+        - name: AILOVE_DATABASE_POOL_TIMEOUT_SEC
+          value: '30'
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 45m
+            memory: 112Mi
+          limits:
+            cpu: 1500m
+            memory: 640Mi
+        volumeMounts:
         - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
+          mountPath: /app/data
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: data
+        hostPath:
+          path: /opt/ailove/data
+          type: Directory
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
+      dnsPolicy: ClusterFirstWithHostNet
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -214,44 +259,58 @@ spec:
       nodeSelector:
         ailove.role: core
       containers:
-        - name: gptsovits
-          image: ailove/gptsovits:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: nacos:8848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "4"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://nats:4222
-          resources:
-            requests: {cpu: 20m, memory: 48Mi}
-            limits: {cpu: 500m, memory: 256Mi}
-          volumeMounts:
-            - name: audio
-              mountPath: /app/data/voice
-      volumes:
+      - name: gptsovits
+        image: ailove/gptsovits:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_CONFIG_RETRY_COUNT
+          value: '5'
+        - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+          value: '2'
+        - name: AILOVE_SNOWFLAKE_WORKER_ID
+          value: '4'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://jaeger:4317
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: 'true'
+        - name: OTEL_SDK_DISABLED
+          value: 'true'
+        - name: AILOVE_BUS_URL
+          value: nats://nats:4222
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 20m
+            memory: 48Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        volumeMounts:
         - name: audio
-          hostPath:
-            path: /opt/ailove/audio
-            type: Directory
+          mountPath: /app/data/voice
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: audio
+        hostPath:
+          path: /opt/ailove/audio
+          type: Directory
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -271,50 +330,65 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: edge
+        ailove.role: app
       containers:
-        - name: live-edge
-          image: ailove/live-edge:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "5"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-          resources:
-            requests: {cpu: 20m, memory: 64Mi}
-            limits: {cpu: 500m, memory: 256Mi}
-          ports:
-            - name: avatar
-              containerPort: 8081
-              hostPort: 8081
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-      volumes:
+      - name: live-edge
+        image: ailove/live-edge:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_CONFIG_RETRY_COUNT
+          value: '5'
+        - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+          value: '2'
+        - name: AILOVE_SNOWFLAKE_WORKER_ID
+          value: '5'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://jaeger:4317
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: 'true'
+        - name: OTEL_SDK_DISABLED
+          value: 'true'
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        ports:
+        - name: avatar
+          containerPort: 8081
+          hostPort: 8081
+        volumeMounts:
         - name: data
-          hostPath:
-            path: /opt/ailove/data
-            type: Directory
+          mountPath: /app/data
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: data
+        hostPath:
+          path: /opt/ailove/data
+          type: Directory
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
+      dnsPolicy: ClusterFirstWithHostNet
 ---
 apiVersion: v1
 kind: Service
@@ -324,9 +398,9 @@ spec:
   selector:
     app: mcp
   ports:
-    - name: http
-      port: 8011
-      targetPort: 8011
+  - name: http
+    port: 8011
+    targetPort: 8011
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -346,29 +420,49 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: edge
+        ailove.role: app
       containers:
-        - name: mcp
-          image: ailove/mcp:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 300m, memory: 192Mi}
-          volumeMounts:
-            - name: plugin-state
-              mountPath: /app/data/plugins
-      volumes:
+      - name: mcp
+        image: ailove/mcp:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 300m
+            memory: 192Mi
+        volumeMounts:
         - name: plugin-state
-          hostPath:
-            path: /opt/ailove/data/plugins
-            type: DirectoryOrCreate
-
+          mountPath: /app/data/plugins
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
+      dnsPolicy: ClusterFirstWithHostNet
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -388,44 +482,58 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: edge
+        ailove.role: app
       containers:
-        - name: extension-host
-          image: ailove/extension-host:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: ailove-secrets
-          env:
-            - name: AILOVE_NACOS_ADDRS
-              value: 127.0.0.1:18848
-            - name: AILOVE_NACOS_GROUP
-              value: DEFAULT_GROUP
-            - name: AILOVE_NACOS_GRPC_TIMEOUT_MS
-              value: "5000"
-            - name: AILOVE_CONFIG_RETRY_COUNT
-              value: "5"
-            - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
-              value: "2"
-            - name: AILOVE_SNOWFLAKE_WORKER_ID
-              value: "7"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://jaeger:4317
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: "true"
-            - name: OTEL_SDK_DISABLED
-              value: "true"
-            - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 300m, memory: 192Mi}
-
-          volumeMounts:
-            - name: plugin-state
-              mountPath: /app/data/plugins
-      volumes:
+      - name: extension-host
+        image: ailove/extension-host:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: ailove-secrets
+        env:
+        - name: AILOVE_CONFIG_RETRY_COUNT
+          value: '5'
+        - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
+          value: '2'
+        - name: AILOVE_SNOWFLAKE_WORKER_ID
+          value: '7'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://jaeger:4317
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: 'true'
+        - name: OTEL_SDK_DISABLED
+          value: 'true'
+        - name: AILOVE_BUS_URL
+          value: nats://127.0.0.1:14222
+        - name: AILOVE_CONFIG_DIRECTORY
+          value: /app/config
+        - name: AILOVE_CONFIG_SECRET_DIRECTORY
+          value: /app/config-secrets
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 300m
+            memory: 192Mi
+        volumeMounts:
         - name: plugin-state
-          hostPath:
-            path: /opt/ailove/data/plugins
-            type: DirectoryOrCreate
+          mountPath: /app/data/plugins
+        - name: runtime-config
+          mountPath: /app/config
+          readOnly: true
+        - name: runtime-config-secrets
+          mountPath: /app/config-secrets
+          readOnly: true
+      volumes:
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      - name: runtime-config
+        configMap:
+          name: ailove-config
+      - name: runtime-config-secrets
+        secret:
+          secretName: ailove-config-secrets
+      dnsPolicy: ClusterFirstWithHostNet

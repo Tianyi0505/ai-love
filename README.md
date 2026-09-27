@@ -92,7 +92,7 @@ shared/
 
 音乐能力目前保持原实现范围：MCP 工具负责接收并记录控制指令，实际播放器适配器仍待接入。
 
-NATS 是运行时事件总线。Nacos 是 `agent.catalog`、`agent.default`、`agent.<ai_id>`、服务配置和全局配置的来源。
+NATS 是运行时事件总线。Kubernetes ConfigMap/Secret 是 `agent.catalog`、`agent.default`、`agent.<ai_id>`、服务配置和全局配置的来源。
 
 ## 长期记忆链路
 
@@ -108,6 +108,8 @@ message → memory.activity → quiet episode → memory_atoms
 同一 owner 的提取与合并通过 KV revision 的 CAS claim 串行化，不同 owner 可以并行。`person` 和 `self` 使用独立阈值，`self` 的更新更保守。对话 Prompt 动态装配固定身份、自我 Markdown、联系人 Markdown、历史 Episode 摘要、近期原文和本轮消息。
 
 ## 配置
+
+生产配置由 Kubernetes ConfigMap/Secret 挂载，支持监听更新。配置准备、热更新和迁移步骤见 [Kubernetes 配置指南](docs/kubernetes-config.md)。
 
 ```text
 agent.catalog             # 声明 active_ai_ids
@@ -130,7 +132,7 @@ ailove.config             # 配置全局运行参数与 QQ 白名单
 本地 Compose 从 `deploy/.env` 读取密钥并传入 ai-agent；该文件被 Git 和 Docker 构建上下文排除。
 直接运行 Python 时需要自行设置进程环境变量（程序不会自动加载 `.env`）；
 Kubernetes 使用现有 `ailove-secrets` 的 `envFrom`，需在部署时注入 `AGNES_API_KEY`。
-请勿把真实密钥写入 Nacos 或提交到仓库。
+请勿把真实密钥写入普通 ConfigMap 或提交到仓库。
 
 需要切换默认模型时，修改 `agent.default` 中以下配置，并确认各 `agent.<ai_id>` 没有另行指定模型；使用另一免费模型时将两个模型 ID 改为 `agnes-2.5-flash`：
 
@@ -153,7 +155,7 @@ model_config:
 
 - 先接通现有单 QQ 账号，再接 B站。
 - NapCat 登录态必须保留，部署不得重启或重建 NapCat。
-- QQ 白名单沿用现有 Nacos 配置；私聊 24 小时被动回复，主动联系只在 AI 工作作息内。
+- QQ 白名单沿用现有 Kubernetes 配置；私聊 24 小时被动回复，主动联系只在 AI 工作作息内。
 - `relationship_policy.group_ceiling_whitelist` 中的群聊可在非工作时间参与回复，仍遵守主动行为开关、冷却及参与判断。
 - QQ 空间遍历全部好友，并按该 AI 与每个人的多维关系分别判断点赞和评论。
 - 禁止工具删除消息、修改账号资料、读取或导出凭据。
@@ -166,4 +168,4 @@ docker compose -f deploy/docker-compose.yml up -d
 
 生产部署不能通过初始化脚本覆盖服务器现有白名单，也不能重启或重建 NapCat。
 
-技术栈：Python 3.11、PostgreSQL/pgvector、NATS、Nacos、Docker Compose、NapCat、OBS、Live2D、GPT-SoVITS。
+技术栈：Python 3.11、PostgreSQL/pgvector、NATS、Kubernetes、Docker Compose、NapCat、OBS、Live2D、GPT-SoVITS。
