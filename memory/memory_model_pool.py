@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import TypeVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
+from memory.memory_prompt_assembler import MemoryPromptAssembler
 from shared.chat_model_factory import create_chat_model
 from shared.contracts.agent import AgentDefinition
 from shared.global_settings import LLMSettings, ObservabilitySettings
@@ -93,6 +94,7 @@ class MemoryModelPool:
         output_type: type[OutputT],
     ) -> OutputT:
         definition, runnable = await self._structured_resources(ai_id, output_type)
+        system_prompt = MemoryPromptAssembler(definition).system()
         model_name = definition.model_profile.model_id
         with model_span(
             "memory.generate",
@@ -100,13 +102,13 @@ class MemoryModelPool:
             self._observability,
             {"max_tokens": self._config.memory_max_tokens},
         ) as span:
-            result = await runnable.ainvoke([HumanMessage(content=prompt)])
+            result = await runnable.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=prompt)])
             output = parsed_output(result, output_type)
             record_messages_usage(span, [result["raw"]])
             record_model_content(
                 span,
                 self._observability,
-                input_text=prompt,
+                input_text=system_prompt + "\n\n" + prompt,
                 output=output,
             )
         return output

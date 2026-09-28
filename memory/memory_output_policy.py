@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from markdown_it import MarkdownIt
 
 from memory.memory_generation_output import (
@@ -8,6 +10,9 @@ from memory.memory_generation_output import (
     MemoryOwnerType,
 )
 from shared.global_settings import MemoryDocumentSchemas, MemoryOutputLimits
+
+if TYPE_CHECKING:
+    from memory.episode_memory_repository import EpisodeMessage
 
 
 class MemoryOutputPolicy:
@@ -32,6 +37,20 @@ class MemoryOutputPolicy:
                 raise ValueError("记忆置信度不符合配置")
         return output
 
+    def ground_extraction(
+        self, output: MemoryExtractionOutput, messages: list[EpisodeMessage]
+    ) -> MemoryExtractionOutput:
+        roles = {message.message_id: message.role for message in messages}
+        memories = []
+        for memory in output.memories:
+            if any(message_id not in roles for message_id in memory.source_message_ids):
+                raise ValueError("记忆引用了本片段之外的消息")
+            evidence_roles = {roles[message_id] for message_id in memory.source_message_ids}
+            if memory.owner_type == "self" and not {"user", "assistant"}.issubset(evidence_roles):
+                continue
+            memories.append(memory)
+        return output.model_copy(update={"memories": memories})
+
     def validate_consolidation(
         self,
         output: MemoryConsolidationOutput,
@@ -48,6 +67,26 @@ class MemoryDocumentPolicy:
 
     def empty_document(self, owner_type: MemoryOwnerType) -> str:
         return getattr(self._schemas, owner_type).empty_document
+
+    def anchor_identity(self, markdown: str, persona: str) -> str:
+        schema = self._schemas.self
+        section = schema.identity_section
+        if section is None:
+            raise ValueError("自我认知文档必须配置固定身份章节")
+        self.validate("self", markdown)
+        tokens = self._markdown.parse(markdown)
+        headings = [token for token in tokens if token.type == "heading_open"]
+        lines = markdown.splitlines()
+        removed: set[int] = set()
+        for index, token in enumerate(tokens):
+            if token.type == "heading_open" and token.tag == "h2" and tokens[index + 1].content == section:
+                start = token.map[0]
+                stop = next((heading.map[0] for heading in headings if heading.map[0] > start), len(lines))
+                removed.update(range(start, stop))
+        title_end = headings[0].map[1]
+        body = "\n".join(line for index, line in enumerate(lines) if index >= title_end and index not in removed).strip()
+        result = f"# {schema.title}\n\n## {section}\n{persona.strip()}"
+        return self.validate("self", result + ("\n\n" + body if body else ""))
 
     def validate(self, owner_type: MemoryOwnerType, markdown: str) -> str:
         schema = getattr(self._schemas, owner_type)

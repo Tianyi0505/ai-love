@@ -340,6 +340,10 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
         definition = SimpleNamespace(
             fingerprint="v1",
             model_profile=SimpleNamespace(model_id="chat"),
+            name="测试角色",
+            identity="测试角色的存在形态为数字形态",
+            personality=SimpleNamespace(traits=["真诚"], speaking_style="自然", catchphrases=[], taboos=["依据真实经历表达"]),
+            prompts={"memory-persona": "${identity}\n${taboos}", "memory-system": "以正式人设为准：${persona}"},
         )
         definitions = SimpleNamespace(load=AsyncMock(return_value=definition))
         extraction = MemoryExtractionOutput(episode_summary="摘要", memories=[])

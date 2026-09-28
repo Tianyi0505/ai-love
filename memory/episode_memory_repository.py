@@ -177,7 +177,7 @@ class EpisodeMemoryRepository:
                         importance=atom["importance"],
                         confidence=atom["confidence"],
                         lfu_state=self._initial_lfu_state(),
-                        source_message_ids=[int(item.message_id) for item in messages],
+                        source_message_ids=list(dict.fromkeys(int(item) for item in atom["source_message_ids"])),
                     )
                     session.add(memory_atom)
                     await session.flush()
@@ -459,6 +459,7 @@ class EpisodeMemoryRepository:
                     m.MemoryAtom.content,
                     m.MemoryAtom.importance,
                     m.MemoryAtom.confidence,
+                    m.MemoryAtom.source_message_ids,
                 )
                 .where(
                     m.MemoryAtom.ai_id == ai_id,
@@ -487,6 +488,7 @@ class EpisodeMemoryRepository:
                         "content": row.content,
                         "importance": float(row.importance),
                         "confidence": float(row.confidence),
+                        "source_message_ids": [str(item) for item in row.source_message_ids],
                     }
                     for row in atom_rows
                 ],

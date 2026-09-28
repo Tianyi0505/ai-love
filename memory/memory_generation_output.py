@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 MemoryOwnerType = Literal["person", "self"]
 MemoryType = Literal[
@@ -24,6 +24,7 @@ class MemoryAtomOutput(BaseModel):
     content: str
     importance: float
     confidence: float
+    source_message_ids: list[str] = Field(min_length=1)
 
 
 class MemoryExtractionOutput(BaseModel):

@@ -12,6 +12,7 @@ from memory.memory_generation_output import (
     MemoryOwnerType,
 )
 from memory.memory_output_policy import MemoryDocumentPolicy, MemoryOutputPolicy
+from memory.memory_prompt_assembler import MemoryPromptAssembler
 from memory.memory_state_store import ActivityState, PendingState, StateEntry
 from shared.global_settings import MemorySettings
 
@@ -94,9 +95,19 @@ class MemoryPipeline:
             await self._state.finish_activity(claim)
             return
         definition, _ = await self._models.resources(data.ai_id)
-        conversation = "\n".join(
-            f"[{item.person_id + ' | ' if item.person_id else ''}{item.speaker if item.role == 'user' else definition.name}] {item.text}"
-            for item in messages
+        conversation = json.dumps(
+            [
+                {
+                    "message_id": item.message_id,
+                    "role": item.role,
+                    "person_id": item.person_id if item.role == "user" else "",
+                    "speaker": item.speaker if item.role == "user" else definition.name,
+                    "text": item.text,
+                    "occurred_at": item.occurred_at,
+                }
+                for item in messages
+            ],
+            ensure_ascii=False,
         )
         prompt = Template(definition.prompts["memory-extraction"]).substitute(
             ai_name=definition.name,
@@ -113,6 +124,7 @@ class MemoryPipeline:
                 MemoryExtractionOutput,
             )
         )
+        output = self._output_policy.ground_extraction(output, messages)
         summary = output.episode_summary
         atoms = [memory.model_dump(mode="json") for memory in output.memories]
         estimated_tokens = max(
@@ -188,6 +200,9 @@ class MemoryPipeline:
             return
         definition, _ = await self._models.resources(data.ai_id)
         current = document.markdown or self._document_policy.empty_document(owner_type)
+        persona = MemoryPromptAssembler(definition).persona()
+        if owner_type == "self":
+            current = self._document_policy.anchor_identity(current, persona)
         prompt_key = f"memory-{owner_type}-consolidation"
         prompt = Template(definition.prompts[prompt_key]).substitute(
             current_markdown=current,
@@ -202,7 +217,10 @@ class MemoryPipeline:
             )
         )
         markdown = self._document_policy.validate(owner_type, output.markdown)
-        changed = markdown != self._document_policy.validate(owner_type, current)
+        if owner_type == "self":
+            markdown = self._document_policy.anchor_identity(markdown, persona)
+            self._output_policy.validate_consolidation(MemoryConsolidationOutput(markdown=markdown))
+        changed = markdown != (document.markdown or self._document_policy.empty_document(owner_type)).strip()
         version = document.version
         if changed:
             version = await self._repo.save_document(
