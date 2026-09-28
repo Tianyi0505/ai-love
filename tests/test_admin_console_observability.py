@@ -266,7 +266,7 @@ class ObservabilityReaderTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("洛雨", result.name)
         self.assertEqual(["真诚", "活泼", "有自己的判断"], result.traits)
-        self.assertIn("泄露私聊内容或账号凭据", result.taboos)
+        self.assertIn("保护私聊内容、个人隐私与账号凭据", result.taboos)
         self.assertNotEqual("", result.fingerprint)
 
     async def test_people_search_builds_database_ilike_and_returns_qq_identity(self) -> None:

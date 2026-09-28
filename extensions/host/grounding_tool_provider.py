@@ -50,7 +50,7 @@ class GroundingToolProvider:
             ),
             ToolDefinition(
                 tool_id="get_person_context",
-                description="读取某人在当前场景允许使用的背景事实，不返回原始人物记忆文档。",
+                description="读取当前场景授权范围内、按人物归属整理的背景事实摘要。",
                 input_schema={
                     "type": "object",
                     "properties": {

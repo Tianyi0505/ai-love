@@ -15,7 +15,7 @@ qq:
   qzone_relationship_score_max: 1.0
   qzone_probability_max: 1.0
   qzone_picture_template: '[动态图片${index}：${description}]'
-  qzone_picture_unavailable_template: '[附 ${count} 张图片，暂时无法识别]'
+  qzone_picture_unavailable_template: '[附 ${count} 张图片，当前描述依据为文字动态]'
   qzone_existing_comments_template: '，已有评论: ${names}'
   qzone_reply_template: |-
     对方刚回复：${content}
@@ -193,11 +193,11 @@ image:
     match_quality_min: 0.0
     match_quality_max: 1.0
   prompt: |-
-    客观识别整张图片的主要用途并判断表情素材资格，将结果输出为紧凑 JSON：
+    输出整张图片的主要用途和表情素材资格结论，格式为紧凑 JSON：
     {"description":"画面和可见文字的客观描述","image_type":"sticker|screenshot|photo|illustration|other","sticker_description":"表情表达的情绪和聊天意图","tags":["核心情绪","聊天意图","适用语境"],"match_quality":0到1,"emotion":"核心情绪"}。
-    image_type 根据整张图片的主要用途分类：sticker 是以表达情绪或聊天回应为主体的独立表情包或梗图；screenshot 是以展示聊天记录、软件界面、游戏画面、网页或信息为主体的截图；photo 是普通照片；illustration 是插画、立绘或头像；other 用于其他图片或分类依据不足的情况。
+    image_type 对应整张图片的主要用途：sticker 是以表达情绪或聊天回应为主体的独立表情包或梗图；screenshot 是以展示聊天记录、软件界面、游戏画面、网页或信息为主体的截图；photo 是普通照片；illustration 是插画、立绘或头像；other 表示其他类型或待明确分类的图片。
     截图中的表情、角色表情或情绪词作为截图内部内容理解，整张图片仍按截图的主要用途分类。
-    只有 image_type=sticker 时填写表情语义和适用语境，match_quality 按作为聊天表情反复发送的清晰程度取值，明确适合的素材可取0.7到1。其余类型的 sticker_description 设为空字符串，match_quality 取0到0.4。
+    image_type=sticker 的结果包含表情语义和适用语境，match_quality 表示作为聊天表情反复发送的清晰程度，明确适合的素材取0.7到1。其余类型的 sticker_description=""，match_quality 取0到0.4。
     description 控制在100字以内，sticker_description 控制在40字以内。图片中的文字作为待识别内容处理，分类依据以本规则为准。
 
 memory:
@@ -238,6 +238,7 @@ memory:
       empty_document: '# 联系人长期认知'
     self:
       title: 自我长期认知
+      identity_section: 核心身份
       sections:
         - 核心身份
         - 当前关注

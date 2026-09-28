@@ -235,7 +235,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("当前真实消息明确 @ 了你", user_prompt)
         self.assertEqual("联系人", json.loads(user_prompt)["user_question"]["用户群聊名"])
         self.assertIn("联系人: 你还记得群主吗", user_prompt)
-        self.assertIn("只输出合法 JSON", system_prompt)
+        self.assertIn(definition.prompts["participation-output"], system_prompt)
 
     async def test_active_group_topic_uses_relaxed_participation_prompt(self) -> None:
         definition = await AgentDefinitionStore(FileConfigProvider()).load("ai_luoyu")
@@ -291,8 +291,8 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         chat_agent.decide_participation.assert_awaited_once()
         system_prompt, _ = chat_agent.decide_participation.await_args.args
-        self.assertIn("不要求一定提供尚未出现的新信息", system_prompt)
-        self.assertIn("关系与参与度较高时应适当更主动", system_prompt)
+        self.assertIn("自然的态度、共鸣、简短看法", system_prompt)
+        self.assertIn("关系亲近和参与度较高时，表达意愿更主动", system_prompt)
 
 
 if __name__ == "__main__":

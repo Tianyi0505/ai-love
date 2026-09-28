@@ -45,6 +45,7 @@ class PromptAssembler:
             traits=traits,
             speaking_style=speaking_style,
             catchphrases=catchphrases,
+            taboos="\n".join(f"- {item}" for item in personality.taboos),
             scene_template=self.template(context.scene),
             person_rules=self.optional_template("person-rules"),
             output_protocol=context.output_protocol or self.template("response-plan"),

@@ -124,7 +124,7 @@ class ProactivePrivateServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(user_prompt.index("<retrieved_context>"), user_prompt.index("<user_question>"))
         self.assertIn("正在准备考试", user_prompt)
         self.assertIn("上次聊到复习计划", user_prompt)
-        self.assertIn("这不是联系人发来的消息", user_prompt)
+        self.assertIn("场景：主动联系", user_prompt)
         self.assertEqual(False, chat_agent.generate_plan.await_args.kwargs["allow_tools"])
         command = send_response.await_args.args[0]
         self.assertEqual("10002", command.chat["chat_id"])

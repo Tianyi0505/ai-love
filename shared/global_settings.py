@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class SettingsModel(BaseModel):
@@ -205,6 +205,13 @@ class MemoryDocumentSchema(SettingsModel):
     title: str
     sections: tuple[str, ...]
     empty_document: str
+    identity_section: str | None = None
+
+    @model_validator(mode="after")
+    def validate_identity_section(self):
+        if self.identity_section is not None and self.identity_section not in self.sections:
+            raise ValueError("固定身份章节必须在文档章节中声明")
+        return self
 
 
 class MemoryDocumentSchemas(SettingsModel):
