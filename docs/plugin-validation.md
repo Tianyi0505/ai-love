@@ -2,6 +2,8 @@
 
 验证日期：2026-09-27 至 2026-09-28，Windows / Python 3.11。本地隔离 worktree：`D:/ai-love-worktrees/plugin-runtime`；分支：`codex/plugin-runtime`。
 
+本页记录合并前的插件分支验收。后续 `main` 已移除 Nacos，完整回归为 198 passed、1 skipped，并完成生产部署；最新结果见 [部署记录](deployment-20260928.md)。
+
 ## 结果
 
 | 检查 | 结果 | 覆盖与限制 |

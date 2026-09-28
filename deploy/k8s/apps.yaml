@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         app: gateway
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       nodeSelector:
@@ -51,6 +52,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 20m
@@ -67,6 +70,8 @@ spec:
         - name: runtime-config-secrets
           mountPath: /app/config-secrets
           readOnly: true
+        - name: plugin-state
+          mountPath: /app/plugin-state
       volumes:
       - name: data
         hostPath:
@@ -78,7 +83,12 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: ClusterFirstWithHostNet
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      dnsPolicy: Default
+      terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -95,6 +105,7 @@ spec:
     metadata:
       labels:
         app: director
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       nodeSelector:
@@ -125,6 +136,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 10m
@@ -141,6 +154,8 @@ spec:
         - name: runtime-config-secrets
           mountPath: /app/config-secrets
           readOnly: true
+        - name: plugin-state
+          mountPath: /app/plugin-state
       volumes:
       - name: data
         hostPath:
@@ -152,7 +167,12 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: ClusterFirstWithHostNet
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      dnsPolicy: Default
+      terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -169,6 +189,7 @@ spec:
     metadata:
       labels:
         app: ai-agent
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       nodeSelector:
@@ -209,6 +230,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 45m
@@ -225,6 +248,8 @@ spec:
         - name: runtime-config-secrets
           mountPath: /app/config-secrets
           readOnly: true
+        - name: plugin-state
+          mountPath: /app/plugin-state
       volumes:
       - name: data
         hostPath:
@@ -236,7 +261,12 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: ClusterFirstWithHostNet
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      dnsPolicy: Default
+      terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -253,6 +283,7 @@ spec:
     metadata:
       labels:
         app: gptsovits
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
@@ -284,6 +315,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 20m
@@ -300,6 +333,8 @@ spec:
         - name: runtime-config-secrets
           mountPath: /app/config-secrets
           readOnly: true
+        - name: plugin-state
+          mountPath: /app/plugin-state
       volumes:
       - name: audio
         hostPath:
@@ -311,11 +346,17 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: live-edge
+  namespace: ailove
 spec:
   replicas: 1
   strategy:
@@ -327,6 +368,7 @@ spec:
     metadata:
       labels:
         app: live-edge
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       nodeSelector:
@@ -357,6 +399,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 20m
@@ -377,6 +421,8 @@ spec:
         - name: runtime-config-secrets
           mountPath: /app/config-secrets
           readOnly: true
+        - name: plugin-state
+          mountPath: /app/plugin-state
       volumes:
       - name: data
         hostPath:
@@ -388,7 +434,12 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: ClusterFirstWithHostNet
+      - name: plugin-state
+        hostPath:
+          path: /opt/ailove/data/plugins
+          type: DirectoryOrCreate
+      dnsPolicy: Default
+      terminationGracePeriodSeconds: 180
 ---
 apiVersion: v1
 kind: Service
@@ -417,6 +468,7 @@ spec:
     metadata:
       labels:
         app: mcp
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       nodeSelector:
@@ -435,6 +487,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 10m
@@ -444,7 +498,7 @@ spec:
             memory: 192Mi
         volumeMounts:
         - name: plugin-state
-          mountPath: /app/data/plugins
+          mountPath: /app/plugin-state
         - name: runtime-config
           mountPath: /app/config
           readOnly: true
@@ -462,7 +516,8 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: ClusterFirstWithHostNet
+      dnsPolicy: Default
+      terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -479,6 +534,7 @@ spec:
     metadata:
       labels:
         app: extension-host
+        ailove.runtime: plugins
     spec:
       hostNetwork: true
       nodeSelector:
@@ -509,6 +565,8 @@ spec:
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
           value: /app/config-secrets
+        - name: AILOVE_PLUGIN_STATE_DIR
+          value: /app/plugin-state
         resources:
           requests:
             cpu: 10m
@@ -518,7 +576,7 @@ spec:
             memory: 192Mi
         volumeMounts:
         - name: plugin-state
-          mountPath: /app/data/plugins
+          mountPath: /app/plugin-state
         - name: runtime-config
           mountPath: /app/config
           readOnly: true
@@ -536,4 +594,5 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: ClusterFirstWithHostNet
+      dnsPolicy: Default
+      terminationGracePeriodSeconds: 180

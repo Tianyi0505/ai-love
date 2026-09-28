@@ -47,3 +47,13 @@ python -m plugin_runtime --role live-edge
 5. 停用并删除 Nacos Deployment/Service 和反向代理入口；原备份保留供审计与恢复。
 
 配置模板不会自动覆盖线上已有配置。部署应用更新时不要重新渲染或初始化生产配置。
+
+## 当前跨云部署约束
+
+app 节点的业务 Pod 使用 `hostNetwork` 和 `dnsPolicy: Default`，沿用宿主机的 DNS 与现有基础服务隧道；NATS 地址为 `nats://127.0.0.1:14222`。该节点不能可靠访问集群 DNS，改为 `ClusterFirstWithHostNet` 会导致生产数据库域名解析失败。
+
+core 节点上的语音服务和管理面板使用 `ClusterFirstWithHostNet`，通过 `nats://nats:4222` 访问集群 Service。不要把 app 节点的隧道端口直接复制到 core。
+
+七个插件宿主将 `/opt/ailove/data/plugins` 挂载到 `/app/plugin-state`，以 `AILOVE_PLUGIN_STATE_DIR` 指定状态目录。各角色使用独立 SQLite 日志与文件锁；更换 Pod 后保留插件目标状态和操作记录。终止宽限期为 180 秒，留出插件排空和资源释放时间。
+
+本次生产迁移与清理结果见 [2026-09-28 部署记录](deployment-20260928.md)。
