@@ -4,28 +4,19 @@ import json
 import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict
 
-from agent.vision.image_description import ImageType
+from shared.contracts.vision_output import StickerDecision as StickerDecision
 from shared.langchain_observability import model_span, record_messages_usage, record_model_content
 from shared.langchain_structured_output import parsed_output, structured_output_runnable
 
 logger = logging.getLogger("ailove.ai-agent.sticker-judge")
 
 
-class StickerDecision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    image_type: ImageType
-    suitable: bool
-    reason: str
-
-
 class StickerJudge:
     """结合候选图片和当前对话判断表情是否适合发送"""
 
-    def __init__(self, model, model_name, fetcher, prompt, max_tokens, retry_count, observability) -> None:
-        self._model = structured_output_runnable(model, StickerDecision, retry_count + 1)
+    def __init__(self, model, model_name, fetcher, prompt, max_tokens, retry_count, observability, output_client) -> None:
+        self._model = structured_output_runnable(model, StickerDecision, retry_count + 1, output_client)
         self._model_name = model_name
         self._fetcher = fetcher
         self._prompt = prompt

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware, ToolRetryMiddleware
-from langchain.agents.structured_output import ToolStrategy
+from langchain.tools import ToolRuntime
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import BaseTool
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import BaseTool, StructuredTool
 
 from agent.conversation.multimodal_input import ImageAttachment
 from agent.conversation.response_output_policy import ResponseOutputPolicy
@@ -25,6 +24,8 @@ from shared.langchain_structured_output import (
     parsed_output,
     structured_output_runnable,
 )
+from shared.mcp_output_client import MCPOutputClient
+from shared.structured_output_tools import output_tool
 
 
 class ChatAgent:
@@ -40,6 +41,7 @@ class ChatAgent:
         retry_count: int,
         tool_retry_count: int,
         observability: ObservabilitySettings,
+        output_client: MCPOutputClient,
         tool_loader: Callable[[], Awaitable[list[BaseTool]]] | None = None,
     ) -> None:
         self._model_name = model_name
@@ -51,11 +53,13 @@ class ChatAgent:
             model,
             ResponsePlan,
             min(max_requests, retry_count + 1),
+            output_client,
         )
         self._participation_model = structured_output_runnable(
             model,
             ParticipationDecision,
             min(participation_max_requests, retry_count + 1),
+            output_client,
         )
 
         middleware = [ModelCallLimitMiddleware(run_limit=max_requests, exit_behavior="error")]
@@ -69,12 +73,30 @@ class ChatAgent:
                 )
             )
 
+        spec = output_tool(ResponsePlan)
+
+        async def submit_plan(runtime: ToolRuntime[ToolExecutionContext], **arguments):
+            if len(runtime.state["messages"][-1].tool_calls) != 1:
+                raise ValueError("最终结果对应一次独立的 submit_response_plan 调用")
+            plan = await output_client.submit(ResponsePlan, arguments, runtime.context)
+            plan = self._output_policy.validate_plan(plan)
+            return "本轮回复已完成结构校验。", plan.model_dump(mode="json")
+
+        result_tool = StructuredTool.from_function(
+            coroutine=submit_plan,
+            name=spec.name,
+            description=spec.description,
+            args_schema=spec.arguments_type.model_json_schema(),
+            infer_schema=False,
+            return_direct=True,
+            response_format="content_and_artifact",
+        )
+
         def build_agent(current_tools):
             return create_agent(
                 model=model,
-                tools=current_tools,
+                tools=[*current_tools, result_tool],
                 middleware=middleware,
-                response_format=ToolStrategy(ResponsePlan, handle_errors=retry_count > 0),
                 context_schema=ToolExecutionContext,
             )
 
@@ -132,7 +154,10 @@ class ChatAgent:
                     {"messages": messages},
                     context=tool_context or ToolExecutionContext(),
                 )
-                plan = cast(ResponsePlan, state["structured_response"])
+                final = state["messages"][-1]
+                if not isinstance(final, ToolMessage) or final.name != output_tool(ResponsePlan).name:
+                    raise ValueError("本轮回复需要 MCP 结果工具的完成记录")
+                plan = ResponsePlan.model_validate(final.artifact)
                 record_messages_usage(span, state["messages"])
             else:
                 result = await self._plan_model.ainvoke(messages)

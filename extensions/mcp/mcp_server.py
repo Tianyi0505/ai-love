@@ -10,6 +10,7 @@ from mcp.server import MCPServer
 from extensions.mcp.mcp_resources import MCPResources
 from extensions.mcp.mcp_server_settings import MCPServerSettings
 from extensions.mcp.music.music_tool import register_music
+from extensions.mcp.structured_output.output_tools import register_structured_output
 from extensions.mcp.weather.qweather_client import QWeatherClient
 from extensions.mcp.weather.weather_tool import CLIENT_SETTINGS, register_weather
 from extensions.mcp.web_search.web_search_client import WebSearchClient
@@ -68,6 +69,7 @@ mcp = MCPServer(
 register_weather(mcp)
 register_music(mcp)
 register_web_search(mcp)
+register_structured_output(mcp)
 
 
 if __name__ == "__main__":

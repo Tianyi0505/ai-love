@@ -7,6 +7,7 @@ import httpx
 import pytest
 import yaml
 from langchain_openai.chat_models.base import BaseChatOpenAI
+from output_fixtures import ValidatingOutputClient
 
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.response_output_policy import ResponseOutputPolicy
@@ -32,13 +33,13 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
     config = settings()
     requests = []
     outputs = {
-        "ResponsePlan": {
+        "submit_response_plan": {
             "speech": [{"text": "你好", "delivery": "text"}],
             "emotion": {"name": "happy", "intensity": 0.5},
             "actions": [],
         },
-        "ParticipationDecision": {"participate": True, "reason": "被直接提问"},
-        "MemoryExtractionOutput": {"episode_summary": "聊了天气", "memories": []},
+        "submit_participation_decision": {"participate": True, "reason": "被直接提问"},
+        "submit_memory_extraction": {"episode_summary": "聊了天气", "memories": []},
     }
 
     def respond(request):
@@ -59,7 +60,7 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
                 "index": 0, "finish_reason": "tool_calls",
                 "message": {"role": "assistant", "content": None, "tool_calls": [{
                     "id": "call-test", "type": "function",
-                    "function": {"name": name, "arguments": json.dumps(outputs[name])},
+                    "function": {"name": name, "arguments": json.dumps({"result": outputs[name]})},
                 }]},
             }],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
@@ -97,13 +98,14 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
             participation_max_requests=config.llm.participation_max_requests,
             max_tokens=config.llm.max_tokens, retry_count=0, tool_retry_count=0,
             observability=config.observability,
+            output_client=ValidatingOutputClient(),
         )
         for allow_tools in (True, False):
             plan = await agent.generate_plan("请简短回复", "你好", allow_tools=allow_tools)
             assert plan.text == "你好"
         decision = await agent.decide_participation("判断是否需要回复", "你好")
         assert decision.participate
-        memory = MemoryModelPool(definitions, config.llm, config.observability)
+        memory = MemoryModelPool(definitions, config.llm, config.observability, lambda ai_id: ValidatingOutputClient())
         result = await memory.generate("ai_luoyu", "总结对话", MemoryExtractionOutput)
         assert result.episode_summary == "聊了天气"
 

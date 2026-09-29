@@ -16,6 +16,7 @@ from shared.contracts.rpc.tools import (
 from shared.contracts.tools import ToolExecutionContext
 from shared.global_settings import TimeoutSettings
 from shared.langchain_observability import tool_span
+from shared.structured_output_tools import OUTPUT_TOOL_NAMES
 
 logger = logging.getLogger("ailove.ai-agent.tools")
 
@@ -35,7 +36,7 @@ async def load_toolset(
     except NoRespondersError:
         logger.warning("[tools] 扩展服务无响应，先以无工具模式启动: ai=%s", ai_id)
         return []
-    return [_build_tool(bus, ai_id, timeouts, info) for info in response.tools]
+    return [_build_tool(bus, ai_id, timeouts, info) for info in response.tools if info.name not in OUTPUT_TOOL_NAMES]
 
 
 def _build_tool(

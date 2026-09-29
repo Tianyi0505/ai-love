@@ -1,0 +1,14 @@
+{
+  "id": "structured-output",
+  "name": "结构化输出",
+  "description": "提供回复、参与判断、视觉与记忆结果的类型校验和 MCP 结构化返回。",
+  "host": "mcp",
+  "category": "tool",
+  "entrypoint": "plugins.mcp:MCPToolPlugin",
+  "provides": ["tools.structured-output"],
+  "requires": ["mcp.server"],
+  "enabled": true,
+  "config": {
+    "registration": "extensions.mcp.structured_output.output_tools:register_structured_output"
+  }
+}

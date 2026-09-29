@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from output_fixtures import ValidatingOutputClient, completed_output, tool_runnable
 
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.multimodal_input import ImageAttachment
@@ -219,15 +220,15 @@ class ChatAgentTests(unittest.IsolatedAsyncioTestCase):
         )
         participation_runnable = RunnableLambda(participation_call)
         model = MagicMock()
-        model.with_structured_output.side_effect = [
-            plan_runnable,
-            participation_runnable,
+        model.bind_tools.side_effect = [
+            tool_runnable(plan_runnable),
+            tool_runnable(participation_runnable),
         ]
         graph = SimpleNamespace(
             ainvoke=AsyncMock(
                 return_value={
                     "structured_response": plan,
-                    "messages": [raw],
+                    "messages": [raw, completed_output(plan)],
                 }
             )
         )
@@ -253,6 +254,7 @@ class ChatAgentTests(unittest.IsolatedAsyncioTestCase):
                 retry_count=0,
                 tool_retry_count=0,
                 observability=observability(),
+                output_client=ValidatingOutputClient(),
             )
 
         direct = await agent.generate_plan(
@@ -305,7 +307,7 @@ class ImageDescriberTests(unittest.IsolatedAsyncioTestCase):
         )
         runnable = RunnableLambda(invoke)
         model = MagicMock()
-        model.with_structured_output.return_value = runnable
+        model.bind_tools.return_value = tool_runnable(runnable)
         fetcher = SimpleNamespace(
             fetch=AsyncMock(
                 return_value=FetchedImage(data=b"image", media_type="image/jpeg")
@@ -321,6 +323,7 @@ class ImageDescriberTests(unittest.IsolatedAsyncioTestCase):
             200,
             0,
             observability(),
+            ValidatingOutputClient(),
         )
 
         result = await describer.describe("https://example.com/image.jpg")
@@ -368,9 +371,9 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         model = MagicMock()
-        model.with_structured_output.side_effect = [
-            extraction_runnable,
-            consolidation_runnable,
+        model.bind_tools.side_effect = [
+            tool_runnable(extraction_runnable),
+            tool_runnable(consolidation_runnable),
         ]
         config = SimpleNamespace(
             models={},
@@ -381,7 +384,7 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
             retry_count=0,
             memory_max_requests=1,
         )
-        pool = MemoryModelPool(definitions, config, observability())
+        pool = MemoryModelPool(definitions, config, observability(), lambda ai_id: ValidatingOutputClient())
 
         with patch(
             "memory.memory_model_pool.create_chat_model",
@@ -400,7 +403,7 @@ class MemoryModelPoolTests(unittest.IsolatedAsyncioTestCase):
         factory.assert_called_once()
         self.assertEqual(200, factory.call_args.kwargs["max_tokens"])
         self.assertEqual(120, factory.call_args.kwargs["timeout_sec"])
-        self.assertEqual(2, model.with_structured_output.call_count)
+        self.assertEqual(2, model.bind_tools.call_count)
 
 
 class StructuredOutputTests(unittest.IsolatedAsyncioTestCase):
@@ -421,11 +424,12 @@ class StructuredOutputTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
         model = MagicMock()
-        model.with_structured_output.return_value = RunnableLambda(invoke)
+        model.bind_tools.return_value = tool_runnable(RunnableLambda(invoke))
         runnable = structured_output_runnable(
             model,
             ParticipationDecision,
             max_attempts=2,
+            output_client=ValidatingOutputClient(),
         )
 
         result = await runnable.ainvoke("prompt")

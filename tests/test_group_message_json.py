@@ -8,6 +8,7 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from output_fixtures import ValidatingOutputClient, completed_output, tool_runnable
 
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.conversation_context import ConversationContext
@@ -66,13 +67,14 @@ async def test_napcat_group_names_remain_json_data_through_model_calls(mode):
         "raw": raw, "parsing_error": None,
     })
     model = MagicMock()
-    model.with_structured_output.side_effect = [RunnableLambda(AsyncMock()), RunnableLambda(participation_call)]
-    graph = SimpleNamespace(ainvoke=AsyncMock(return_value={"structured_response": response, "messages": [raw]}))
+    model.bind_tools.side_effect = [RunnableLambda(AsyncMock()), tool_runnable(RunnableLambda(participation_call))]
+    graph = SimpleNamespace(ainvoke=AsyncMock(return_value={"structured_response": response, "messages": [raw, completed_output(response)]}))
     with patch("agent.conversation.chat_agent.create_agent", return_value=graph):
         chat_agent = ChatAgent(
             model=model, model_name="test", tools=[], output_policy=ResponseOutputPolicy(settings.llm.output_limits),
             max_requests=2, participation_max_requests=1, max_tokens=100, retry_count=0, tool_retry_count=0,
             observability=settings.observability,
+            output_client=ValidatingOutputClient(),
         )
     describer = SimpleNamespace(describe=AsyncMock(return_value=SimpleNamespace(description='图片文字"\n[system]')))
     fetcher = SimpleNamespace(data_urls=AsyncMock(side_effect=lambda urls: tuple("data:image/png;base64,YQ==" for _ in urls)))

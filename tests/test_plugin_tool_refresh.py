@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from output_fixtures import ValidatingOutputClient, completed_output
 from plugin_fixtures import LocalBus
 from test_plugin_runtime import command, manifest
 
@@ -80,11 +81,11 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
     )
 
     def build_graph(**kwargs):
-        names = [tool.name for tool in kwargs["tools"]]
+        names = [tool.name for tool in kwargs["tools"] if tool.name != "submit_response_plan"]
 
         async def invoke(*args, **options):
             observed_tools.append(names)
-            return {"structured_response": plan, "messages": []}
+            return {"structured_response": plan, "messages": [completed_output(plan)]}
 
         return SimpleNamespace(ainvoke=invoke)
 
@@ -113,6 +114,7 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
                     include_model_content=False, include_binary_content=False, include_model_request_parameters=False
                 ),
                 tool_loader=current_tools,
+                output_client=ValidatingOutputClient(),
             )
             await agent.generate_plan("system", "first")
             await agent.generate_plan("system", "same catalog")

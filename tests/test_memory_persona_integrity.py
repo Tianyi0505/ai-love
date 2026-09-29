@@ -8,8 +8,9 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 import yaml
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableLambda
+from output_fixtures import ValidatingOutputClient, tool_call
 from sqlalchemy import select
 from test_memory_state import FakeKV
 
@@ -39,10 +40,10 @@ class RecordingModel:
         self.extraction = extraction
         self.requests = []
 
-    def with_structured_output(self, output_type, **kwargs):
+    def bind_tools(self, tools, *, tool_choice):
         async def invoke(messages):
             self.requests.append(messages)
-            if output_type is MemoryExtractionOutput:
+            if tool_choice == "submit_memory_extraction":
                 output = self.extraction
             elif "联系人长期认知" in messages[-1].content:
                 output = MemoryConsolidationOutput(markdown="# 联系人长期认知\n\n## 稳定偏好\n- 喜欢文字步骤。")
@@ -51,7 +52,7 @@ class RecordingModel:
                     markdown="# 自我长期认知\n\n## 核心身份\n- 我是服务器住客，没有主人。\n\n"
                     "## 重要经历\n- 在一次聊天中帮联系人整理排查思路。"
                 )
-            return {"parsed": output, "raw": AIMessage(content=""), "parsing_error": None}
+            return tool_call(output)
 
         return RunnableLambda(invoke)
 
@@ -105,6 +106,7 @@ async def memory_flow(private_database):
         models = MemoryModelPool(
             AgentDefinitionStore(FileConfiguration()), config.llm, config.observability,
             model_factory=lambda *args, **kwargs: model,
+            output_client_factory=lambda ai_id: ValidatingOutputClient(),
         )
         pipeline = MemoryPipeline(
             repo=EpisodeMemoryRepository(db, memory), state=state, models=models, bus=None, config=memory,

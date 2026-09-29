@@ -30,12 +30,14 @@ class MemoryModelPool:
         definitions,
         config: LLMSettings,
         observability: ObservabilitySettings,
+        output_client_factory,
         model_factory=None,
     ) -> None:
         self._definitions = definitions
         self._config = config
         self._observability = observability
         self._model_factory = model_factory
+        self._output_client_factory = output_client_factory
         self._models: dict[str, tuple[str, BaseChatModel]] = {}
         self._outputs: dict[tuple[str, type[BaseModel]], tuple[str, Runnable]] = {}
 
@@ -81,6 +83,7 @@ class MemoryModelPool:
                 model,
                 output_type,
                 attempts,
+                self._output_client_factory(ai_id),
             )
             self._outputs[key] = (definition.fingerprint, runnable)
         else:

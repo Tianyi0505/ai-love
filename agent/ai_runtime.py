@@ -49,6 +49,7 @@ from shared.contracts.rpc.social import CommentRequest, CommentResponse, SocialS
 from shared.contracts.social import SocialMessage
 from shared.contracts.turn import ResponseCommand
 from shared.global_settings_store import GlobalSettingsStore
+from shared.mcp_output_client import MCPOutputClient
 from shared.private_interaction_repository import PrivateInteractionRepository
 
 logger = logging.getLogger("ailove.ai-agent")
@@ -77,6 +78,7 @@ class AIRuntime:
 
         self.settings = await GlobalSettingsStore(self.cfg.config_provider).load()
         self._timeouts = self.settings.timeouts
+        output_client = MCPOutputClient(self.bus, self.ai_id, self._timeouts.tool_execute_sec)
         self.persona = Persona.from_definition(self.definition, self.settings.social)
         llm_config = self.settings.llm
 
@@ -115,6 +117,7 @@ class AIRuntime:
             image_config.max_tokens,
             image_config.retry_count,
             self.settings.observability,
+            output_client,
         )
         self.understanding = MessageUnderstanding(
             self.prompt_assembler,
@@ -164,6 +167,7 @@ class AIRuntime:
                 retry_count=llm_config.retry_count,
                 tool_retry_count=llm_config.tool_retry_count,
                 observability=self.settings.observability,
+                output_client=output_client,
                 tool_loader=current_tools if context else None,
             )
 
@@ -192,6 +196,7 @@ class AIRuntime:
             image_config.max_tokens,
             image_config.retry_count,
             self.settings.observability,
+            output_client,
         )
         tts_config = self.settings.tts
         self._tts_http_client = httpx.AsyncClient(timeout=self._timeouts.tts_request_sec)
@@ -247,6 +252,7 @@ class AIRuntime:
             max_attempts=min(llm_config.participation_max_requests, llm_config.retry_count + 1),
             max_tokens=group_repeat_max_tokens,
             observability=self.settings.observability,
+            output_client=output_client,
         )
         behavior_schedule = BehaviorSchedule.from_config(self.definition.behavior_policy)
         self.group_participation = GroupParticipationService(

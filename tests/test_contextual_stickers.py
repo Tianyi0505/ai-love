@@ -8,6 +8,7 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from output_fixtures import ValidatingOutputClient, tool_runnable
 
 from agent.conversation.conversation_context import ConversationContext
 from agent.conversation.multimodal_input import MessageInput
@@ -64,11 +65,12 @@ async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, 
         "parsed": StickerDecision(image_type=image_type, suitable=suitable, reason="根据图片和当前场景判断"),
         "raw": AIMessage(content=""), "parsing_error": None,
     })
-    model.with_structured_output.return_value = RunnableLambda(judge_call)
+    model.bind_tools.return_value = tool_runnable(RunnableLambda(judge_call))
     judge = StickerJudge(
         model, "vision", SimpleNamespace(data_urls=AsyncMock(return_value=("data:image/png;base64,YQ==",))),
         "根据图片和当前场景判断", 100, 0,
         SimpleNamespace(include_model_content=False, include_binary_content=False, include_model_request_parameters=False),
+        ValidatingOutputClient(),
     )
     plan = ResponsePlan(
         speech=[Speech(text=reply, delivery="text")],

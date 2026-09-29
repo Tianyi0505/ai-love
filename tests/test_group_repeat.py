@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from output_fixtures import ValidatingOutputClient, tool_runnable
 
 from agent.conversation.conversation_context import ConversationContext
 from agent.conversation.multimodal_input import MessageInput
@@ -135,7 +136,7 @@ class GroupRepeatJudgeTests(unittest.IsolatedAsyncioTestCase):
     def _judge(result, speaker_name="乙") -> tuple[GroupRepeatJudge, AsyncMock, Mock]:
         call = AsyncMock(return_value=result)
         model = MagicMock()
-        model.with_structured_output.return_value = RunnableLambda(call)
+        model.bind_tools.return_value = tool_runnable(RunnableLambda(call))
         conversation = ConversationContext(window_size=10)
         conversation.add_user("group", "123", "支持这个方案", speaker_id="person-1", speaker_name="甲")
         conversation.add_user("group", "123", "支持这个方案", speaker_id="person-2", speaker_name=speaker_name)
@@ -148,6 +149,7 @@ class GroupRepeatJudgeTests(unittest.IsolatedAsyncioTestCase):
             ai_name="洛雨",
             history_limit=7,
             max_attempts=1,
+            output_client=ValidatingOutputClient(),
             max_tokens=128,
             observability=SimpleNamespace(
                 include_model_content=False,

@@ -51,6 +51,7 @@ from shared.contracts.rpc.sticker import (
 )
 from shared.global_settings_store import GlobalSettingsStore
 from shared.lfu import LazyLFU, LFUConfig
+from shared.mcp_output_client import MCPOutputClient
 from shared.relationship_repository import RelationshipRepository
 
 
@@ -201,6 +202,9 @@ class MemoryModule:
                 self._definitions,
                 self._settings.llm,
                 self._settings.observability,
+                output_client_factory=lambda ai_id: MCPOutputClient(
+                    self._bus, ai_id, self._settings.timeouts.tool_execute_sec,
+                ),
                 model_factory=self._model_factory,
             ),
             bus=self._bus,

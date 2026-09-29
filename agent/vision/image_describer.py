@@ -18,6 +18,7 @@ from shared.langchain_structured_output import (
     parsed_output,
     structured_output_runnable,
 )
+from shared.mcp_output_client import MCPOutputClient
 
 
 class ImageDescriber:
@@ -31,6 +32,7 @@ class ImageDescriber:
         max_tokens: int,
         retry_count: int,
         observability: ObservabilitySettings,
+        output_client: MCPOutputClient,
     ) -> None:
         self._model_name = model_name
         self._fetcher = fetcher
@@ -42,6 +44,7 @@ class ImageDescriber:
             model,
             ImageDescription,
             retry_count + 1,
+            output_client,
         )
 
     async def describe(self, image_url: str) -> ImageDescription:

@@ -6,7 +6,6 @@ import logging
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
 from agent.conversation.conversation_context import ConversationContext, format_group_entries
@@ -15,6 +14,8 @@ from shared.contracts.social import ContentType, SocialMessage
 from shared.global_settings import ObservabilitySettings
 from shared.langchain_observability import model_span, record_messages_usage, record_model_content
 from shared.langchain_structured_output import parsed_output, structured_output_runnable
+from shared.mcp_output_client import MCPOutputClient
+from shared.structured_output_tools import GroupRepeatDecision as GroupRepeatDecision
 
 logger = logging.getLogger("ailove.ai-agent.group-repeat")
 
@@ -65,13 +66,6 @@ class GroupRepeatService:
         return claimed and message.type == ContentType.TEXT and not message.meta.get("at_user_ids")
 
 
-class GroupRepeatDecision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    repeat: bool = Field(description="是否适合由 AI 跟随复读当前消息")
-    reason: str = Field(description="简短的内部判断理由")
-
-
 class GroupRepeatJudge:
     def __init__(
         self,
@@ -85,6 +79,7 @@ class GroupRepeatJudge:
         max_attempts: int,
         max_tokens: int,
         observability: ObservabilitySettings,
+        output_client: MCPOutputClient,
     ) -> None:
         self._model_name = model_name
         self._conversation = conversation
@@ -93,7 +88,7 @@ class GroupRepeatJudge:
         self._history_limit = max(2, history_limit)
         self._max_tokens = max_tokens
         self._observability = observability
-        self._decision_model = structured_output_runnable(model, GroupRepeatDecision, max_attempts)
+        self._decision_model = structured_output_runnable(model, GroupRepeatDecision, max_attempts, output_client)
 
     async def should_repeat(self, chat_id: str) -> bool:
         try:

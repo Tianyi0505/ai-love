@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from output_fixtures import ValidatingOutputClient, tool_runnable
 
 from agent.social.sticker_collector import StickerCollector
 from agent.social.sticker_judge import StickerJudge
@@ -27,11 +28,11 @@ async def test_collection_requires_sticker_classification_even_with_high_score(i
     )
     call = AsyncMock(return_value={"parsed": output, "raw": AIMessage(content=""), "parsing_error": None})
     model = MagicMock()
-    model.with_structured_output.return_value = RunnableLambda(call)
+    model.bind_tools.return_value = tool_runnable(RunnableLambda(call))
     fetcher = SimpleNamespace(fetch=AsyncMock(return_value=FetchedImage(data=b"image", media_type="image/png")))
     vision = ImageDescriber(
         model, "vision", fetcher, VisionOutputPolicy(settings.image.output_limits),
-        settings.image.prompt, 100, 0, settings.observability,
+        settings.image.prompt, 100, 0, settings.observability, ValidatingOutputClient(),
     )
     stickers = SimpleNamespace(add=AsyncMock(return_value=True))
     collector = StickerCollector("ai-test", vision, stickers, settings.sticker.collect_min_quality)
@@ -51,12 +52,13 @@ async def test_unavailable_sticker_evaluation_keeps_text_reply(failure):
     fetcher = SimpleNamespace(data_urls=AsyncMock(return_value=("data:image/png;base64,YQ==",)))
     call = AsyncMock(side_effect=RuntimeError("判断服务不可用"))
     model = MagicMock()
-    model.with_structured_output.return_value = RunnableLambda(call)
+    model.bind_tools.return_value = tool_runnable(RunnableLambda(call))
     if failure == "fetch":
         fetcher.data_urls.side_effect = RuntimeError("图片获取失败")
     judge = StickerJudge(
         model, "vision", fetcher, "结合图片判断", 100, 0,
         SimpleNamespace(include_model_content=False, include_binary_content=False, include_model_request_parameters=False),
+        ValidatingOutputClient(),
     )
 
     assert not await judge.should_send("https://example.com/candidate.png", {"计划回复": "我陪着你"})
