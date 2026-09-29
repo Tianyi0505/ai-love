@@ -463,6 +463,9 @@ class EpisodeMemoryRepository:
                 )
                 .where(
                     m.MemoryAtom.ai_id == ai_id,
+                    m.MemoryAtom.owner_type == owner_type,
+                    m.MemoryAtom.owner_id == owner_id,
+                    m.MemoryAtom.consolidated_at.is_(None),
                     m.MemoryAtom.atom_id.in_([int(item) for item in atom_ids]),
                 )
                 .order_by(m.MemoryAtom.created_at, m.MemoryAtom.atom_id)
