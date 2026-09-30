@@ -170,7 +170,7 @@ llm:
 
 tts:
   provider: gptsovits
-  base_url: http://127.0.0.1:19881
+  base_url: http://127.0.0.1:9881
 
 image:
   model: qwen-vl-plus

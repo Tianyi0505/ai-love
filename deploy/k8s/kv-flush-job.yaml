@@ -8,8 +8,9 @@ spec:
   template:
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       restartPolicy: Never
       containers:
         - name: kvflush
@@ -20,7 +21,7 @@ spec:
                 name: ailove-secrets
           env:
             - name: AILOVE_BUS_URL
-              value: nats://127.0.0.1:14222
+              value: nats://nats:4222
           command:
             - sh
             - -c

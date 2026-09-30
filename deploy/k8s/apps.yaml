@@ -17,7 +17,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       containers:
       - name: gateway
         image: ailove/gateway:latest
@@ -39,7 +39,7 @@ spec:
         - name: OTEL_SDK_DISABLED
           value: 'true'
         - name: AILOVE_BUS_URL
-          value: nats://127.0.0.1:14222
+          value: nats://nats:4222
         - name: AILOVE_DATABASE_POOL_MIN_SIZE
           value: '1'
         - name: AILOVE_DATABASE_POOL_MAX_SIZE
@@ -87,7 +87,7 @@ spec:
         hostPath:
           path: /opt/ailove/data/plugins
           type: DirectoryOrCreate
-      dnsPolicy: Default
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
@@ -109,7 +109,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       containers:
       - name: director
         image: ailove/director:latest
@@ -131,7 +131,7 @@ spec:
         - name: OTEL_SDK_DISABLED
           value: 'true'
         - name: AILOVE_BUS_URL
-          value: nats://127.0.0.1:14222
+          value: nats://nats:4222
         - name: AILOVE_CONFIG_DIRECTORY
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
@@ -171,7 +171,7 @@ spec:
         hostPath:
           path: /opt/ailove/data/plugins
           type: DirectoryOrCreate
-      dnsPolicy: Default
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
@@ -193,7 +193,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       containers:
       - name: ai-agent
         image: ailove/ai-agent:latest
@@ -203,7 +203,7 @@ spec:
             name: ailove-secrets
         env:
         - name: AILOVE_REDIS_URL
-          value: redis://127.0.0.1:16379/0
+          value: redis://redis:6379/0
         - name: AILOVE_CONFIG_RETRY_COUNT
           value: '5'
         - name: AILOVE_CONFIG_RETRY_INTERVAL_SEC
@@ -217,7 +217,7 @@ spec:
         - name: OTEL_SDK_DISABLED
           value: 'true'
         - name: AILOVE_BUS_URL
-          value: nats://127.0.0.1:14222
+          value: nats://nats:4222
         - name: AILOVE_DATABASE_POOL_MIN_SIZE
           value: '1'
         - name: AILOVE_DATABASE_POOL_MAX_SIZE
@@ -265,7 +265,7 @@ spec:
         hostPath:
           path: /opt/ailove/data/plugins
           type: DirectoryOrCreate
-      dnsPolicy: Default
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
@@ -372,7 +372,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       containers:
       - name: live-edge
         image: ailove/live-edge:latest
@@ -394,7 +394,7 @@ spec:
         - name: OTEL_SDK_DISABLED
           value: 'true'
         - name: AILOVE_BUS_URL
-          value: nats://127.0.0.1:14222
+          value: nats://nats:4222
         - name: AILOVE_CONFIG_DIRECTORY
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
@@ -438,7 +438,7 @@ spec:
         hostPath:
           path: /opt/ailove/data/plugins
           type: DirectoryOrCreate
-      dnsPolicy: Default
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 180
 ---
 apiVersion: v1
@@ -472,7 +472,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       containers:
       - name: mcp
         image: ailove/mcp:latest
@@ -482,7 +482,7 @@ spec:
             name: ailove-secrets
         env:
         - name: AILOVE_BUS_URL
-          value: nats://127.0.0.1:14222
+          value: nats://nats:4222
         - name: AILOVE_CONFIG_DIRECTORY
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
@@ -516,7 +516,7 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: Default
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 180
 ---
 apiVersion: apps/v1
@@ -538,7 +538,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       containers:
       - name: extension-host
         image: ailove/extension-host:latest
@@ -560,7 +560,7 @@ spec:
         - name: OTEL_SDK_DISABLED
           value: 'true'
         - name: AILOVE_BUS_URL
-          value: nats://127.0.0.1:14222
+          value: nats://nats:4222
         - name: AILOVE_CONFIG_DIRECTORY
           value: /app/config
         - name: AILOVE_CONFIG_SECRET_DIRECTORY
@@ -594,5 +594,5 @@ spec:
       - name: runtime-config-secrets
         secret:
           secretName: ailove-config-secrets
-      dnsPolicy: Default
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 180

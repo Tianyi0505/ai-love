@@ -8,8 +8,9 @@ spec:
   template:
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
-        ailove.role: app
+        ailove.role: core
       restartPolicy: Never
       containers:
         - name: dbmigrate

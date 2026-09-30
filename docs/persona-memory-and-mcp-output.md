@@ -90,3 +90,13 @@ LLM 在本地测试中由可控响应替代，验证的是协议、来源约束�
 2026-09-30 11:38:33（北京时间），app 节点 iziahxpba1nr6oz 状态转为 Unknown，最后心跳为 11:36:55。稍后复查时，6 个 app 服务的旧 Pod 处于 Terminating，新 Pod 因节点不可达而 Pending。从本地和 core 发起 SSH 均在 banner 握手阶段超时。core、管理页面、NATS、Redis 和 gptsovits 仍正常。发布成功时的验收记录不代表故障后的当前可用状态。
 
 需要通过云控制台恢复 app 节点，再检查插件、业务调用及余下归档清理。app 的旧发布归档和旧临时传输包尚未删除；长期离线的 edge 节点也无法核验或清理。MCP 日志另有 localhost:4317 链路追踪收集器连接失败，业务 MCP 验收通过；可观测性上报需要单独恢复。
+
+## 2026-09-30 core 节点迁移
+
+按用户要求，将 app 上的 gateway、ai-agent、director、extension-host、mcp、live-edge 迁移至在线的 ailove-core（106.55.16.95）。离线 app 与 edge 已 cordon。旧 app Pod 已从控制面移除，Deployment 选择器固定为 core；离线节点恢复后仍需核对旧进程已退出，避免重复消费。
+
+6 个服务改用集群 NATS 地址与 ClusterFirstWithHostNet DNS，Agent 使用集群 Redis 地址。线上 ConfigMap 中 NapCat 地址改为 core 的 3000/3001 端口，语音客户端改为 9881。镜像继续使用 persona-mcp-1d54f85-20260930，无需重新构建。运行配置与迁移前 Deployment 备份位于 deploy/private/core-migration-20260930。
+
+验收：10 个 Pod 全部 Running/Ready、零重启；7 个宿主和 18 个插件 active；真实模型直接回复、Agent 回复和记忆提取成功，七类 MCP 往返通过；网关日志确认 NapCat WebSocket 已连接。自我文档继续更新至版本 47，管理接口校验通过。迁移后节点可用内存约 845MB，Agent 实测约 283MiB。NapCat 容器及启动时间保持原值。
+
+共享数据库、NATS、Redis 与 core 已有数据继续使用。离线 app 的本地文件和插件操作日志暂时无法读取；新宿主按插件清单重建默认启用状态，与上次验收的 18 个 active 插件一致。离线节点的文件恢复及旧镜像归档清理仍待节点可访问后处理。模型调用期间出现过一次上游超时，后续真实调用验收成功。
