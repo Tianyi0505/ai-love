@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, create_model
+from pydantic import BaseModel, BeforeValidator, ConfigDict, create_model
 
 from shared.contracts.memory_output import MemoryConsolidationOutput, MemoryExtractionOutput
 from shared.contracts.response_output import ParticipationDecision, ResponsePlan
@@ -14,6 +16,11 @@ class GroupRepeatDecision(BaseModel):
 
     repeat: bool
     reason: str
+
+
+def _decode_tool_result(value: object) -> object:
+    """Normalize JSON-encoded tool arguments from model gateways before validation."""
+    return json.loads(value) if isinstance(value, str) else value
 
 
 @dataclass(frozen=True)
@@ -28,7 +35,7 @@ class OutputTool:
         arguments = create_model(
             f"{output_type.__name__}Submission",
             __config__=ConfigDict(extra="forbid"),
-            result=(output_type, ...),
+            result=(Annotated[output_type, BeforeValidator(_decode_tool_result)], ...),
         )
         return cls(name, description, output_type, arguments)
 

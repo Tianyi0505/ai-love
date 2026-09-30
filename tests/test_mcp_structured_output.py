@@ -12,7 +12,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import StructuredTool
 from mcp import Client
 from output_fixtures import tool_call
-from pydantic import Field
+from pydantic import Field, ValidationError
 from test_plugin_runtime import command, manifest
 
 from agent.conversation.chat_agent import ChatAgent
@@ -109,11 +109,15 @@ OUTPUTS = (
 )
 
 
+@pytest.mark.parametrize("encoded", [False, True])
 @pytest.mark.parametrize("output", OUTPUTS, ids=lambda value: type(value).__name__)
-async def test_model_tool_call_crosses_gateway_and_real_mcp_http(output_service, output):
+async def test_model_tool_call_crosses_gateway_and_real_mcp_http(output_service, output, encoded):
     from shared.langchain_structured_output import parsed_output, structured_output_runnable
 
-    model = ScriptedToolModel(responses=[tool_call(output)])
+    message = tool_call(output)
+    if encoded:
+        message.tool_calls[0]["args"]["result"] = output.model_dump_json()
+    model = ScriptedToolModel(responses=[message])
     runnable = structured_output_runnable(model, type(output), 1, output_service.client)
     result = await runnable.ainvoke([HumanMessage(content="给出本轮结论")])
     assert parsed_output(result, type(output)) == output
@@ -134,13 +138,17 @@ def chat(model, service, tools=()):
     )
 
 
-async def test_chat_graph_uses_business_result_then_mcp_final_tool(output_service):
+@pytest.mark.parametrize("encoded", [False, True])
+async def test_chat_graph_uses_business_result_then_mcp_final_tool(output_service, encoded):
     async def lookup(query: str) -> str:
         return "已核实资料"
 
+    final_call = tool_call(PLAN)
+    if encoded:
+        final_call.tool_calls[0]["args"]["result"] = PLAN.model_dump_json()
     model = ScriptedToolModel(responses=[
         AIMessage(content="", tool_calls=[{"id": "lookup", "name": "lookup", "args": {"query": "资料"}}]),
-        tool_call(PLAN),
+        final_call,
     ])
     agent = chat(model, output_service, [StructuredTool.from_function(coroutine=lookup, description="查询资料")])
     assert await agent.generate_plan("结果通过 submit_response_plan 提交", "你好") == PLAN
@@ -171,3 +179,9 @@ async def test_mcp_rejects_invalid_shapes_and_gateway_enforces_ai_permission(out
 async def test_plain_text_graph_result_is_rejected(output_service):
     with pytest.raises(ValueError, match="MCP"):
         await chat(ScriptedToolModel(responses=[AIMessage(content="你好")]), output_service).generate_plan("提交结论", "你好")
+
+
+@pytest.mark.parametrize("result", ['{"speech":"bad"}', "[]", "null", "invalid json"])
+async def test_encoded_tool_arguments_keep_contract_validation(output_service, result):
+    with pytest.raises(ValidationError):
+        await output_service.client.submit(ResponsePlan, {"result": result})
