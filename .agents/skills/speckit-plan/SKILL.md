@@ -1,12 +1,13 @@
 ---
 name: "speckit-plan"
-description: "Execute the implementation planning workflow using the plan template to generate design artifacts."
-compatibility: "Requires spec-kit project structure with .specify/ directory"
+description: "功能实施所需的设计产物"
+compatibility: "适用于具有 .specify/ 目录的 Spec Kit 项目"
 metadata:
   author: "github-spec-kit"
   source: "templates/commands/plan.md"
 ---
 
+# 功能实施所需的设计产物
 
 ## User Input
 
@@ -14,153 +15,36 @@ metadata:
 $ARGUMENTS
 ```
 
-You **MUST** consider the user input before proceeding (if not empty).
+当前用户目标和已有授权是产物范围的依据。
 
-## Pre-Execution Checks
+## 上下文入口
 
-**Check for extension hooks (before planning)**:
-- Check if `.specify/extensions.yml` exists in the project root.
-- If it exists, read it and look for entries under the `hooks.before_plan` key
-- If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
-- Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
-- For each remaining hook, do **not** attempt to interpret or evaluate hook `condition` expressions:
-  - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
-  - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
-- When constructing command invocations from hook command names, replace dots (`.`) with hyphens (`-`). For example, `speckit.git.commit` → `$speckit-git-commit`.
-- For each executable hook, output the following based on its `optional` flag:
-  - **Optional hook** (`optional: true`):
-    ```
-    ## Extension Hooks
+```powershell
+.specify/scripts/powershell/setup-plan.ps1 -Json
+```
 
-    **Optional Pre-Hook**: {extension}
-    Command: `/{command}`
-    Description: {description}
+上下文结果包含适用的 FEATURE_DIR、AVAILABLE_DOCS、模板内容和实际分支。路径采用绝对定位，文档引用采用相对路径。项目宪章提供适用原则，完整输入对应可交付产物。
 
-    Prompt: {prompt}
-    To execute: `/{command}`
-    ```
-  - **Mandatory hook** (`optional: false`):
-    ```
-    ## Extension Hooks
+## 产物
 
-    **Automatic Pre-Hook**: {extension}
-    Executing: `/{command}`
-    EXECUTE_COMMAND: {command}
+| 文档 | 结果 |
+| --- | --- |
+| plan.md | Summary、Technical Context、Constitution Check、Project Structure 和设计收益 |
+| research.md | Decision、Rationale 与适用依据 |
+| data-model.md | 实体、字段、关联、唯一性及状态语义 |
+| contracts/ | 适用外部接口的当前输入、输出、授权和结果 |
+| quickstart.md | 环境条件、运行入口和端到端验收标准 |
 
-    Wait for the result of the hook command before proceeding to the Outline.
-    ```
-    After emitting the block above you MUST actually invoke the hook and wait for it to finish before continuing. Run it the same way you would run the command yourself in this agent/session (the invocation may differ from the literal `{command}` id shown above, e.g. a skills-mode agent runs it as `/skill:speckit-...` or `$speckit-...`). Emitting the block alone does not run the hook.
-- If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+当前规格与宪章是设计依据。技术决策具有明确理由，数据和权限归属与用户目标一致，宪章检查覆盖适用原则。外部接口契约的生成条件为实际公开接口需求。
 
-## Outline
+## 交付范围
 
-1. **Setup**: Run `.specify/scripts/powershell/setup-plan.ps1 -Json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
+设计完成状态以可实施的技术选择和完整产物为依据。quickstart 提供运行及验收入口，完整实现归 tasks 与 implement。文件操作采用绝对路径，文档引用采用项目相对路径。
 
-2. **Load context**: Read FEATURE_SPEC and `.specify/memory/constitution.md`. Load IMPL_PLAN template (already copied).
+交付报告包含实际 Git 分支、计划绝对路径、生成文档及设计检查结果。
 
-3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
-   - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
-   - Fill Constitution Check section from constitution
-   - Evaluate gates (ERROR if violations unjustified)
-   - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
-   - Phase 1: Generate data-model.md, contracts/, quickstart.md
-   - Re-evaluate Constitution Check post-design
+## 扩展结果契约
 
-## Mandatory Post-Execution Hooks
+扩展定义来源为 `.specify/extensions.yml`，作用点为 `hooks.before_plan` 与 `hooks.after_plan`。有效 YAML 的已启用条目具有执行资格，enabled 默认值为 true。带 condition 的条目由 HookExecutor 求值，空条件条目适用当前会话执行器。
 
-**You MUST complete this section before reporting completion to the user.**
-
-Check if `.specify/extensions.yml` exists in the project root.
-- If it does not exist, or no hooks are registered under `hooks.after_plan`, skip to the Completion Report.
-- If it exists, read it and look for entries under the `hooks.after_plan` key.
-- If the YAML cannot be parsed or is invalid, skip hook checking silently and continue to the Completion Report.
-- Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
-- For each remaining hook, do **not** attempt to interpret or evaluate hook `condition` expressions:
-  - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
-  - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
-- When constructing command invocations from hook command names, replace dots (`.`) with hyphens (`-`). For example, `speckit.git.commit` → `$speckit-git-commit`.
-- For each executable hook, output the following based on its `optional` flag:
-  - **Mandatory hook** (`optional: false`) — **You MUST emit `EXECUTE_COMMAND:` for each mandatory hook**:
-    ```
-    ## Extension Hooks
-
-    **Automatic Hook**: {extension}
-    Executing: `/{command}`
-    EXECUTE_COMMAND: {command}
-    ```
-    After emitting the block above you MUST actually invoke the hook and wait for it to finish before continuing. Run it the same way you would run the command yourself in this agent/session (the invocation may differ from the literal `{command}` id shown above, e.g. a skills-mode agent runs it as `/skill:speckit-...` or `$speckit-...`). Emitting the block alone does not run the hook.
-  - **Optional hook** (`optional: true`):
-    ```
-    ## Extension Hooks
-
-    **Optional Hook**: {extension}
-    Command: `/{command}`
-    Description: {description}
-
-    Prompt: {prompt}
-    To execute: `/{command}`
-    ```
-
-## Completion Report
-
-Command ends after Phase 1 design. Report branch, IMPL_PLAN path, and generated artifacts.
-
-## Phases
-
-### Phase 0: Outline & Research
-
-1. **Extract unknowns from Technical Context** above:
-   - For each NEEDS CLARIFICATION → research task
-   - For each dependency → best practices task
-   - For each integration → patterns task
-
-2. **Generate and dispatch research agents**:
-
-   ```text
-   For each unknown in Technical Context:
-     Task: "Research {unknown} for {feature context}"
-   For each technology choice:
-     Task: "Find best practices for {tech} in {domain}"
-   ```
-
-3. **Consolidate findings** in `research.md` using format:
-   - Decision: [what was chosen]
-   - Rationale: [why chosen]
-   - Alternatives considered: [what else evaluated]
-
-**Output**: research.md with all NEEDS CLARIFICATION resolved
-
-### Phase 1: Design & Contracts
-
-**Prerequisites:** `research.md` complete
-
-1. **Extract entities from feature spec** → `data-model.md`:
-   - Entity name, fields, relationships
-   - Validation rules from requirements
-   - State transitions if applicable
-
-2. **Define interface contracts** (if project has external interfaces) → `/contracts/`:
-   - Identify what interfaces the project exposes to users or other systems
-   - Document the contract format appropriate for the project type
-   - Examples: public APIs for libraries, command schemas for CLI tools, endpoints for web services, grammars for parsers, UI contracts for applications
-   - Skip if project is purely internal (build scripts, one-off tools, etc.)
-
-3. **Create quickstart validation guide** → `quickstart.md`:
-   - Document runnable validation scenarios that prove the feature works end-to-end
-   - Include prerequisites, setup commands, test/run commands, and expected outcomes
-   - Use links or references to contracts and data model details instead of duplicating them
-   - Do not include full implementation code, model/service/controller bodies, migrations, or complete test suites
-   - Keep this artifact as a validation/run guide; implementation details belong in `tasks.md` and the implementation phase
-
-**Output**: data-model.md, /contracts/*, quickstart.md
-
-## Key rules
-
-- Use absolute paths for filesystem operations; use project-relative paths for references in documentation
-- ERROR on gate failures or unresolved clarifications
-
-## Done When
-
-- [ ] Plan workflow executed and design artifacts generated
-- [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
-- [ ] Completion reported to user with branch, plan path, and generated artifacts
+命令标识中的点对应连字符，例如 speckit.git.commit 对应 speckit-git-commit。`optional: false` 的完成凭证包含 `EXECUTE_COMMAND: {command}` 及真实命令结果；`optional: true` 的报告包含命令、描述和用户提示，执行资格依据用户选择。扩展结果与主产物共同组成完成报告。

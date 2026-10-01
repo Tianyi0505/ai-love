@@ -1,23 +1,15 @@
-### Agent System
+# Live Edge 运行边界
 
-**Live Edge Service** (`live/edge_service.py`):
 
-- 进程入口是 `python -m live.edge_service`；`LiveEdgeService` 继承 `BaseService`，以 `live-edge` 使用 Kubernetes 挂载配置，并在一个 edge 侧进程内组合 avatar 与 stream。
-- 模块按 `AvatarModule`、`StreamModule` 顺序启动，按相反顺序停止。任一模块启动失败时必须清理已经启动的模块，不能留下部分可用的 edge 进程。
-- `live-edge` 是部署边界；`live/avatar` 与 `live/stream` 是进程内模块，不应恢复成独立服务或各自创建 NATS 连接。
+`LiveEdgeService` 以 `live-edge` 承载 AvatarModule 与 StreamModule，共享 Kubernetes 配置及 Bus。现有入口为 `python -m live.edge_service`，插件边界见 [插件运行时](../docs/plugin-runtime.md)。
 
-**Avatar Module** (`live/avatar/avatar_module.py`):
+## 模块结果
 
-- 订阅 `avatar.command.>` 并处理 `AvatarCommand`。模块使用宿主注入的共享 Bus，保存 subscription，并在 `stop()` 中显式 unsubscribe。
-- Avatar 负责形象和舞台事件适配，不承载 Agent 回复决策。
+| 模块 | 输入契约 | 职责 |
+| --- | --- | --- |
+| AvatarModule | avatar.command.> / AvatarCommand | 形象及舞台事件适配 |
+| StreamModule | obs.control / StreamControl | OBS 与推流控制适配 |
 
-**Stream Module** (`live/stream/stream_module.py`):
+模块具有各自订阅句柄，停止完成表示句柄已释放；服务状态对应完整模块集合。共享连接归宿主，回复决策归 Agent。现有外部执行范围以具体适配器的回执为准。
 
-- 订阅 `obs.control` 并处理 `StreamControl`。OBS WebSocket 地址和推流密钥来自 `LiveEdgeSettings`，不写入源码或日志。
-- Stream 负责 OBS/推流控制；新增真实适配器时保留模块生命周期和共享 Bus 边界。
-
-**Runtime Configuration** (`service.live-edge`):
-
-- `instance_addr`：Kubernetes 挂载配置 注册地址。
-- `obs_ws_url`：OBS WebSocket 地址。
-- `stream_key`：推流密钥；只能通过部署环境注入 Kubernetes 挂载配置 模板值，不能提交真实值。
+service.live-edge 的字段为 instance_addr、obs_ws_url 和 stream_key。真实推流密钥由部署 Secret 提供，源码及公开配置承载引用或模板。

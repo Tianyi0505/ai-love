@@ -1,55 +1,45 @@
 # AI-Love 插件运行时
 
-业务能力通过本地清单注册，由统一宿主管理生命周期；管理页面位于 `#/plugins`（能力工坊）。当前共有 17 个内置插件、7 种宿主。原有领域代码通过适配器接入，模型、渠道、语音实现通过工厂注册表注入。
+业务能力由本地 `plugin.json` 清单、稳定契约和统一宿主管理。基础目录包含 17 个插件、7 种宿主；structured-output 的结果工具见 [人设与 MCP 结果](persona-memory-and-mcp-output.md)。管理页为 `#/plugins`（能力工坊）。
 
-## 架构与边界
+## 架构结果
 
-```mermaid
-flowchart LR
-    UI[能力工坊] --> API[登录会话与同源检查]
-    API --> RPC[NATS 控制协议]
-    RPC --> Host[通用插件宿主]
-    Host --> Manager[生命周期与依赖管理]
-    Manager --> Journal[SQLite 状态与操作日志]
-    Manager --> Catalog[本地 plugin.json 清单]
-    Manager --> Scope[资源作用域]
-    Manager --> Business[业务插件与工厂插件]
-    Scope --> Resources[订阅 / 任务 / 定时器 / 配置监听 / HTTP]
-```
+| 边界 | 职责 |
+| --- | --- |
+| plugin_runtime | 发现、契约、能力解析、生命周期与控制面 |
+| plugins/components.py | 现有服务适配 |
+| 资源作用域 | 订阅、后台任务、定时器、配置监听、HTTP 与清理回调 |
+| 工厂注册表 | 模型、渠道、语音的清单配置与 Python entry points |
+| SQLite WAL | 期望状态、修订号与幂等操作记录 |
+| 管理外壳 | 登录、同源检查、预检与持久操作查询 |
 
-- **小内核**：`plugin_runtime` 只承担发现、契约、能力解析、生命周期和控制面。没有业务包的静态导入；空目录启动无需导入业务实现。
-- **依赖倒置**：插件只通过 `context.require()` 取得声明的能力，通过 `context.provide()` 导出能力；同一宿主中每个依赖必须有唯一已安装提供者。
-- **适配器**：`plugins/components.py` 复用已有服务；总线、调度器、配置监听和 HTTP 入口统一纳入资源作用域。
-- **工厂与策略**：模型、渠道和语音实现由清单配置与 Python entry points 提供；新增实现无需增加内核分支。
-- **控制面独立**：业务初始化失败仍可查看日志、停用、重试；管理入口和基础设施属于宿主，不作为可自我卸载的业务插件。
+`context.require()` 返回声明能力，`context.provide()` 导出能力。单宿主依赖以唯一已安装提供者解析。控制面及基础设施由宿主拥有，业务状态可通过独立管理入口查询。
 
-## 内置目录
+## 基础插件目录
 
-| 宿主 | 插件 ID | 负责内容 |
+| 宿主 | 插件 ID | 能力 |
 | --- | --- | --- |
 | ai-agent | agent.environment | Redis、数据库和人物资源 |
-| ai-agent | models | 模型策略和创建工厂 |
-| ai-agent | memory | 记忆、关系、表情等现有 Memory Module |
+| ai-agent | models | 模型策略与创建工厂 |
+| ai-agent | memory | 记忆、关系、表情 |
 | ai-agent | speech.clients | 语音调用适配器工厂 |
 | ai-agent | agent | 对话、私聊、群聊、主动联系与人物运行时 |
 | gateway | channels | 平台渠道工厂 |
 | gateway | gateway | 平台连接、消息归一化与投递 |
-| gptsovits | speech.engines | 语音合成引擎工厂 |
+| gptsovits | speech.engines | 语音引擎工厂 |
 | gptsovits | speech.server | HTTP / NATS 语音服务 |
-| extension-host | tools | 工具发现、授权与调用网关 |
+| extension-host | tools | 工具发现、授权与调用 |
 | mcp | mcp.server | MCP HTTP 服务 |
-| mcp | music | 音乐指令工具，沿用现有记录指令实现 |
+| mcp | music | 音乐指令记录 |
 | mcp | weather | 天气工具 |
-| mcp | web-search | 搜索工具 |
+| mcp | web-search | 网络搜索 |
 | director | director | 直播导演与调度 |
-| live-edge | avatar | 形象指令 |
-| live-edge | stream | 推流控制 |
+| live-edge | avatar | 形象事件 |
+| live-edge | stream | 推流事件 |
 
-模型供应商、具体渠道等目前在相应工厂插件内注册，并非每个实现都具有独立生命周期。`specs/002-plugin-architecture` 中的早期拆包草案不等于本次已全部完成；本实现的交付范围以此目录和验证报告为准。
+具体供应商由工厂插件注册。交付能力以此目录和[验证结果](plugin-validation.md)为准；[独立包架构规格](../specs/002-plugin-architecture/spec.md)描述更完整的目标。
 
-## 启动与管理
-
-在项目根目录中使用项目现有 Python 依赖环境：
+## 运行与管理契约
 
 ```powershell
 $env:AILOVE_BUS_URL = 'nats://127.0.0.1:4222'
@@ -57,45 +47,32 @@ $env:AILOVE_PLUGIN_STATE_DIR = 'data/plugins'
 python -m plugin_runtime --role live-edge
 ```
 
-其他角色分别为 `gateway`、`ai-agent`、`gptsovits`、`extension-host`、`mcp`、`director`。每个角色独立进程。同一 NATS 环境中每种角色只运行一个宿主。业务使用Kubernetes 挂载配置、数据库、Redis 和密钥环境配置；基础设施未就绪时可在管理页看到启动失败。
+其他角色为 gateway、ai-agent、gptsovits、extension-host、mcp、director。同一 NATS 环境中，每种角色有一个活动宿主；管理后端使用相同总线地址和凭据。
 
-运行现有管理后端与前端，确保后端的 `AILOVE_BUS_URL` / `AILOVE_BUS_TOKEN` 与宿主一致。登录后进入“能力工坊”：
+管理页提供真实状态、依赖、在途回调、操作记录和影响范围。级联停用由显式依赖范围决定。操作 ID 的重复请求对应同一持久结果。
 
-1. 搜索或按宿主筛选，查看真实状态、能力依赖、在途回调和最近操作。
-2. 点击安装、启用、停用、重新启动或移除，先查看变更预检。
-3. 停用被其他插件依赖的能力时，必须勾选一并停用依赖插件；预检给出实际顺序和范围。
-4. 提交后等待状态更新；请求超时可使用原操作 ID 重试，重复请求不会重复执行。
+清单 `enabled` 决定首次启动意图，运行状态以持久记录为准。新增目录项的初始状态为 `uninstalled`，业务代码执行资格由安装和启用状态决定。
 
-首次启动时，内置清单的 `enabled` 提供初始状态；之后以持久化状态为准。运行中刷新发现的新插件保持“未安装”，需要手动安装再启用。刷新不会自动执行新增代码。
+`install` 登记本地已交付插件；`remove` 的结果保留交付文件、操作历史和业务数据。交付方式为宿主可导入路径中的本地受信任代码。Docker、Compose、Kubernetes 使用统一插件入口、状态卷和控制连接。
 
-`install` 是登记本地已交付插件；`remove` 停止实例并移除安装状态，保留交付文件、操作历史和业务数据。管理页面不执行网络下载、pip 安装或文件上传。
+## 状态与资源结果
 
-Dockerfile 已使用统一插件入口。Compose 和 Kubernetes 清单已补上状态卷与控制连接；这些文件是本地变更，需按现有部署流程交付。**不要并行运行旧入口与新宿主**，否则会重复消费业务消息。旧 Python 入口保留用于既有调用方，但不提供插件管理控制面。
+`active` 表示声明能力已完整导出；停止完成表示业务入口闭合、在途工作排空且实例资源释放。控制阶段预算为 30 秒，排空预算为 60 秒。`failed` 保留实例所有权与资源诊断，重试资格由实际状态决定。
 
-## 生命周期与失败语义
+单宿主变更采用串行控制。重启后期望状态和操作历史保留，中断操作记录为 `interrupted`。级联操作的结果包含每个插件的实际状态。
 
-启用按依赖拓扑执行 `initialize → start`，全部声明能力导出后才标记 active。停用按反向依赖执行：
+MCP 工具目录与工具网关同步，新对话使用最新工具图，当前回合持有自身快照；执行授权以实际活动工具和当前权限为准。普通对话与本地工具具有独立能力边界。
 
-1. 撤销能力导出，封锁新回调并停止新消息入口。
-2. 等待已进入的 HTTP / 总线 / 定时回调和已有业务工作排空。
-3. 执行 `stop → dispose`，取消托管任务并反向释放资源。
+## 插件示例
 
-初始化/启动、停止、销毁分别有 30 秒预算，排空有 60 秒预算。超时或释放失败会保留实例所有权，标记 failed；管理员可重试停用再启用。不会将尚未清理的实例伪装成已卸载。
-
-同一宿主串行执行变更；SQLite WAL 保存期望状态、修订号与幂等操作记录。重启恢复期望状态，中断操作标记 interrupted。批量级联失败可能已经完成部分插件的启停，不提供业务事务回滚，应查看每项实际状态后处理。
-
-MCP 工具变化通过真实工具列表传播到工具网关，智能体在下一轮对话刷新工具图；已开始的一轮继续使用它捕获的工具图。已被撤销的远程工具调用仍可能失败，由现有工具错误处理接管。MCP 服务离线时撤销远程工具，保留普通对话与本地工具。
-
-## 接入自己的插件
-
-示例代码：`examples/plugin_echo.py`；清单：`examples/plugin-catalog/echo/plugin.json`。
+交付示例位于 `examples/plugin_echo.py` 和 `examples/plugin-catalog/echo/plugin.json`。
 
 ```powershell
 $env:AILOVE_PLUGIN_PATH = (Resolve-Path 'examples/plugin-catalog').Path
 python -m plugin_runtime --role live-edge
 ```
 
-在同一已配置目录下增加 `任意目录/plugin.json` 后，点击“刷新目录”即可发现。`--catalog` 可重复指定，显式使用时替代内置目录；`AILOVE_PLUGIN_PATH` 追加搜索目录（Windows 用分号，Linux 用冒号）。`entrypoint` 对应的 Python 模块必须已交付到宿主可导入路径。
+`--catalog` 可重复指定，显式目录替代内置目录；`AILOVE_PLUGIN_PATH` 追加目录，Windows 使用分号，Linux 使用冒号。每个 entrypoint 位于宿主可导入路径。
 
 ```python
 from plugin_runtime import Plugin
@@ -111,14 +88,12 @@ class EchoPlugin(Plugin):
         return payload
 ```
 
-使用 `resources.spawn()` 创建托管任务；`resources.defer()` 登记最终清理；`resources.on_quiesce()` 停止新工作；异步外部回调通过 `resources.guard()` 包装。资源清理需要允许部分初始化和重复尝试。不要直接创建脱离作用域的订阅、后台任务或全局缓存。
+`resources.spawn()` 对应托管任务，`defer()` 对应最终清理，`on_quiesce()` 对应入口闭合，`guard()` 对应受管异步回调。资源契约覆盖部分初始化和重复清理。
 
-## 当前限制
+## 能力范围
 
-- 插件为受信任的进程内 Python 代码。作用域管理生命周期，不是权限沙箱；不接受不可信代码上传。NATS 控制 subject 应沿用现有受控网络与访问凭据。
-- 支持运行中发现新增模块、安装、启停、移除与重新创建实例。Python 已导入模块的代码替换需要重启宿主；没有承诺 importlib.reload、无损代码升级或逐供应商热替换。
-- 能力依赖图在单宿主内解析；跨宿主仍通过现有 NATS / HTTP 协议调用，不做分布式启停事务。
-- 文件锁防止共用同一状态目录的本地重复进程；不充当跨机器分布式主节点选举。状态目录必须持久化。
-- 业务插件保留原有业务数据，不保证取消所有已发出的外部请求，也不会在未知投递结果时重新发送消息。
-
-验证范围见 [验证记录](plugin-validation.md)。
+- 进程内插件的信任范围为已审核 Python 代码，资源作用域提供生命周期管理。
+- 模块发现、安装、启停、移除和实例重建适用于运行中的宿主；已导入代码的替换生效方式为宿主重启。
+- 依赖图属于单宿主；跨宿主调用采用 NATS / HTTP 契约。
+- 文件锁的作用域为共用本地状态目录的进程，状态目录具有持久化要求。
+- 外部动作的确认依据为平台结果；`unknown` 保留定位资料和核实入口。

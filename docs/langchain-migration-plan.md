@@ -1,64 +1,33 @@
-# LangChain 迁移改造清单
+# LangChain 能力设计结果
 
-## 依赖
+本文描述 LangChain 适配的目标产物和验收条件。
 
-- 用 `langchain`、`langchain-deepseek`、`langchain-openai`、`langchain-anthropic` 替换 `pydantic-ai-slim`。
-- 将 `requirements.txt` 恢复为项目直接运行依赖清单并固定已验证版本。
-- 将 `websockets` 固定为与 LangGraph 依赖约束兼容的版本。
+## 依赖与模型
 
-## 模型创建
+运行依赖包含固定版本的 `langchain`、`langchain-deepseek`、`langchain-openai`、`langchain-anthropic` 和满足 LangGraph 约束的 `websockets`。`requirements.txt` 表达直接运行依赖。
 
-- 新增 `shared/infrastructure/chat_model_factory.py`。
-- 根据 Agent 选择的模型 ID 从全局 `llm.models` 读取 provider、模型名、地址和密钥环境变量，并通过对应策略创建 DeepSeek、Anthropic 或 OpenAI chat model。
-- 注入 API key、base URL、最大输出 token、请求超时和网络重试次数。
-- 为图片理解提供 OpenAI-compatible 模型创建入口和共享异步 HTTP client。
+模型工厂按 Agent 模型 ID 解析 `llm.models` 的 provider、模型名、地址和密钥环境变量，提供 DeepSeek、Anthropic、OpenAI chat model。每个实例包含 API key、base URL、输出预算、请求超时和有限重试配置。图片模型具有 OpenAI-compatible 入口与共享异步 HTTP client。
 
-## 结构化输出
+## 结果契约
 
-- 新增 `shared/infrastructure/langchain_structured_output.py`。
-- 使用 `with_structured_output(..., include_raw=True)` 生成 Pydantic 输出。
-- 将解析错误转为可重试异常，并按请求次数与重试配置限制调用次数。
-- 从结果中统一读取已解析对象并透传解析异常。
+| 能力 | 目标结果 |
+| --- | --- |
+| 结构化输出 | with_structured_output(..., include_raw=True) 返回已解析 Pydantic 对象与可定位解析结果 |
+| 工具回复 | create_agent 与 ToolStrategy(ResponsePlan) 返回合法回复计划 |
+| 调用预算 | ModelCallLimitMiddleware 限定每轮模型调用数 |
+| 工具重试 | ToolRetryMiddleware 应用配置预算 |
+| 普通回复与参与 | 对应输出类型的结构化对象 |
+| 业务校验 | ResponseOutputPolicy 确认回复适用范围 |
+| 扩展工具 | StructuredTool 使用 JSON Schema args_schema |
+| 可信上下文 | ToolRuntime[ToolExecutionContext] 提供运行时身份与授权 |
+| 工具请求 | arguments 承载模型参数，execution_context 承载可信身份 |
+| 图片描述 | bytes/media type 与多模态消息对应 ImageDescription，并符合 VisionOutputPolicy |
+| 记忆生成 | MemoryExtractionOutput、MemoryConsolidationOutput 满足结构化契约与调用预算 |
 
-## ChatAgent
+模型缓存键包含 `ai_id`、定义指纹和输出类型。视觉 HTTP client 的资源归属为 AIRuntime 生命周期。
 
-- 使用 LangChain v1 `create_agent` 和 `ToolStrategy(ResponsePlan)` 实现带工具的回复循环。
-- 使用 `ModelCallLimitMiddleware` 限制每轮模型调用次数。
-- 使用 `ToolRetryMiddleware` 应用工具重试配置。
-- 使用 `with_structured_output` 实现无工具回复与参与决策。
-- 在返回前执行 `ResponseOutputPolicy` 校验。
+## 可观测结果
 
-## 扩展工具
+模型 span 包含 provider、model、token 用量以及配置允许的请求资料；工具 span 沿现有 NATS 链路关联。ai-agent 的模型连接参数由部署环境提供。
 
-- 将 extension host 工具定义转换为 `StructuredTool`。
-- 将工具 JSON Schema 写入 `args_schema`。
-- 使用 `ToolRuntime[ToolExecutionContext]` 注入可信执行上下文。
-- 将模型参数写入 `ToolExecuteRequest.arguments`，将可信上下文写入 `execution_context`。
-- 在工具执行 span 内调用 `tool.execute.request`。
-
-## 图片理解
-
-- 将图片下载结果改为 bytes 与 media type 数据对象。
-- 将图片编码为 data URL 并构造 LangChain 多模态消息。
-- 使用 `with_structured_output(ImageDescription)` 解析并执行 `VisionOutputPolicy` 校验。
-- 在 `AIRuntime.stop()` 中关闭视觉模型共享 HTTP client。
-
-## 记忆生成
-
-- 使用统一模型工厂创建记忆模型。
-- 按 `ai_id`、定义指纹和输出类型缓存模型与 structured runnable。
-- 对 `MemoryExtractionOutput` 和 `MemoryConsolidationOutput` 使用结构化输出与重试限制。
-
-## 观测与部署配置
-
-- 新增 LangChain 模型 span，记录 provider、model、token 用量和受开关控制的请求参数及内容。
-- 新增工具调用 span，并沿现有 NATS 调用传播上下文。
-- 向承载 Agent Runtime 与 Memory Module 的 ai-agent 容器注入 DeepSeek API key 与 base URL。
-
-## 验证
-
-- 验证模型目录、DeepSeek、Anthropic 和 OpenAI-compatible 模型路由。
-- 验证回复、参与决策、图片描述和记忆输出的结构化解析。
-- 验证解析失败重试、模型调用上限和工具重试配置。
-- 验证模型参数与可信工具上下文隔离。
-- 验证旧 PydanticAI 代码引用与依赖全部移除。
+验收覆盖模型目录、provider 路由、回复、参与、图片和记忆输出、调用预算、重试预算、参数与可信上下文各自归属。

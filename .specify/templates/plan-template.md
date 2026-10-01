@@ -1,113 +1,57 @@
 # Implementation Plan: [FEATURE]
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
-
-**Note**: This template is filled in by the `$speckit-plan` command; its definition describes the execution workflow.
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [规格路径]
+**Input**: [规格路径与用户范围]
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+[交付能力、架构边界和可观察结果。]
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
-
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
-
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
-
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
-
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
-
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
-
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
-
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
-
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: [语言及运行版本]
+**Primary Dependencies**: [依赖与固定版本]
+**Storage**: [数据所有权及持久位置]
+**Testing**: [真实入口、依赖环境与验收边界]
+**Target Platform**: [运行环境]
+**Project Type**: [产品形态]
+**Performance Goals**: [样本量、指标、预算和阈值]
+**Constraints**: [有效权限、资源范围和状态约束]
+**Scale/Scope**: [交付范围]
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
-
-[Gates determined based on constitution file]
+| 原则 | 适用结果 | 证据或目标 |
+| --- | --- | --- |
+| [条款] | [该设计满足的条件] | [资料引用] |
 
 ## Project Structure
 
 ### Documentation (this feature)
 
-```text
-specs/[###-feature]/
-├── plan.md              # This file ($speckit-plan command output)
-├── research.md          # Phase 0 output ($speckit-plan command)
-├── data-model.md        # Phase 1 output ($speckit-plan command)
-├── quickstart.md        # Phase 1 output ($speckit-plan command)
-├── contracts/           # Phase 1 output ($speckit-plan command)
-└── tasks.md             # Phase 2 output ($speckit-tasks command - NOT created by $speckit-plan)
-```
+[spec.md、plan.md、research.md、data-model.md、contracts/、quickstart.md 和 tasks.md 的归属。]
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
-```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+[具有明确职责的包、模块及具体文件路径。]
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+**Structure Decision**: [边界及实际收益。]
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+## Design Artifacts
 
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
-```
-
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+| 产物 | 完成标准 |
+| --- | --- |
+| research.md | 技术决策、理由与适用依据 |
+| data-model.md | 实体、字段、唯一性、关联及状态语义 |
+| contracts/ | 当前输入、输出、授权与结果 schema |
+| quickstart.md | 环境、运行入口及可观察验收结果 |
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+| 设计选择 | 实际收益 | 范围与授权 |
+| --- | --- | --- |
+| [必要抽象或例外] | [量化或具体收益] | [边界及负责人依据] |
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+## Delivery Criteria
+
+[交付状态、入口证据、配置与数据恢复结果。目标与实测各有明确标记。]
