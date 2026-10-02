@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
-from mcp.server.mcpserver.context import Context
+from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -26,7 +26,7 @@ def register_weather(mcp) -> None:
         name=WEATHER_SETTINGS.name,
         title=WEATHER_SETTINGS.title,
         description=WEATHER_SETTINGS.description,
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
     )
     async def weather(
         ctx: Context[MCPResources, object],
@@ -54,7 +54,7 @@ def register_weather(mcp) -> None:
             ),
         ] = WEATHER_SETTINGS.lang.default,
     ) -> dict:
-        return await ctx.request_context.lifespan.weather.weather(
+        return await ctx.request_context.lifespan_context.weather.weather(
             city=city,
             days=days,
             lang=lang,

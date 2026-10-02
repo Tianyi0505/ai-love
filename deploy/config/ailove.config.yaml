@@ -193,8 +193,8 @@ image:
     match_quality_min: 0.0
     match_quality_max: 1.0
   prompt: |-
-    整张图片的主要用途和表情素材资格结论由 submit_image_description 工具提交，字段结构以工具 Schema 为准。
-    result 中 description 为画面和可见文字的客观描述，sticker_description 为表情表达的情绪和聊天意图，tags 为核心情绪、聊天意图与适用语境，emotion 为核心情绪。
+    整张图片的主要用途和表情素材资格结论由 GenerateStructuredOutput 工具提交，字段结构以工具 Schema 为准。
+    输出中 description 为画面和可见文字的客观描述，sticker_description 为表情表达的情绪和聊天意图，tags 为核心情绪、聊天意图与适用语境，emotion 为核心情绪。
     image_type 对应整张图片的主要用途：sticker 是以表达情绪或聊天回应为主体的独立表情包或梗图；screenshot 是以展示聊天记录、软件界面、游戏画面、网页或信息为主体的截图；photo 是普通照片；illustration 是插画、立绘或头像；other 表示其他类型或待明确分类的图片。
     截图中的表情、角色表情或情绪词作为截图内部内容理解，整张图片仍按截图的主要用途分类。
     image_type=sticker 的结果包含表情语义和适用语境，match_quality 表示作为聊天表情反复发送的清晰程度，明确适合的素材取0.7到1。其余类型的 sticker_description=""，match_quality 取0到0.4。

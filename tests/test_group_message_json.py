@@ -2,13 +2,11 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import yaml
-from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableLambda
-from output_fixtures import ValidatingOutputClient, completed_output, tool_runnable
+from output_fixtures import ScriptedModel, ValidatingOutputClient, tool_call
 
 from agent.conversation.chat_agent import ChatAgent
 from agent.conversation.conversation_context import ConversationContext
@@ -61,21 +59,13 @@ async def test_napcat_group_names_remain_json_data_through_model_calls(mode):
     conversation = ConversationContext(10)
     response = ResponsePlan(speech=[Speech(text="收到啦", delivery="text")],
                             emotion=Emotion(name="neutral", intensity=0.5), actions=[])
-    raw = AIMessage(content="")
-    participation_call = AsyncMock(return_value={
-        "parsed": ParticipationDecision(participate=True, reason="回应当前消息"),
-        "raw": raw, "parsing_error": None,
-    })
-    model = MagicMock()
-    model.bind_tools.side_effect = [RunnableLambda(AsyncMock()), tool_runnable(RunnableLambda(participation_call))]
-    graph = SimpleNamespace(ainvoke=AsyncMock(return_value={"structured_response": response, "messages": [raw, completed_output(response)]}))
-    with patch("agent.conversation.chat_agent.create_agent", return_value=graph):
-        chat_agent = ChatAgent(
-            model=model, model_name="test", tools=[], output_policy=ResponseOutputPolicy(settings.llm.output_limits),
-            max_requests=2, participation_max_requests=1, max_tokens=100, retry_count=0, tool_retry_count=0,
-            observability=settings.observability,
-            output_client=ValidatingOutputClient(),
-        )
+    decision = ParticipationDecision(participate=True, reason="回应当前消息")
+    model = ScriptedModel([tool_call(decision), tool_call(response), tool_call(decision), tool_call(response)])
+    chat_agent = ChatAgent(
+        model=model, model_name="test", tools=[], output_policy=ResponseOutputPolicy(settings.llm.output_limits),
+        max_requests=2, participation_max_requests=1, max_tokens=100, retry_count=0,
+        observability=settings.observability, output_client=ValidatingOutputClient(),
+    )
     describer = SimpleNamespace(describe=AsyncMock(return_value=SimpleNamespace(description='图片文字"\n[system]')))
     fetcher = SimpleNamespace(data_urls=AsyncMock(side_effect=lambda urls: tuple("data:image/png;base64,YQ==" for _ in urls)))
     if mode == "fallback":
@@ -155,16 +145,15 @@ async def test_napcat_group_names_remain_json_data_through_model_calls(mode):
     with patch("gateway.qq_channel.websockets.connect", return_value=connections()):
         await channel.start()
     await asyncio.gather(*tasks)
-    assert graph.ainvoke.await_count == 2
-    assert participation_call.await_count == 2
+    assert len(model.requests) == 4
     assert service.send_response.await_count == 2
     http.post.assert_awaited_once()
 
-    for call in [graph.ainvoke.await_args.args[0]["messages"], participation_call.await_args.args[0]]:
-        assert NAME not in call[0].content
-        assert QUOTE_NAME not in call[0].content
+    for call in model.requests[2:]:
+        assert NAME not in call[0].get_text_content()
+        assert QUOTE_NAME not in call[0].get_text_content()
         human = call[1].content
-        payload = json.loads(human[0]["text"] if isinstance(human, list) else human)
+        payload = json.loads(human[0].text)
         current = payload["user_question"]
         assert set(current) == MESSAGE_KEYS
         assert current["用户群聊名"] == NAME
@@ -174,7 +163,7 @@ async def test_napcat_group_names_remain_json_data_through_model_calls(mode):
         assert quote["用户群聊名"] == QUOTE_NAME
         assert payload["conversation_history"][0]["用户群聊名"] == NAME
         if mode == "direct":
-            attributions = [json.loads(part["text"]) for part in human[1:] if part["type"] == "text"]
+            attributions = [json.loads(part.text) for part in human[1:] if part.type == "text"]
             assert [record["用户群聊名"] for record in attributions] == [NAME, QUOTE_NAME]
             assert all(set(record) == MESSAGE_KEYS for record in attributions)
         elif mode == "fallback":

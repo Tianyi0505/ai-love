@@ -2,13 +2,12 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 import yaml
-from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableLambda
-from output_fixtures import ValidatingOutputClient, tool_runnable
+from agentscope.message import AssistantMsg
+from output_fixtures import ResultModel, ValidatingOutputClient
 
 from agent.conversation.conversation_context import ConversationContext
 from agent.conversation.multimodal_input import MessageInput
@@ -60,12 +59,11 @@ async def test_social_reply_uses_matching_sticker_and_preserves_text(chat_type, 
         return task
 
     stickers = sticker_service()
-    model = MagicMock()
     judge_call = AsyncMock(return_value={
         "parsed": StickerDecision(image_type=image_type, suitable=suitable, reason="根据图片和当前场景判断"),
-        "raw": AIMessage(content=""), "parsing_error": None,
+        "raw": AssistantMsg("model", content=""), "parsing_error": None,
     })
-    model.bind_tools.return_value = tool_runnable(RunnableLambda(judge_call))
+    model = ResultModel(judge_call)
     judge = StickerJudge(
         model, "vision", SimpleNamespace(data_urls=AsyncMock(return_value=("data:image/png;base64,YQ==",))),
         "根据图片和当前场景判断", 100, 0,

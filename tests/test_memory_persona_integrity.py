@@ -8,9 +8,7 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 import yaml
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.runnables import RunnableLambda
-from output_fixtures import ValidatingOutputClient, tool_call
+from output_fixtures import ScriptedModel, ValidatingOutputClient, tool_call
 from sqlalchemy import select
 from test_memory_state import FakeKV
 
@@ -35,17 +33,13 @@ class FileConfiguration:
         return data
 
 
-class RecordingModel:
+class RecordingModel(ScriptedModel):
     def __init__(self, extraction):
-        self.extraction = extraction
-        self.requests = []
-
-    def bind_tools(self, tools, *, tool_choice):
-        async def invoke(messages):
-            self.requests.append(messages)
-            if tool_choice == "submit_memory_extraction":
-                output = self.extraction
-            elif "联系人长期认知" in messages[-1].content:
+        def respond(messages, tools):
+            properties = tools[0]["function"]["parameters"]["properties"]
+            if "episode_summary" in properties:
+                output = extraction
+            elif "联系人长期认知" in messages[1].get_text_content():
                 output = MemoryConsolidationOutput(markdown="# 联系人长期认知\n\n## 稳定偏好\n- 喜欢文字步骤。")
             else:
                 output = MemoryConsolidationOutput(
@@ -53,8 +47,7 @@ class RecordingModel:
                     "## 重要经历\n- 在一次聊天中帮联系人整理排查思路。"
                 )
             return tool_call(output)
-
-        return RunnableLambda(invoke)
+        super().__init__(callback=respond)
 
 
 @pytest_asyncio.fixture
@@ -153,14 +146,15 @@ async def test_production_pipeline_grounds_sources_and_anchors_identity(memory_f
     assert memory_flow.pending.values() == []
     assert memory_flow.activity.values() == []
 
-    for system, user in model.requests:
-        assert isinstance(system, SystemMessage) and isinstance(user, HumanMessage)
-        assert "存在形态为数字形态" in system.content
-        assert "联系人、被引用人物和 AI 的经历各归其主" in system.content
-    extraction_prompt = model.requests[0][-1].content
+    for messages in model.requests:
+        system, user = messages[:2]
+        assert system.role == "system" and user.role == "user"
+        assert "存在形态为数字形态" in system.get_text_content()
+        assert "联系人、被引用人物和 AI 的经历各归其主" in system.get_text_content()
+    extraction_prompt = model.requests[0][1].get_text_content()
     for message_id, role in (("101", "user"), ("102", "assistant")):
         assert f'"message_id": "{message_id}", "role": "{role}"' in extraction_prompt
-    self_prompt = next(messages[-1].content for messages in model.requests[1:] if "自我长期认知" in messages[-1].content)
+    self_prompt = next(messages[1].get_text_content() for messages in model.requests[1:] if "自我长期认知" in messages[1].get_text_content())
     assert "旧文档把免费节点当成人设" not in self_prompt
     assert '"source_message_ids": ["103", "104"]' in self_prompt
 

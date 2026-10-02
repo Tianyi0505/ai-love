@@ -51,3 +51,23 @@ deploy/private/
 # 忽略系统文件
 .DS_Store
 Thumbs.db
+
+# 私有部署、服务器与运维 Markdown（保留本地，不提交）
+**/*deploy*.md
+**/*server*.md
+**/*infra*.md
+**/*kubernetes*.md
+**/*k8s*.md
+**/*部署*.md
+**/*服务器*.md
+**/*运维*.md
+**/operations.md
+deploy/**/*.md
+docs/live-service-merge.md
+docs/persona-memory-and-mcp-output.md
+docs/plugin-validation.md
+docs/langchain-migration-plan.md
+specs/001-private-reply-rules/validation.md
+output/
+.pytest_cache/
+.ruff_cache/

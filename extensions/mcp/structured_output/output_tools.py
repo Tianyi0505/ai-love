@@ -19,5 +19,5 @@ def register_structured_output(mcp) -> None:
             name=spec.name,
             description=spec.description,
             structured_output=True,
-            annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False),
+            annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
         )(_handler(spec))

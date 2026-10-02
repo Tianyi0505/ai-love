@@ -4,7 +4,7 @@ from pathlib import Path
 from string import Template
 from typing import Annotated
 
-from mcp.server.mcpserver.context import Context
+from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -26,7 +26,7 @@ def register_web_search(mcp) -> None:
         name=SEARCH_SETTINGS.name,
         title=SEARCH_SETTINGS.title,
         description=SEARCH_SETTINGS.description,
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
     )
     async def web_search(
         ctx: Context[MCPResources, object],
@@ -40,7 +40,7 @@ def register_web_search(mcp) -> None:
         ],
     ) -> str:
         result_limit = SEARCH_SETTINGS.result_limit
-        results = await ctx.request_context.lifespan.web_search.search(query)
+        results = await ctx.request_context.lifespan_context.web_search.search(query)
         if not results:
             return Template(SEARCH_SETTINGS.messages.no_result).substitute(query=query)
         result_template = Template(SEARCH_SETTINGS.messages.result)

@@ -26,7 +26,7 @@ def register_music(mcp) -> None:
         name=MUSIC_SETTINGS.name,
         title=MUSIC_SETTINGS.title,
         description=MUSIC_SETTINGS.description,
-        annotations=ToolAnnotations(read_only_hint=False, open_world_hint=False),
+        annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
     )
     async def music_control(
         action: Annotated[

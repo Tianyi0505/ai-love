@@ -4,17 +4,17 @@ import hashlib
 import json
 import logging
 
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from agentscope.message import SystemMsg, UserMsg
+from agentscope.model import ChatModelBase
 from redis.asyncio import Redis
 
 from agent.conversation.conversation_context import ConversationContext, format_group_entries
 from agent.conversation.prompt_assembler import PromptAssembler
+from shared.agent_output import StructuredOutput
 from shared.contracts.social import ContentType, SocialMessage
 from shared.global_settings import ObservabilitySettings
-from shared.langchain_observability import model_span, record_messages_usage, record_model_content
-from shared.langchain_structured_output import parsed_output, structured_output_runnable
 from shared.mcp_output_client import MCPOutputClient
+from shared.model_observability import model_span, record_messages_usage, record_model_content
 from shared.structured_output_tools import GroupRepeatDecision as GroupRepeatDecision
 
 logger = logging.getLogger("ailove.ai-agent.group-repeat")
@@ -70,7 +70,7 @@ class GroupRepeatJudge:
     def __init__(
         self,
         *,
-        model: BaseChatModel,
+        model: ChatModelBase,
         model_name: str,
         conversation: ConversationContext,
         prompt_assembler: PromptAssembler,
@@ -88,7 +88,7 @@ class GroupRepeatJudge:
         self._history_limit = max(2, history_limit)
         self._max_tokens = max_tokens
         self._observability = observability
-        self._decision_model = structured_output_runnable(model, GroupRepeatDecision, max_attempts, output_client)
+        self._decision_model = StructuredOutput(model, GroupRepeatDecision, max_attempts, output_client)
 
     async def should_repeat(self, chat_id: str) -> bool:
         try:
@@ -102,15 +102,15 @@ class GroupRepeatJudge:
                 + "\n\n" + self._prompt_assembler.template("group-message-format")
             )
             user_prompt = format_group_entries(entries, self._ai_name)
-            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+            messages = [SystemMsg("system", content=system_prompt), UserMsg("user", content=user_prompt)]
             with model_span(
                 "group-repeat.decide",
                 self._model_name,
                 self._observability,
                 {"max_tokens": self._max_tokens},
             ) as span:
-                result = await self._decision_model.ainvoke(messages)
-                decision = parsed_output(result, GroupRepeatDecision)
+                result = await self._decision_model.generate(messages)
+                decision = result["parsed"]
                 record_messages_usage(span, [result["raw"]])
                 record_model_content(
                     span,

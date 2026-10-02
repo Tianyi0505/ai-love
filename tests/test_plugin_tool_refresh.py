@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from output_fixtures import ValidatingOutputClient, completed_output
+from output_fixtures import ScriptedModel, ValidatingOutputClient, tool_call
 from plugin_fixtures import LocalBus
 from test_plugin_runtime import command, manifest
 
@@ -66,9 +66,9 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
     )
     control = PluginControlClient(bus, ("mcp", "extension-host"))
     timeouts = TimeoutSettings(**{key: 5 for key in TimeoutSettings.model_fields})
-    from mcp import Client
+    from shared.mcp_session import mcp_session
 
-    async with Client(settings.mcp_url) as client:
+    async with mcp_session(settings.mcp_url) as client:
         music_name = (await client.list_tools()).tools[0].name
     definition = SimpleNamespace(
         ai_id="test-ai",
@@ -80,14 +80,9 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
         speech=[Speech(text="你好", delivery="text")], emotion=Emotion(name="happy", intensity=0.5), actions=[]
     )
 
-    def build_graph(**kwargs):
-        names = [tool.name for tool in kwargs["tools"] if tool.name != "submit_response_plan"]
-
-        async def invoke(*args, **options):
-            observed_tools.append(names)
-            return {"structured_response": plan, "messages": [completed_output(plan)]}
-
-        return SimpleNamespace(ainvoke=invoke)
+    def respond(messages, tools):
+        observed_tools.append([t["function"]["name"] for t in tools if t["function"]["name"] != "GenerateStructuredOutput"])
+        return tool_call(plan)
 
     async def current_tools():
         return await load_toolset(bus, "test-ai", timeouts)
@@ -95,13 +90,11 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
     try:
         with (
             patch("extensions.host.extension_host_service.AgentDefinitionStore") as store,
-            patch("agent.conversation.chat_agent.create_agent", side_effect=build_graph) as factory,
-            patch("agent.conversation.chat_agent.structured_output_runnable"),
         ):
             store.return_value.list_active = AsyncMock(return_value=[definition])
             await extension.start()
             agent = ChatAgent(
-                model=MagicMock(),
+                model=ScriptedModel(callback=respond),
                 model_name="test",
                 tools=await current_tools(),
                 output_policy=SimpleNamespace(validate_plan=lambda value: value),
@@ -109,7 +102,7 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
                 participation_max_requests=1,
                 max_tokens=100,
                 retry_count=0,
-                tool_retry_count=0,
+
                 observability=ObservabilitySettings(
                     include_model_content=False, include_binary_content=False, include_model_request_parameters=False
                 ),
@@ -118,7 +111,6 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
             )
             await agent.generate_plan("system", "first")
             await agent.generate_plan("system", "same catalog")
-            assert factory.call_count == 1
             assert (await command(control, "disable", "music", host="mcp"))["status"] == "completed"
             await agent.generate_plan("system", "without music")
             assert (await command(control, "enable", "music", host="mcp"))["status"] == "completed"
@@ -126,7 +118,6 @@ async def test_next_agent_turn_tracks_mcp_enable_disable_and_server_removal(tmp_
             assert (await command(control, "disable", "mcp.server", host="mcp", cascade=True))["status"] == "completed"
             await agent.generate_plan("system", "MCP offline")
             assert observed_tools == [[music_name], [music_name], [], [music_name], []]
-            assert factory.call_count == 4
     finally:
         await extension.close()
         await mcp_host.close()

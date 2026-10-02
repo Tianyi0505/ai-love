@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 
-from mcp import Client
 from mcp.types import TextContent
 
 from extensions.host.tool_gateway import ToolDefinition, ToolInvocation, ToolResult
+from shared.mcp_session import mcp_session
 
 
 # 通过MCP提供扩展工具
@@ -20,13 +20,13 @@ class MCPToolProvider:
     # 发现可用工具
     @classmethod
     async def discover(cls, provider_id: str, url: str) -> "MCPToolProvider":
-        async with Client(url) as client:
+        async with mcp_session(url) as client:
             result = await client.list_tools()
         definitions = [
             ToolDefinition(
                 tool_id=tool.name,
                 description=tool.description or tool.title or tool.name,
-                input_schema=dict(tool.input_schema),
+                input_schema=dict(tool.inputSchema),
                 provider_id=provider_id,
                 operation="network.read",
             )
@@ -40,14 +40,14 @@ class MCPToolProvider:
 
     # 调用工具
     async def invoke(self, invocation: ToolInvocation) -> ToolResult:
-        async with Client(self._url) as client:
+        async with mcp_session(self._url) as client:
             result = await client.call_tool(invocation.tool_id, invocation.arguments)
         texts = [block.text for block in result.content if isinstance(block, TextContent)]
-        data = result.structured_content if isinstance(result.structured_content, dict) else {}
+        data = result.structuredContent if isinstance(result.structuredContent, dict) else {}
         content = "\n".join(texts) or json.dumps(data, ensure_ascii=False)
         return ToolResult(
-            ok=not result.is_error,
+            ok=not result.isError,
             content=content,
             data=data,
-            error_code="mcp_tool_error" if result.is_error else "",
+            error_code="mcp_tool_error" if result.isError else "",
         )

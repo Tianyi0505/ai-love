@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from shared.contracts.rpc.tools import ToolExecuteRequest, ToolExecuteResponse
 from shared.contracts.tools import ToolExecutionContext
-from shared.langchain_observability import tool_span
+from shared.model_observability import tool_span
 from shared.structured_output_tools import output_tool
 
 OutputT = TypeVar("OutputT", bound=BaseModel)

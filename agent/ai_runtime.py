@@ -165,7 +165,6 @@ class AIRuntime:
                 participation_max_requests=llm_config.participation_max_requests,
                 max_tokens=llm_config.max_tokens,
                 retry_count=llm_config.retry_count,
-                tool_retry_count=llm_config.tool_retry_count,
                 observability=self.settings.observability,
                 output_client=output_client,
                 tool_loader=current_tools if context else None,

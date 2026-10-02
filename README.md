@@ -6,7 +6,7 @@
 
 统一插件宿主提供本地插件目录、能力依赖、生命周期、资源作用域和持久化操作记录。基础目录包含 17 个内置插件、7 种宿主；2026-09-30 的验收范围包含 structured-output，共 18 个 active 插件。
 
-管理页面“能力工坊”位于 `#/plugins`，提供目录查询、变更预检、安装、启停、重启、移除和操作结果。架构与入口见 [插件运行时](docs/plugin-runtime.md)，验收数据见 [插件验证结果](docs/plugin-validation.md)。
+管理页面“能力工坊”位于 `#/plugins`，提供目录查询、变更预检、安装、启停、重启、移除和操作结果。架构与入口见 [插件运行时](docs/plugin-runtime.md)。
 
 ## 运行职责
 
@@ -63,6 +63,10 @@ shared/                # 跨运行单元复用的契约、配置、仓库与基�
 
 包按业务职责内聚。部署边界以运行单元为准，Memory 位于 ai-agent 进程内；`shared` 的内容具有实际跨运行单元使用者。
 
+## AgentScope
+
+对话、群聊判断、图片识别、表情判断和记忆生成统一使用 AgentScope 2.0.9 SDK。原生 Agent 负责 ReAct 循环、工具调度和结构化输出；工具授权与业务持久化沿用现有契约。实现边界见 [AgentScope 运行时](docs/agentscope-runtime.md)。
+
 ## 长期记忆
 
 长期记忆以真实消息、活动水位、静默 Episode、原子记忆和批量文档为依据。JetStream 持久订阅 `memory.activity`，KV 保存 `ai_id + person_id` 的最新活动水位及 CAS claim，PostgreSQL 保存原文、Episode、Atom 和 Markdown 文档。
@@ -73,7 +77,7 @@ shared/                # 跨运行单元复用的契约、配置、仓库与基�
 
 ## 配置结果
 
-生产配置来自 Kubernetes ConfigMap/Secret 挂载卷，具备热更新能力。资源及字段见 [Kubernetes 配置](docs/kubernetes-config.md)。
+生产配置来自 Kubernetes ConfigMap/Secret 挂载卷，具备热更新能力。
 
 | 配置标识 | 内容 |
 | --- | --- |

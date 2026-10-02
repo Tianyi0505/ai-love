@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from langchain.tools import ToolRuntime
-from langchain_core.tools import BaseTool, StructuredTool
+from agentscope.message import TextBlock, ToolResultState
+from agentscope.permission import PermissionBehavior, PermissionDecision
+from agentscope.state import AgentState
+from agentscope.tool import FunctionTool, ToolBase, ToolChunk
 from nats.errors import NoRespondersError
 
 from shared.contracts.rpc.tools import (
@@ -15,7 +17,7 @@ from shared.contracts.rpc.tools import (
 )
 from shared.contracts.tools import ToolExecutionContext
 from shared.global_settings import TimeoutSettings
-from shared.langchain_observability import tool_span
+from shared.model_observability import tool_span
 from shared.structured_output_tools import OUTPUT_TOOL_NAMES
 
 logger = logging.getLogger("ailove.ai-agent.tools")
@@ -25,7 +27,7 @@ async def load_toolset(
     bus,
     ai_id: str,
     timeouts: TimeoutSettings,
-) -> list[BaseTool]:
+) -> list[ToolBase]:
     try:
         response = await bus.request_model(
             "tool.list.request",
@@ -44,13 +46,13 @@ def _build_tool(
     ai_id: str,
     timeouts: TimeoutSettings,
     info: ToolDescriptor,
-) -> BaseTool:
+) -> ToolBase:
     tool_id = info.name
 
     async def execute(
-        runtime: ToolRuntime[ToolExecutionContext],
+        _agent_state: AgentState,
         **arguments,
-    ) -> str:
+    ) -> ToolChunk:
         with tool_span(tool_id):
             result = await bus.request_model(
                 "tool.execute.request",
@@ -58,17 +60,19 @@ def _build_tool(
                     ai_id=ai_id,
                     tool_id=tool_id,
                     arguments=arguments,
-                    execution_context=runtime.context,
+                    execution_context=ToolExecutionContext.model_validate(_agent_state.middle_context["execution_context"]),
                 ),
                 ToolExecuteResponse,
                 timeout=timeouts.tool_execute_sec,
             )
-        return result.content
+        return ToolChunk(content=[TextBlock(text=result.content)], state=ToolResultState.SUCCESS)
 
-    return StructuredTool.from_function(
-        coroutine=execute,
+    return FunctionTool(
+        func=execute,
         name=info.name,
         description=info.description,
-        args_schema=info.parameters,
-        infer_schema=False,
+        input_schema=info.parameters,
+        is_state_injected=True,
+        is_concurrency_safe=False,
+        permission=PermissionDecision(behavior=PermissionBehavior.ALLOW, message="授权由 Extension Host 校验"),
     )

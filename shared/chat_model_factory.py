@@ -4,8 +4,8 @@ import os
 from collections.abc import Mapping
 
 import httpx
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_openai import ChatOpenAI
+from agentscope.credential import OpenAICredential
+from agentscope.model import ChatModelBase, OpenAIChatModel
 
 from shared.chat_model_strategy import CHAT_MODEL_STRATEGIES, ChatModelParameters
 from shared.global_settings import ChatModelSettings
@@ -19,7 +19,7 @@ def create_chat_model(
     timeout_sec: float,
     max_retries: int,
     strategies=None,
-) -> BaseChatModel:
+) -> ChatModelBase:
     model_config = models.get(model_id)
     if model_config is None:
         raise ValueError(f"未配置模型: {model_id}")
@@ -52,13 +52,15 @@ def create_openai_compatible_chat_model(
     timeout_sec: float,
     max_retries: int,
     http_async_client: httpx.AsyncClient | None = None,
-) -> BaseChatModel:
-    return ChatOpenAI(
+) -> ChatModelBase:
+    client_kwargs = {"timeout": timeout_sec, "max_retries": 0}
+    if http_async_client is not None:
+        client_kwargs["http_client"] = http_async_client
+    return OpenAIChatModel(
+        credential=OpenAICredential(api_key=api_key, base_url=base_url),
         model=model,
-        api_key=api_key,
-        base_url=base_url,
-        max_tokens=max_tokens,
-        timeout=timeout_sec,
+        extra_body={"max_tokens": max_tokens},
+        stream=False,
         max_retries=max_retries,
-        http_async_client=http_async_client,
+        client_kwargs=client_kwargs,
     )

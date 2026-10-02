@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 from extensions.mcp.mcp_resources import MCPResources
 from extensions.mcp.mcp_server_settings import MCPServerSettings
@@ -26,7 +26,7 @@ SERVER_SETTINGS = YamlSettingsLoader.load_section(
 
 
 @asynccontextmanager
-async def lifespan(_server: MCPServer) -> AsyncIterator[MCPResources]:
+async def lifespan(_server: FastMCP) -> AsyncIterator[MCPResources]:
     weather_connection = QWeatherConnectionSettings()
     async with (
         httpx.AsyncClient(
@@ -59,11 +59,14 @@ async def lifespan(_server: MCPServer) -> AsyncIterator[MCPResources]:
         )
 
 
-mcp = MCPServer(
+mcp = FastMCP(
     SERVER_SETTINGS.name,
-    version=SERVER_SETTINGS.version,
     instructions=SERVER_SETTINGS.instructions,
     lifespan=lifespan,
+    host=SERVER_SETTINGS.host,
+    port=SERVER_SETTINGS.port,
+    json_response=SERVER_SETTINGS.json_response,
+    stateless_http=SERVER_SETTINGS.stateless_http,
 )
 
 register_weather(mcp)
@@ -73,10 +76,4 @@ register_structured_output(mcp)
 
 
 if __name__ == "__main__":
-    mcp.run(
-        transport=SERVER_SETTINGS.transport,
-        host=SERVER_SETTINGS.host,
-        port=SERVER_SETTINGS.port,
-        json_response=SERVER_SETTINGS.json_response,
-        stateless_http=SERVER_SETTINGS.stateless_http,
-    )
+    mcp.run(transport=SERVER_SETTINGS.transport)

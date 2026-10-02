@@ -16,7 +16,7 @@ from .components import load_symbol
 class MCPServerPlugin(Plugin):
     async def initialize(self, context) -> None:
         await super().initialize(context)
-        from mcp.server import MCPServer
+        from mcp.server.fastmcp import FastMCP
 
         self.resources = SimpleNamespace(weather=None, web_search=None)
 
@@ -24,17 +24,16 @@ class MCPServerPlugin(Plugin):
         async def lifespan(_server):
             yield self.resources
 
-        self.server = MCPServer("ailove", instructions="AI-Love 动态工具插件", lifespan=lifespan)
+        self.server = FastMCP(
+            "ailove", instructions="AI-Love 动态工具插件", lifespan=lifespan,
+            json_response=True, stateless_http=True, host=self.context.config.get("bind", "0.0.0.0"),
+        )
 
     async def start(self) -> None:
         import uvicorn
 
         config = self.context.config
-        app = self.server.streamable_http_app(
-            json_response=True,
-            stateless_http=True,
-            host=config.get("bind", "0.0.0.0"),
-        )
+        app = self.server.streamable_http_app()
         app = ScopedASGI(app, self.context.resources)
         self.http = uvicorn.Server(
             uvicorn.Config(app, host=config.get("bind", "0.0.0.0"), port=config.get("port", 8011), log_level="warning")

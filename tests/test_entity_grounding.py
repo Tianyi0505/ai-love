@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 import yaml
-from langchain_core.messages import AIMessage
-from langgraph.graph import END, START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode
+from agentscope.message import ToolCallBlock, UserMsg
+from agentscope.model import ChatResponse
+from agentscope.tool import Toolkit
 from nats.errors import NoRespondersError
+from output_fixtures import ScriptedModel, ValidatingOutputClient, tool_call
+
+from shared.agent_output import StructuredOutput
+from shared.structured_output_tools import GroupRepeatDecision
 
 try:
     import websockets  # noqa: F401
@@ -49,7 +54,7 @@ class _ExtensionBus:
                     {
                         "name": "resolve_people",
                         "description": "解析称呼",
-                        "parameters": {"type": "object"},
+                        "parameters": {"type": "object", "properties": {"mention": {"type": "string"}, "chat_id": {"type": "string"}}},
                         "provider": "grounding",
                     }
                 ]
@@ -214,31 +219,15 @@ class EntityGroundingTests(unittest.IsolatedAsyncioTestCase):
             SimpleNamespace(tool_list_sec=1, tool_execute_sec=1),
         )
         trusted = ToolExecutionContext(ai_id="ai", chat_type="group", chat_id="真实群")
-        builder = StateGraph(MessagesState, context_schema=ToolExecutionContext)
-        builder.add_node("tools", ToolNode(toolset))
-        builder.add_edge(START, "tools")
-        builder.add_edge("tools", END)
-        graph = builder.compile()
-        await graph.ainvoke(
-            {
-                "messages": [
-                    AIMessage(
-                        content="",
-                        tool_calls=[
-                            {
-                                "name": "resolve_people",
-                                "args": {
-                                    "mention": "群主",
-                                    "chat_id": "模型伪造群",
-                                },
-                                "id": "tool-call-1",
-                                "type": "tool_call",
-                            }
-                        ],
-                    )
-                ]
-            },
-            context=trusted,
+        output = GroupRepeatDecision(repeat=False, reason="已核实")
+        model = ScriptedModel([
+            ChatResponse(content=[ToolCallBlock(id="business-call", name="resolve_people", input=json.dumps({
+                "mention": "群主", "chat_id": "模型伪造群",
+            }))], is_last=True),
+            tool_call(output),
+        ])
+        await StructuredOutput(model, GroupRepeatDecision, 2, ValidatingOutputClient()).generate(
+            [UserMsg("user", "群主是谁")], toolkit=Toolkit(tools=toolset), context=trusted,
         )
 
         self.assertEqual("真实群", bus.execute_request["execution_context"]["chat_id"])

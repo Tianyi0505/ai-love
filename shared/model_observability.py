@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from langchain_core.messages import AIMessage
+from agentscope.message import Msg
 from opentelemetry import trace
 from opentelemetry.trace import Span
 from pydantic import BaseModel
 
 from shared.global_settings import ObservabilitySettings
 
-tracer = trace.get_tracer("ai-love.langchain")
+tracer = trace.get_tracer("ai-love.agentscope")
 
 
 def model_span(
@@ -47,12 +47,12 @@ def record_messages_usage(span: Span, messages: Iterable[Any]) -> None:
     total_tokens = 0
     has_usage = False
     for message in messages:
-        if not isinstance(message, AIMessage) or not message.usage_metadata:
+        if not isinstance(message, Msg) or not message.usage:
             continue
         has_usage = True
-        input_tokens += int(message.usage_metadata.get("input_tokens", 0))
-        output_tokens += int(message.usage_metadata.get("output_tokens", 0))
-        total_tokens += int(message.usage_metadata.get("total_tokens", 0))
+        input_tokens += int(message.usage.input_tokens)
+        output_tokens += int(message.usage.output_tokens)
+        total_tokens += int(message.usage.input_tokens + message.usage.output_tokens)
     if has_usage:
         if not total_tokens:
             total_tokens = input_tokens + output_tokens

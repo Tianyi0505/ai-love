@@ -6,13 +6,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
-from langchain_core.tools import StructuredTool
-from mcp import Client
-from output_fixtures import tool_call
-from pydantic import Field, ValidationError
+from agentscope.message import TextBlock, ToolCallBlock, UserMsg
+from agentscope.model import ChatResponse
+from agentscope.permission import PermissionBehavior, PermissionDecision
+from agentscope.tool import FunctionTool, ToolChunk
+from output_fixtures import ScriptedModel, tool_call
+from pydantic import ValidationError
 from test_plugin_runtime import command, manifest
 
 from agent.conversation.chat_agent import ChatAgent
@@ -25,28 +24,11 @@ from shared.contracts.response_output import Emotion, ParticipationDecision, Res
 from shared.contracts.vision_output import ImageDescription, StickerDecision
 from shared.global_settings import GlobalSettings
 from shared.mcp_output_client import MCPOutputClient
+from shared.mcp_session import mcp_session
 from shared.nats_bus import RemoteCallError, create_bus
 from shared.service_settings import ExtensionHostSettings
 from shared.structured_output_tools import OUTPUT_TOOLS, GroupRepeatDecision, output_tool
 from tests.test_memory_persona_integrity import FileConfiguration
-
-
-class ScriptedToolModel(BaseChatModel):
-    responses: list[AIMessage]
-    requests: list = Field(default_factory=list)
-    bindings: list = Field(default_factory=list)
-
-    @property
-    def _llm_type(self):
-        return "scripted-tool-model"
-
-    def bind_tools(self, tools, **kwargs):
-        self.bindings.append((tools, kwargs))
-        return self
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        self.requests.append(messages)
-        return ChatResult(generations=[ChatGeneration(message=self.responses.pop(0))])
 
 
 @pytest.fixture
@@ -109,23 +91,20 @@ OUTPUTS = (
 )
 
 
-@pytest.mark.parametrize("encoded", [False, True])
 @pytest.mark.parametrize("output", OUTPUTS, ids=lambda value: type(value).__name__)
-async def test_model_tool_call_crosses_gateway_and_real_mcp_http(output_service, output, encoded):
-    from shared.langchain_structured_output import parsed_output, structured_output_runnable
+async def test_model_tool_call_crosses_gateway_and_real_mcp_http(output_service, output):
+    from shared.agent_output import StructuredOutput
 
     message = tool_call(output)
-    if encoded:
-        message.tool_calls[0]["args"]["result"] = output.model_dump_json()
-    model = ScriptedToolModel(responses=[message])
-    runnable = structured_output_runnable(model, type(output), 1, output_service.client)
-    result = await runnable.ainvoke([HumanMessage(content="给出本轮结论")])
-    assert parsed_output(result, type(output)) == output
-    assert model.bindings[0][1]["tool_choice"] == output_tool(type(output)).name
-    async with Client(output_service.url) as client:
+    model = ScriptedModel(responses=[message])
+    runnable = StructuredOutput(model, type(output), 1, output_service.client)
+    result = await runnable.generate([UserMsg("user", "给出本轮结论")])
+    assert result["parsed"] == output
+    assert model.bindings[0][1].mode == "GenerateStructuredOutput"
+    async with mcp_session(output_service.url) as client:
         catalog = {item.name: item for item in (await client.list_tools()).tools}
     assert set(catalog) == {item.name for item in OUTPUT_TOOLS}
-    assert catalog[output_tool(type(output)).name].output_schema
+    assert catalog[output_tool(type(output)).name].outputSchema
     assert await load_toolset(output_service.bus, "test-ai", output_service.settings.timeouts) == []
 
 
@@ -133,31 +112,28 @@ def chat(model, service, tools=()):
     return ChatAgent(
         model=model, model_name="test", tools=list(tools),
         output_policy=ResponseOutputPolicy(service.settings.llm.output_limits),
-        max_requests=4, participation_max_requests=2, max_tokens=500, retry_count=1, tool_retry_count=0,
+        max_requests=4, participation_max_requests=2, max_tokens=500, retry_count=1,
         observability=service.settings.observability, output_client=service.client,
     )
 
 
-@pytest.mark.parametrize("encoded", [False, True])
-async def test_chat_graph_uses_business_result_then_mcp_final_tool(output_service, encoded):
+async def test_chat_graph_uses_business_result_then_mcp_final_tool(output_service):
     async def lookup(query: str) -> str:
-        return "已核实资料"
+        return ToolChunk(content=[TextBlock(text="已核实资料")])
 
     final_call = tool_call(PLAN)
-    if encoded:
-        final_call.tool_calls[0]["args"]["result"] = PLAN.model_dump_json()
-    model = ScriptedToolModel(responses=[
-        AIMessage(content="", tool_calls=[{"id": "lookup", "name": "lookup", "args": {"query": "资料"}}]),
+    model = ScriptedModel(responses=[
+        ChatResponse(content=[ToolCallBlock(id="business-call", name="lookup", input='{"query": "资料"}')], is_last=True),
         final_call,
     ])
-    agent = chat(model, output_service, [StructuredTool.from_function(coroutine=lookup, description="查询资料")])
-    assert await agent.generate_plan("结果通过 submit_response_plan 提交", "你好") == PLAN
+    agent = chat(model, output_service, [FunctionTool(lookup, description="查询资料", permission=PermissionDecision(behavior=PermissionBehavior.ALLOW, message="test"))])
+    assert await agent.generate_plan("使用结构化结果工具提交结论", "你好") == PLAN
     assert len(model.requests) == 2
-    assert any(isinstance(item, ToolMessage) and item.content == "已核实资料" for item in model.requests[-1])
+    assert any("已核实资料" in str(item.content) for item in model.requests[-1])
 
 
 async def test_direct_reply_retries_invalid_model_call_and_requires_mcp(output_service):
-    model = ScriptedToolModel(responses=[AIMessage(content='{"speech": []}'), tool_call(PLAN)])
+    model = ScriptedModel(responses=[ChatResponse(content=[TextBlock(text='{"speech": []}')], is_last=True), tool_call(PLAN)])
     agent = chat(model, output_service)
     assert await agent.generate_plan("提交结论", "你好", allow_tools=False) == PLAN
     assert len(model.requests) == 2
@@ -169,19 +145,26 @@ async def test_direct_reply_retries_invalid_model_call_and_requires_mcp(output_s
 
 
 async def test_mcp_rejects_invalid_shapes_and_gateway_enforces_ai_permission(output_service):
-    async with Client(output_service.url) as client:
+    async with mcp_session(output_service.url) as client:
         result = await client.call_tool("submit_response_plan", {"result": {"speech": "bad"}})
-        assert result.is_error
+        assert result.isError
     with pytest.raises(RemoteCallError):
         await MCPOutputClient(output_service.bus, "unbound-ai", 5).submit(ResponsePlan, {"result": PLAN.model_dump()})
 
 
 async def test_plain_text_graph_result_is_rejected(output_service):
-    with pytest.raises(ValueError, match="MCP"):
-        await chat(ScriptedToolModel(responses=[AIMessage(content="你好")]), output_service).generate_plan("提交结论", "你好")
+    with pytest.raises(ValueError, match="限额"):
+        await chat(ScriptedModel(responses=[ChatResponse(content=[TextBlock(text="你好")], is_last=True)] * 4), output_service).generate_plan("提交结论", "你好")
 
 
 @pytest.mark.parametrize("result", ['{"speech":"bad"}', "[]", "null", "invalid json"])
 async def test_encoded_tool_arguments_keep_contract_validation(output_service, result):
     with pytest.raises(ValidationError):
         await output_service.client.submit(ResponsePlan, {"result": result})
+
+
+@pytest.mark.parametrize("encoded", [False, True])
+@pytest.mark.parametrize("output", OUTPUTS, ids=lambda value: type(value).__name__)
+async def test_mcp_submission_accepts_object_and_encoded_result(output_service, output, encoded):
+    value = output.model_dump_json() if encoded else output.model_dump(mode="json")
+    assert await output_service.client.submit(type(output), {"result": value}) == output

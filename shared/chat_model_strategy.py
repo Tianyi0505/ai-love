@@ -3,13 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from langchain_anthropic import ChatAnthropic
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_deepseek import ChatDeepSeek
-from langchain_openai import ChatOpenAI
-from langchain_openai.chat_models.base import BaseChatOpenAI
+from agentscope.credential import AnthropicCredential, DeepSeekCredential, OpenAICredential
+from agentscope.model import AnthropicChatModel, ChatModelBase, DeepSeekChatModel, OpenAIChatModel
 
-# Agnes pricing checked on 2026-09-26; promotional prices can change.
 AGNES_FREE_CHAT_MODELS = frozenset({"agnes-2.5-flash", "agnes-3.0-flash"})
 
 
@@ -25,61 +21,56 @@ class ChatModelParameters:
 
 class ChatModelStrategy(ABC):
     @abstractmethod
-    def create(self, parameters: ChatModelParameters) -> BaseChatModel: ...
+    def create(self, parameters: ChatModelParameters) -> ChatModelBase: ...
 
 
 class DeepSeekChatModelStrategy(ChatModelStrategy):
-    def create(self, parameters: ChatModelParameters) -> BaseChatModel:
-        return ChatDeepSeek(
+    def create(self, parameters: ChatModelParameters) -> ChatModelBase:
+        return DeepSeekChatModel(
+            credential=DeepSeekCredential(api_key=parameters.api_key, base_url=parameters.base_url),
             model=parameters.model,
-            api_key=parameters.api_key,
-            base_url=parameters.base_url,
-            extra_body={"thinking": {"type": "disabled"}},
-            max_tokens=parameters.max_tokens,
-            timeout=parameters.timeout_sec,
+            parameters=DeepSeekChatModel.Parameters(max_tokens=parameters.max_tokens, thinking_enable=False),
+            stream=False,
             max_retries=parameters.max_retries,
+            client_kwargs={"timeout": parameters.timeout_sec, "max_retries": 0},
         )
 
 
 class AnthropicChatModelStrategy(ChatModelStrategy):
-    def create(self, parameters: ChatModelParameters) -> BaseChatModel:
-        return ChatAnthropic(
+    def create(self, parameters: ChatModelParameters) -> ChatModelBase:
+        return AnthropicChatModel(
+            credential=AnthropicCredential(api_key=parameters.api_key, base_url=parameters.base_url),
             model=parameters.model,
-            api_key=parameters.api_key,
-            base_url=parameters.base_url,
-            max_tokens=parameters.max_tokens,
-            timeout=parameters.timeout_sec,
+            parameters=AnthropicChatModel.Parameters(max_tokens=parameters.max_tokens),
+            stream=False,
             max_retries=parameters.max_retries,
+            client_kwargs={"timeout": parameters.timeout_sec, "max_retries": 0},
         )
 
 
 class OpenAIChatModelStrategy(ChatModelStrategy):
-    def create(self, parameters: ChatModelParameters) -> BaseChatModel:
-        return ChatOpenAI(
+    def create(self, parameters: ChatModelParameters) -> ChatModelBase:
+        return OpenAIChatModel(
+            credential=OpenAICredential(api_key=parameters.api_key, base_url=parameters.base_url),
             model=parameters.model,
-            api_key=parameters.api_key,
-            base_url=parameters.base_url,
-            max_tokens=parameters.max_tokens,
-            timeout=parameters.timeout_sec,
+            parameters=OpenAIChatModel.Parameters(max_tokens=parameters.max_tokens),
+            stream=False,
             max_retries=parameters.max_retries,
+            client_kwargs={"timeout": parameters.timeout_sec, "max_retries": 0},
         )
 
 
 class AgnesChatModelStrategy(ChatModelStrategy):
-    def create(self, parameters: ChatModelParameters) -> BaseChatModel:
+    def create(self, parameters: ChatModelParameters) -> ChatModelBase:
         if parameters.model not in AGNES_FREE_CHAT_MODELS:
             raise ValueError(f"Agnes 仅接入已核对免费的对话模型: {parameters.model}")
-        # BaseChatOpenAI retains the documented max_tokens field and defaults
-        # structured output to function calling, rather than OpenAI JSON Schema.
-        return BaseChatOpenAI(
+        return OpenAIChatModel(
+            credential=OpenAICredential(api_key=parameters.api_key, base_url=parameters.base_url),
             model=parameters.model,
-            api_key=parameters.api_key,
-            base_url=parameters.base_url,
-            max_tokens=parameters.max_tokens,
-            timeout=parameters.timeout_sec,
+            extra_body={"max_tokens": parameters.max_tokens},
+            stream=False,
             max_retries=parameters.max_retries,
-            use_responses_api=False,
-            disabled_params={"parallel_tool_calls": None},
+            client_kwargs={"timeout": parameters.timeout_sec, "max_retries": 0},
         )
 
 

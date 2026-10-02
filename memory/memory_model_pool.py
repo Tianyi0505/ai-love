@@ -2,23 +2,19 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.runnables import Runnable
+from agentscope.message import SystemMsg, UserMsg
+from agentscope.model import ChatModelBase
 from pydantic import BaseModel
 
 from memory.memory_prompt_assembler import MemoryPromptAssembler
+from shared.agent_output import StructuredOutput
 from shared.chat_model_factory import create_chat_model
 from shared.contracts.agent import AgentDefinition
 from shared.global_settings import LLMSettings, ObservabilitySettings
-from shared.langchain_observability import (
+from shared.model_observability import (
     model_span,
     record_messages_usage,
     record_model_content,
-)
-from shared.langchain_structured_output import (
-    parsed_output,
-    structured_output_runnable,
 )
 
 OutputT = TypeVar("OutputT", bound=BaseModel)
@@ -38,13 +34,13 @@ class MemoryModelPool:
         self._observability = observability
         self._model_factory = model_factory
         self._output_client_factory = output_client_factory
-        self._models: dict[str, tuple[str, BaseChatModel]] = {}
-        self._outputs: dict[tuple[str, type[BaseModel]], tuple[str, Runnable]] = {}
+        self._models: dict[str, tuple[str, ChatModelBase]] = {}
+        self._outputs: dict[tuple[str, type[BaseModel]], tuple[str, StructuredOutput]] = {}
 
     async def resources(
         self,
         ai_id: str,
-    ) -> tuple[AgentDefinition, BaseChatModel]:
+    ) -> tuple[AgentDefinition, ChatModelBase]:
         definition = await self._definitions.load(ai_id)
         cached_model = self._models.get(ai_id)
         if cached_model is None or cached_model[0] != definition.fingerprint:
@@ -69,7 +65,7 @@ class MemoryModelPool:
         self,
         ai_id: str,
         output_type: type[OutputT],
-    ) -> tuple[AgentDefinition, Runnable]:
+    ) -> tuple[AgentDefinition, StructuredOutput]:
         definition, model = await self.resources(ai_id)
 
         key = (ai_id, output_type)
@@ -79,7 +75,7 @@ class MemoryModelPool:
                 self._config.memory_max_requests,
                 self._config.retry_count + 1,
             )
-            runnable = structured_output_runnable(
+            runnable = StructuredOutput(
                 model,
                 output_type,
                 attempts,
@@ -105,8 +101,8 @@ class MemoryModelPool:
             self._observability,
             {"max_tokens": self._config.memory_max_tokens},
         ) as span:
-            result = await runnable.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=prompt)])
-            output = parsed_output(result, output_type)
+            result = await runnable.generate([SystemMsg("system", content=system_prompt), UserMsg("user", content=prompt)])
+            output = result["parsed"]
             record_messages_usage(span, [result["raw"]])
             record_model_content(
                 span,

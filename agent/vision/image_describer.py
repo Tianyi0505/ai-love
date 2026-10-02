@@ -2,29 +2,26 @@ from __future__ import annotations
 
 import base64
 
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from agentscope.message import TextBlock, UserMsg
+from agentscope.model import ChatModelBase
 
 from agent.vision.image_description import ImageDescription
 from agent.vision.image_fetcher import ImageFetcher
 from agent.vision.vision_output_policy import VisionOutputPolicy
+from shared.agent_output import StructuredOutput, image_block
 from shared.global_settings import ObservabilitySettings
-from shared.langchain_observability import (
+from shared.mcp_output_client import MCPOutputClient
+from shared.model_observability import (
     model_span,
     record_messages_usage,
     record_model_content,
 )
-from shared.langchain_structured_output import (
-    parsed_output,
-    structured_output_runnable,
-)
-from shared.mcp_output_client import MCPOutputClient
 
 
 class ImageDescriber:
     def __init__(
         self,
-        model: BaseChatModel,
+        model: ChatModelBase,
         model_name: str,
         fetcher: ImageFetcher,
         output_policy: VisionOutputPolicy,
@@ -40,7 +37,7 @@ class ImageDescriber:
         self._prompt = prompt
         self._max_tokens = max_tokens
         self._observability = observability
-        self._model = structured_output_runnable(
+        self._model = StructuredOutput(
             model,
             ImageDescription,
             retry_count + 1,
@@ -53,10 +50,10 @@ class ImageDescriber:
             f"data:{image.media_type};base64,"
             f"{base64.b64encode(image.data).decode('ascii')}"
         )
-        message = HumanMessage(
+        message = UserMsg("user",
             content=[
-                {"type": "text", "text": self._prompt},
-                {"type": "image_url", "image_url": {"url": data_url}},
+                TextBlock(text=self._prompt),
+                image_block(data_url),
             ]
         )
         with model_span(
@@ -67,8 +64,8 @@ class ImageDescriber:
         ) as span:
             if self._observability.include_binary_content:
                 span.set_attribute("gen_ai.input.image", data_url)
-            result = await self._model.ainvoke([message])
-            output = parsed_output(result, ImageDescription)
+            result = await self._model.generate([message])
+            output = result["parsed"]
             record_messages_usage(span, [result["raw"]])
             record_model_content(
                 span,

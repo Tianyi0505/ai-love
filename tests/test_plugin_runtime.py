@@ -266,7 +266,7 @@ async def test_real_nats_builtin_avatar_can_hotplug_100_times(tmp_path):
 
 
 async def test_builtin_mcp_tools_disappear_and_return_through_real_http(tmp_path):
-    from mcp import Client
+    from shared.mcp_session import mcp_session
 
     root = tmp_path / "catalog"
     manifest(
@@ -285,16 +285,16 @@ async def test_builtin_mcp_tools_disappear_and_return_through_real_http(tmp_path
     control = PluginControlClient(host.bus, ("mcp",))
     try:
         port = host.manager.resolve("mcp.server").http.servers[0].sockets[0].getsockname()[1]
-        async with Client(f"http://127.0.0.1:{port}/mcp") as mcp:
+        async with mcp_session(f"http://127.0.0.1:{port}/mcp") as mcp:
             tools = await mcp.list_tools()
             assert len(tools.tools) == 1
             name = tools.tools[0].name
             # The existing music adapter records intents; this does not contact a player.
             result = await mcp.call_tool(name, {"action": "pause"})
-            assert not result.is_error
+            assert not result.isError
             assert (await command(control, "disable", "music", host="mcp"))["status"] == "completed"
             assert not (await mcp.list_tools()).tools
-            assert (await mcp.call_tool(name, {"action": "pause"})).is_error
+            assert (await mcp.call_tool(name, {"action": "pause"})).isError
             assert (await command(control, "enable", "music", host="mcp"))["status"] == "completed"
             assert len((await mcp.list_tools()).tools) == 1
     finally:

@@ -1,6 +1,6 @@
 # AI-Love 插件运行时
 
-业务能力由本地 `plugin.json` 清单、稳定契约和统一宿主管理。基础目录包含 17 个插件、7 种宿主；structured-output 的结果工具见 [人设与 MCP 结果](persona-memory-and-mcp-output.md)。管理页为 `#/plugins`（能力工坊）。
+业务能力由本地 `plugin.json` 清单、稳定契约和统一宿主管理。基础目录包含 17 个插件、7 种宿主；structured-output 的结果工具见 [AgentScope 运行时](agentscope-runtime.md)。管理页为 `#/plugins`（能力工坊）。
 
 ## 架构结果
 
@@ -37,7 +37,7 @@
 | live-edge | avatar | 形象事件 |
 | live-edge | stream | 推流事件 |
 
-具体供应商由工厂插件注册。交付能力以此目录和[验证结果](plugin-validation.md)为准；[独立包架构规格](../specs/002-plugin-architecture/spec.md)描述更完整的目标。
+具体供应商由工厂插件注册。交付能力以此目录为准；[独立包架构规格](../specs/002-plugin-architecture/spec.md)描述更完整的目标。
 
 ## 运行与管理契约
 
@@ -61,7 +61,7 @@ python -m plugin_runtime --role live-edge
 
 单宿主变更采用串行控制。重启后期望状态和操作历史保留，中断操作记录为 `interrupted`。级联操作的结果包含每个插件的实际状态。
 
-MCP 工具目录与工具网关同步，新对话使用最新工具图，当前回合持有自身快照；执行授权以实际活动工具和当前权限为准。普通对话与本地工具具有独立能力边界。
+MCP 工具目录与工具网关同步，新对话使用最新 AgentScope Toolkit，当前回合持有自身快照；执行授权以实际活动工具和当前权限为准。普通对话与本地工具具有独立能力边界。
 
 ## 插件示例
 

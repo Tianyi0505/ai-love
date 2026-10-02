@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
-from langchain_openai.chat_models.base import BaseChatOpenAI
+from agentscope.model import OpenAIChatModel
 from output_fixtures import ValidatingOutputClient
 
 from agent.conversation.chat_agent import ChatAgent
@@ -33,13 +33,13 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
     config = settings()
     requests = []
     outputs = {
-        "submit_response_plan": {
+        "speech": {
             "speech": [{"text": "你好", "delivery": "text"}],
             "emotion": {"name": "happy", "intensity": 0.5},
             "actions": [],
         },
-        "submit_participation_decision": {"participate": True, "reason": "被直接提问"},
-        "submit_memory_extraction": {"episode_summary": "聊了天气", "memories": []},
+        "participate": {"participate": True, "reason": "被直接提问"},
+        "episode_summary": {"episode_summary": "聊了天气", "memories": []},
     }
 
     def respond(request):
@@ -52,7 +52,10 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
         assert "max_completion_tokens" not in payload
         assert "response_format" not in payload
         assert "parallel_tool_calls" not in payload
-        name = payload["tools"][0]["function"]["name"]
+        tool = payload["tools"][0]["function"]
+        name = tool["name"]
+        assert name == "GenerateStructuredOutput"
+        output = next(value for key, value in outputs.items() if key in tool["parameters"]["properties"])
         return httpx.Response(200, json={
             "id": "chatcmpl-test", "object": "chat.completion", "created": 0,
             "model": model_id,
@@ -60,7 +63,7 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
                 "index": 0, "finish_reason": "tool_calls",
                 "message": {"role": "assistant", "content": None, "tool_calls": [{
                     "id": "call-test", "type": "function",
-                    "function": {"name": name, "arguments": json.dumps({"result": outputs[name]})},
+                    "function": {"name": name, "arguments": json.dumps(output)},
                 }]},
             }],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
@@ -80,9 +83,10 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
     monkeypatch.setenv("AGNES_API_KEY", "test-agnes-key")
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         def make_model(**kwargs):
-            return BaseChatOpenAI(**kwargs, http_async_client=client)
+            kwargs["client_kwargs"]["http_client"] = client
+            return OpenAIChatModel(**kwargs)
 
-        monkeypatch.setattr("shared.chat_model_strategy.BaseChatOpenAI", make_model)
+        monkeypatch.setattr("shared.chat_model_strategy.OpenAIChatModel", make_model)
         definitions = AgentDefinitionStore(FileConfigProvider())
         definition = await definitions.load("ai_luoyu")
         assert not definition.model_profile.multimodal_model_ids
@@ -96,7 +100,7 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
             output_policy=ResponseOutputPolicy(config.llm.output_limits),
             max_requests=config.llm.max_requests,
             participation_max_requests=config.llm.participation_max_requests,
-            max_tokens=config.llm.max_tokens, retry_count=0, tool_retry_count=0,
+            max_tokens=config.llm.max_tokens, retry_count=0,
             observability=config.observability,
             output_client=ValidatingOutputClient(),
         )
@@ -110,7 +114,7 @@ async def test_agnes_chat_and_memory_use_documented_http_contract(monkeypatch, m
         assert result.episode_summary == "聊了天气"
 
     assert len(requests) == 4
-    assert requests[0]["messages"][0] == {"role": "system", "content": "请简短回复"}
+    assert "请简短回复" in str(requests[0]["messages"][0]["content"])
     assert requests[0]["max_tokens"] == config.llm.max_tokens
     assert requests[-1]["max_tokens"] == config.llm.memory_max_tokens
 

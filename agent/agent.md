@@ -9,6 +9,7 @@
 - AgentDefinitionStore 的人物定义由 agent.default 与 agent.<ai_id> 合并，catalog 和定义变化对应最新运行时目录。
 - AgentSupervisor 是 Runtime 目录、热更新及分发并发的拥有者；fingerprint 相同的实例保持连续。
 - 每个 Runtime 提供 Persona、Prompt、ChatAgent、Vision、Memory、Sticker、TTS、工具与社交策略。
+- ChatAgent 使用 AgentScope Agent、Toolkit 和原生 structured_schema；每次生成拥有独立 AgentState，长期记忆由 MemoryModule 管理。
 - TurnCoordinator 保证同会话状态有序，各会话具有独立并发范围。
 - 回复出口为 social.send.request，真实回合的记忆凭证为 memory.activity。
 - 后台资源由 spawn() 登记，实例停止结果包含在途工作归零与 HTTP client 关闭。

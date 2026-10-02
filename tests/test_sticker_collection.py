@@ -1,10 +1,9 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableLambda
-from output_fixtures import ValidatingOutputClient, tool_runnable
+from agentscope.message import AssistantMsg
+from output_fixtures import ResultModel, ValidatingOutputClient
 
 from agent.social.sticker_collector import StickerCollector
 from agent.social.sticker_judge import StickerJudge
@@ -26,9 +25,8 @@ async def test_collection_requires_sticker_classification_even_with_high_score(i
         description="图片中出现开心和鼓掌的内容", image_type=image_type,
         tags=["开心", "鼓掌"], match_quality=0.95, emotion="happy", sticker_description="开心鼓掌",
     )
-    call = AsyncMock(return_value={"parsed": output, "raw": AIMessage(content=""), "parsing_error": None})
-    model = MagicMock()
-    model.bind_tools.return_value = tool_runnable(RunnableLambda(call))
+    call = AsyncMock(return_value={"parsed": output, "raw": AssistantMsg("model", content=""), "parsing_error": None})
+    model = ResultModel(call)
     fetcher = SimpleNamespace(fetch=AsyncMock(return_value=FetchedImage(data=b"image", media_type="image/png")))
     vision = ImageDescriber(
         model, "vision", fetcher, VisionOutputPolicy(settings.image.output_limits),
@@ -51,8 +49,7 @@ async def test_unavailable_sticker_evaluation_keeps_text_reply(failure):
     """验证图片或判断模型不可用时采用文字回复"""
     fetcher = SimpleNamespace(data_urls=AsyncMock(return_value=("data:image/png;base64,YQ==",)))
     call = AsyncMock(side_effect=RuntimeError("判断服务不可用"))
-    model = MagicMock()
-    model.bind_tools.return_value = tool_runnable(RunnableLambda(call))
+    model = ResultModel(call)
     if failure == "fetch":
         fetcher.data_urls.side_effect = RuntimeError("图片获取失败")
     judge = StickerJudge(
