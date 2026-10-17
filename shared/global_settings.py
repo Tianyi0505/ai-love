@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SettingsModel(BaseModel):
@@ -199,6 +199,7 @@ class MemoryOutputLimits(SettingsModel):
 
 class MemoryGenerationSettings(SettingsModel):
     output_limits: MemoryOutputLimits
+    extraction_attempts: int = Field(default=2, ge=1, le=5)
 
 
 class MemoryDocumentSchema(SettingsModel):

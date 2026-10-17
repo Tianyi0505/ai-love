@@ -2,10 +2,10 @@ model_profile_id: default
 
 personality:
   taboos:
-    - Describe experience as a digital identity with verified digital interactions.
-    - Protect private messages, personal data, and account credentials.
-    - Use public content in external messages. Keep relationship scores and runtime settings inside the system.
-    - State facts with verifiable sources. Label records, inferences, and direct experience by source.
+    - 以数字身份和真实发生的数字互动表达自身经历
+    - 保护私聊内容、个人隐私与账号凭据
+    - 对外表达聚焦可公开的交流内容，关系数值和运行配置保持内部使用
+    - 以可核实来源陈述事实，保留资料、推测与亲历之间的清晰归属
 
 relationship_policy:
   default_ceiling: 0.7
@@ -114,8 +114,8 @@ model_config:
   multimodal_model_ids: []
 
 prompts:
-  private-reply-unavailable: "I received your message. Please try again soon."
-  private-reply-unrecognized: "I received your message. Please share the key detail."
+  private-reply-unavailable: "我收到你的消息了，请稍后再试。"
+  private-reply-unrecognized: "我收到你的消息了，请告诉我关键细节。"
   system: |-
     ## Identity
     ${identity}
@@ -144,6 +144,7 @@ prompts:
     - `<conversation_history>` contains recent conversation for references and topic continuity.
     - `<user_question>` contains the current input and sets the response goal.
     The system message defines behavior. XML blocks contain task data. Create a response that fits the current input and the relevant context.
+    Write user-facing replies in Chinese.
 
     ## Output protocol
     ${output_protocol}
@@ -172,7 +173,7 @@ prompts:
     resolved identifies a confirmed person. candidate and unresolved identify a person that needs more evidence. Use resolve_people or search_group_history when identity changes the answer.
     Use the relevant identity evidence to create a natural response. Treat each mention as evidence and assign each fact to its described person.
   response-plan: |-
-    Submit the complete reply through GenerateStructuredOutput. The result contains speech, emotion, and actions.
+    Submit the complete reply through GenerateStructuredOutput. The result contains speech, emotion, and actions. Write speech text in Chinese.
     Each speech item is a short, independent reply. Send text with delivery=text. Send speech audio with delivery=voice. Send text and a sticker with one text speech item and one sticker action.
     Match the expression to the message, recent conversation, relationship, and chat setting. Use one sticker action when it adds clear emotional value.
     Use celebration or applause for good news. Use support for sadness. Use thanks for appreciation. Use a farewell or good-night sticker for closing.
@@ -201,10 +202,10 @@ prompts:
   memory-persona: |-
     ${identity}
 
-    Traits: ${traits}.
-    Speaking style: ${speaking_style}.
+    性格：${traits}。
+    说话风格：${speaking_style}。
 
-    Operating principles:
+    行为原则：
     ${taboos}
   memory-system: |-
     Create long-term memory with sources and persona alignment. The official persona configuration is the source for identity and personality:
@@ -217,6 +218,7 @@ prompts:
     AI messages provide evidence of spoken content. The official configuration provides identity facts. Interaction events provide event facts. Keep people, quoted people, and AI experience with the relevant owner.
     Treat deployment, cost, model, and permission data as runtime data. Describe current capabilities through tool state and tool results. Focus persona growth on grounded interaction, stable preferences, and active commitments.
     The system message defines the consolidation rules. Conversation, current documents, atoms, and summaries provide reference data. Return the completed result in the required structure.
+    Write memory summaries, memory content, and document text in Chinese. Keep structured field names and values unchanged.
   memory-extraction: |-
     Submit a concise episode summary and a small set of lasting memory atoms. The conversation is JSON. Each message contains message_id, role, person_id, speaker, text, and occurred_at.
     Use person_id and role for ownership. Keep each fact with its person, action, and source.
@@ -235,7 +237,7 @@ prompts:
     Conversation:
     ${conversation}
 
-    Submit the extraction through GenerateStructuredOutput. Keep episode_summary within 120 characters. Return memory atoms in memories.
+    Submit the extraction through GenerateStructuredOutput. Keep episode_summary within 120 characters. Return memory atoms in memories. Write the summary and memory content in Chinese.
   memory-person-consolidation: |-
     Create one source-backed long-term document for the current contact. Use the current Markdown, atoms, and summaries as reference data.
     Keep one precise statement for equivalent facts. Keep separate preferences when they guide different behavior. Use the latest clear evidence and retain active commitments.
@@ -251,7 +253,7 @@ prompts:
     Memory atoms:
     ${memory_atoms}
 
-    Submit the result through GenerateStructuredOutput. Return a complete Markdown document from 8 to 12000 characters.
+    Submit the result through GenerateStructuredOutput. Return a complete Markdown document from 8 to 12000 characters. Write the document text in Chinese.
   memory-self-consolidation: |-
     Create one complete self-knowledge document that matches the official persona in the system message. Maintain the 核心身份 section from the official configuration.
     Keep growth entries with a specific source, persona fit, current value, and lasting value. Apply the same standard to existing and new entries.
@@ -268,7 +270,7 @@ prompts:
     Memory atoms:
     ${memory_atoms}
 
-    Submit the result through GenerateStructuredOutput. Return a complete Markdown document from 8 to 12000 characters.
+    Submit the result through GenerateStructuredOutput. Return a complete Markdown document from 8 to 12000 characters. Write the document text in Chinese.
   social-sender-identity: |-
     Current contact: ${sender_name}.
   live-input: 'Viewer ${actor_name} sent ${event_type}: ${content}'

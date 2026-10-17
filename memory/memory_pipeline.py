@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from string import Template
 from typing import cast
 
@@ -41,6 +42,9 @@ class MemoryPipeline:
         self._models = models
         self._bus = bus
         self._extraction = config.extraction
+        self._extraction_attempts = config.generation.extraction_attempts
+        self._output_limits = config.generation.output_limits
+        self._lease_safety_margin_sec = min(30.0, config.worker_lease_sec / 10)
         self._consolidation = config.consolidation
         self._token_estimation = config.token_estimation
         self._output_policy = output_policy
@@ -117,14 +121,38 @@ class MemoryPipeline:
             ),
             conversation=conversation,
         )
-        output = self._output_policy.validate_extraction(
-            await self._models.generate(
-                data.ai_id,
-                prompt,
-                MemoryExtractionOutput,
-            )
+        limits = self._output_limits
+        prompt += (
+            "\n\nOutput limits: "
+            f"episode_summary has {limits.episode_summary_min_chars} to {limits.episode_summary_max_chars} characters; "
+            f"memories has at most {limits.memories_max_count} entries; "
+            f"each memory content has {limits.memory_content_min_chars} to {limits.memory_content_max_chars} characters; "
+            f"importance is from {limits.importance_min} to {limits.importance_max}; "
+            f"confidence is from {limits.confidence_min} to {limits.confidence_max}."
         )
-        output = self._output_policy.ground_extraction(output, messages)
+        for attempt in range(self._extraction_attempts):
+            try:
+                if claim.data.lease_until is None:
+                    raise ValueError("Memory extraction claim has no lease")
+                remaining = claim.data.lease_until - time.time() - self._lease_safety_margin_sec
+                if remaining <= 0:
+                    raise TimeoutError("Memory extraction lease is about to expire")
+                async with asyncio.timeout(remaining):
+                    generated = await self._models.generate(
+                        data.ai_id,
+                        prompt,
+                        MemoryExtractionOutput,
+                    )
+                output = self._output_policy.validate_extraction(generated)
+                output = self._output_policy.ground_extraction(output, messages)
+                break
+            except ValueError:
+                if attempt + 1 == self._extraction_attempts:
+                    raise
+                prompt += (
+                    "\nReturn a complete extraction that satisfies the output limits "
+                    "and uses source_message_ids from this conversation."
+                )
         summary = output.episode_summary
         atoms = [memory.model_dump(mode="json") for memory in output.memories]
         estimated_tokens = max(

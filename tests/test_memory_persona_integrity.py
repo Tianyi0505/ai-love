@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,6 +9,8 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 import yaml
+from agentscope.message import TextBlock
+from agentscope.model import ChatResponse, FinishedReason
 from output_fixtures import ScriptedModel, ValidatingOutputClient, tool_call
 from sqlalchemy import select
 from test_memory_state import FakeKV
@@ -94,17 +97,21 @@ async def memory_flow(private_database):
         sequence=1, active_at=occurred.timestamp() + 1,
     ))
 
-    def build(extraction):
-        model = RecordingModel(extraction)
+    def build(extraction, model=None, *, lease_sec=None):
+        model = model or RecordingModel(extraction)
+        memory_config = memory
+        if lease_sec is not None:
+            memory_config = memory.model_copy(update={"worker_lease_sec": lease_sec})
+            state._lease = lease_sec
         models = MemoryModelPool(
             AgentDefinitionStore(FileConfiguration()), config.llm, config.observability,
             model_factory=lambda *args, **kwargs: model,
             output_client_factory=lambda ai_id: ValidatingOutputClient(),
         )
         pipeline = MemoryPipeline(
-            repo=EpisodeMemoryRepository(db, memory), state=state, models=models, bus=None, config=memory,
-            output_policy=MemoryOutputPolicy(memory.generation.output_limits),
-            document_policy=MemoryDocumentPolicy(memory.document_schemas),
+            repo=EpisodeMemoryRepository(db, memory_config), state=state, models=models, bus=None, config=memory_config,
+            output_policy=MemoryOutputPolicy(memory_config.generation.output_limits),
+            document_policy=MemoryDocumentPolicy(memory_config.document_schemas),
         )
         return pipeline, model
 
@@ -137,8 +144,9 @@ async def test_production_pipeline_grounds_sources_and_anchors_identity(memory_f
     assert all(a.consolidated_at is not None for a in atoms)
     self_document = next(d for d in documents if d.owner_type == "self")
     assert self_document.version == 5
-    assert "a digital AI with a persistent identity" in self_document.markdown_content
-    assert "sincere、lively、independent" in self_document.markdown_content
+    assert "具有持续身份、记忆、关系和成长经历" in self_document.markdown_content
+    assert "性格：真诚、活泼、有自己的判断" in self_document.markdown_content
+    assert "行为原则：" in self_document.markdown_content
     assert "整理排查思路" in self_document.markdown_content
     assert "服务器住客" not in self_document.markdown_content
     assert "没有主人" not in self_document.markdown_content
@@ -149,12 +157,15 @@ async def test_production_pipeline_grounds_sources_and_anchors_identity(memory_f
     for messages in model.requests:
         system, user = messages[:2]
         assert system.role == "system" and user.role == "user"
-        assert "a digital AI with a persistent identity" in system.get_text_content()
+        assert "具有持续身份、记忆、关系和成长经历" in system.get_text_content()
         assert "Keep people, quoted people, and AI experience with the relevant owner" in system.get_text_content()
+        assert "Write memory summaries, memory content, and document text in Chinese" in system.get_text_content()
     extraction_prompt = model.requests[0][1].get_text_content()
+    assert "Write the summary and memory content in Chinese" in extraction_prompt
     for message_id, role in (("101", "user"), ("102", "assistant")):
         assert f'"message_id": "{message_id}", "role": "{role}"' in extraction_prompt
     self_prompt = next(messages[1].get_text_content() for messages in model.requests[1:] if "自我长期认知" in messages[1].get_text_content())
+    assert "Write the document text in Chinese" in self_prompt
     assert "旧文档把免费节点当成人设" not in self_prompt
     assert '"source_message_ids": ["103", "104"]' in self_prompt
 
@@ -172,6 +183,74 @@ async def test_unknown_evidence_retries_without_saving_any_memory(memory_flow):
         assert not (await session.execute(select(m.ConversationEpisode))).scalars().all()
     assert memory_flow.activity.values()[0]["status"] == "active"
     assert memory_flow.pending.values() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["score", "missing_output"])
+async def test_extraction_retries_invalid_model_output_before_saving(memory_flow, failure):
+    valid = MemoryExtractionOutput(episode_summary="讨论了排查思路。", memories=[
+        atom("person", "联系人喜欢文字步骤。", ["103"]),
+    ])
+    invalid = valid.model_copy(deep=True)
+    invalid.memories[0].importance = 5.0
+    first = (
+        tool_call(invalid) if failure == "score" else
+        ChatResponse(content=[TextBlock(text="No structured result")], is_last=True,
+                     finished_reason=FinishedReason.COMPLETED)
+    )
+    model = ScriptedModel(responses=[first, tool_call(valid)])
+    pipeline, _ = memory_flow.build(valid, model=model)
+
+    await pipeline.process_due_activities()
+
+    async with memory_flow.db.session() as session:
+        atoms = (await session.execute(select(m.MemoryAtom))).scalars().all()
+        episodes = (await session.execute(select(m.ConversationEpisode))).scalars().all()
+    assert len(atoms) == len(episodes) == 1
+    assert atoms[0].importance == 0.8
+    assert memory_flow.activity.values() == []
+    assert len(model.requests) == 2
+    first_prompt = model.requests[0][1].get_text_content()
+    retry_prompt = model.requests[1][1].get_text_content()
+    assert "importance is from 0.0 to 1.0" in first_prompt
+    assert "confidence is from 0.0 to 1.0" in first_prompt
+    assert "satisfies the output limits" in retry_prompt
+
+
+@pytest.mark.asyncio
+async def test_extraction_releases_activity_after_retry_limit(memory_flow):
+    invalid = MemoryExtractionOutput(episode_summary="讨论了排查思路。", memories=[
+        atom("person", "联系人喜欢文字步骤。", ["103"]),
+    ])
+    invalid.memories[0].importance = 5.0
+    pipeline, model = memory_flow.build(invalid)
+
+    with pytest.raises(ValueError):
+        await pipeline.process_due_activities()
+
+    async with memory_flow.db.session() as session:
+        assert not (await session.execute(select(m.MemoryAtom))).scalars().all()
+        assert not (await session.execute(select(m.ConversationEpisode))).scalars().all()
+    assert len(model.requests) == 2
+    assert memory_flow.activity.values()[0]["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_extraction_stops_model_call_before_lease_expires(memory_flow):
+    valid = MemoryExtractionOutput(episode_summary="讨论了排查思路。", memories=[])
+
+    async def slow_model(messages, tools):
+        await asyncio.sleep(2)
+        return tool_call(valid)
+
+    model = ScriptedModel(callback=slow_model)
+    pipeline, _ = memory_flow.build(valid, model=model, lease_sec=1)
+    with pytest.raises(TimeoutError):
+        await pipeline.process_due_activities()
+
+    async with memory_flow.db.session() as session:
+        assert not (await session.execute(select(m.ConversationEpisode))).scalars().all()
+    assert memory_flow.activity.values()[0]["status"] == "active"
 
 
 @pytest.mark.parametrize("heading", ["## 核心身份", "核心身份\n--------"])

@@ -56,6 +56,8 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("`<retrieved_context>`", system_prompt)
         self.assertIn("`<conversation_history>`", system_prompt)
         self.assertIn("`<user_question>`", system_prompt)
+        self.assertIn("Write user-facing replies in Chinese", system_prompt)
+        self.assertIn("Write speech text in Chinese", system_prompt)
         self.assertNotIn("检索到的记忆", system_prompt)
         self.assertLess(user_prompt.index("<conversation_history>"), user_prompt.index("<retrieved_context>"))
         self.assertLess(user_prompt.index("<retrieved_context>"), user_prompt.index("<user_question>"))
