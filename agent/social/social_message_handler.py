@@ -123,7 +123,8 @@ async def _process(service, msg, execution, *, send=True):
         )
         return {"outcome": "group_repeat", "tool_rounds": 0, "response_text": repeat_text}
 
-    explicitly_addressed = bool(is_group and (msg.to_ai or (msg.at_user_id and msg.at_user_id == service.ai_id)))
+    # to_ai 由渠道按当前登录账号和直接引用的发送者确认；其余消息按普通群聊判断。
+    explicitly_addressed = bool(is_group and msg.to_ai)
     group_turn_started = False
     if is_group:
         group_turn_started = await service.group_participation.begin_turn(
@@ -144,8 +145,6 @@ async def _process(service, msg, execution, *, send=True):
         should_respond = not is_group or service.persona.should_respond_directly(
             msg.chat.chat_type.value,
             msg.to_ai,
-            msg.at_user_id,
-            service.ai_id,
         )
         if is_group and not should_respond:
             should_respond = await service.group_participation.should_join(

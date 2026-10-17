@@ -62,9 +62,9 @@ class Persona:
         return self._social_settings.contact_names.get(user_id, "")
 
     # 判断是否需要回复
-    def should_respond_directly(self, chat_type: str, to_ai: bool, at_user_id: str, ai_id: str) -> bool:
+    def should_respond_directly(self, chat_type: str, to_ai: bool) -> bool:
         if chat_type == ChatType.PRIVATE.value:
             return True
-        if to_ai or (at_user_id and at_user_id == ai_id):
+        if to_ai:
             return True
         return False

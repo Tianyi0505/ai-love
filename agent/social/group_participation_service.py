@@ -147,7 +147,7 @@ class GroupParticipationService:
         context = PromptContext(
             scene="group-join",
             user_input=current_message,
-            extra={"提及状态": "当前真实消息明确 @ 了你" if explicitly_addressed else "当前群聊消息"},
+            extra={"提及状态": "当前真实消息明确 @ 了你或回复了你的消息" if explicitly_addressed else "当前群聊消息"},
             recent_messages=(history_text,) if history_text else (),
             relationship_summary=self._prompt_assembler.render(
                 "group-join-relationship",
