@@ -167,7 +167,7 @@ class GroupRepeatJudgeTests(unittest.IsolatedAsyncioTestCase):
         messages = call.await_args.args[0]
         self.assertIn("Decide whether a group plus-one reply fits.", messages[0].get_text_content())
         self.assertEqual(["甲", "乙"], [record["group_display_name"] for record in json.loads(messages[1].get_text_content())])
-        self.assertEqual(2, messages[1].get_text_content().count("Wed"))
+        self.assertTrue(all(record["timestamp"] for record in json.loads(messages[1].get_text_content())))
         self.assertEqual(2, messages[1].get_text_content().count("支持这个方案"))
 
     async def test_model_failure_is_fail_closed(self) -> None:

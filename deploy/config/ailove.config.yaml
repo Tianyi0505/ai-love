@@ -224,30 +224,30 @@ memory:
       markdown_max_chars: 12000
   document_schemas:
     person:
-      title: Long-Term Contact Knowledge
+      title: 联系人长期认知
       sections:
-        - Basic Information
-        - Current Interests
-        - Stable Preferences
-        - Communication Preferences
-        - Important Events
-        - Relationship Context
-        - Active Commitments
-        - Open Questions
-      empty_document: '# Long-Term Contact Knowledge'
+        - 基本信息
+        - 当前关注
+        - 稳定偏好
+        - 交流偏好
+        - 重要经历
+        - 关系认知
+        - 未完成事项
+        - 不确定信息
+      empty_document: '# 联系人长期认知'
     self:
-      title: Long-Term Self Knowledge
-      identity_section: Core Identity
+      title: 自我长期认知
+      identity_section: 核心身份
       sections:
-        - Core Identity
-        - Current Interests
-        - Stable Preferences
-        - Communication Style
-        - Important Events
-        - Behavior Principles
-        - Active Commitments
-        - Open Questions
-      empty_document: '# Long-Term Self Knowledge'
+        - 核心身份
+        - 当前关注
+        - 稳定偏好
+        - 交流方式
+        - 重要经历
+        - 行为原则
+        - 未完成事项
+        - 不确定信息
+      empty_document: '# 自我长期认知'
   episode:
     history_episode_limit: 12
   extraction:

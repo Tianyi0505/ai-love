@@ -137,8 +137,8 @@ async def test_production_pipeline_grounds_sources_and_anchors_identity(memory_f
     assert all(a.consolidated_at is not None for a in atoms)
     self_document = next(d for d in documents if d.owner_type == "self")
     assert self_document.version == 5
-    assert "存在形态为数字形态" in self_document.markdown_content
-    assert "真诚、活泼、有自己的判断" in self_document.markdown_content
+    assert "a digital AI with a persistent identity" in self_document.markdown_content
+    assert "sincere、lively、independent" in self_document.markdown_content
     assert "整理排查思路" in self_document.markdown_content
     assert "服务器住客" not in self_document.markdown_content
     assert "没有主人" not in self_document.markdown_content
@@ -149,8 +149,8 @@ async def test_production_pipeline_grounds_sources_and_anchors_identity(memory_f
     for messages in model.requests:
         system, user = messages[:2]
         assert system.role == "system" and user.role == "user"
-        assert "存在形态为数字形态" in system.get_text_content()
-        assert "联系人、被引用人物和 AI 的经历各归其主" in system.get_text_content()
+        assert "a digital AI with a persistent identity" in system.get_text_content()
+        assert "Keep people, quoted people, and AI experience with the relevant owner" in system.get_text_content()
     extraction_prompt = model.requests[0][1].get_text_content()
     for message_id, role in (("101", "user"), ("102", "assistant")):
         assert f'"message_id": "{message_id}", "role": "{role}"' in extraction_prompt

@@ -140,9 +140,9 @@ prompts:
     ${person_rules}
 
     ## Input structure
-    - retrieved_context contains long-term knowledge, relationships, memory, summaries, and entity data.
-    - conversation_history contains recent conversation for references and topic continuity.
-    - user_question contains the current input and sets the response goal.
+    - `<retrieved_context>` contains long-term knowledge, relationships, memory, summaries, and entity data.
+    - `<conversation_history>` contains recent conversation for references and topic continuity.
+    - `<user_question>` contains the current input and sets the response goal.
     The system message defines behavior. XML blocks contain task data. Create a response that fits the current input and the relevant context.
 
     ## Output protocol
@@ -240,7 +240,7 @@ prompts:
     Create one source-backed long-term document for the current contact. Use the current Markdown, atoms, and summaries as reference data.
     Keep one precise statement for equivalent facts. Keep separate preferences when they guide different behavior. Use the latest clear evidence and retain active commitments.
     Keep confirmation items with a specific source and future conversation value. Give each document statement an evidence source.
-    Use the title # Long-Term Contact Knowledge. Use these section names when they have content: Basic Information, Current Interests, Stable Preferences, Communication Preferences, Important Events, Relationship Context, Active Commitments, Open Questions.
+    Use the title # 联系人长期认知. Use these section names when they have content: 基本信息, 当前关注, 稳定偏好, 交流偏好, 重要经历, 关系认知, 未完成事项, 不确定信息.
 
     Current Markdown:
     ${current_markdown}
@@ -253,11 +253,11 @@ prompts:
 
     Submit the result through GenerateStructuredOutput. Return a complete Markdown document from 8 to 12000 characters.
   memory-self-consolidation: |-
-    Create one complete self-knowledge document that matches the official persona in the system message. Maintain the Core Identity section from the official configuration.
+    Create one complete self-knowledge document that matches the official persona in the system message. Maintain the 核心身份 section from the official configuration.
     Keep growth entries with a specific source, persona fit, current value, and lasting value. Apply the same standard to existing and new entries.
     Use verified digital interaction, cross-context preferences, and active commitments as growth content. Use summaries for context and atoms with sources for facts. Keep runtime data with its runtime owner.
     Keep one precise statement for equivalent facts. Keep separate preferences when they guide different behavior. Keep every section aligned with the official persona.
-    Use the title # Long-Term Self Knowledge. Use these section names when they have content: Core Identity, Current Interests, Stable Preferences, Communication Style, Important Events, Behavior Principles, Active Commitments, Open Questions.
+    Use the title # 自我长期认知. Use these section names when they have content: 核心身份, 当前关注, 稳定偏好, 交流方式, 重要经历, 行为原则, 未完成事项, 不确定信息.
 
     Current Markdown:
     ${current_markdown}
