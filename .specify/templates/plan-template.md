@@ -1,57 +1,57 @@
 # Implementation Plan: [FEATURE]
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [规格路径]
-**Input**: [规格路径与用户范围]
+**Branch**: \`[###-feature-name]\` | **Date**: [DATE] | **Spec**: [specification path]
+**Input**: [specification path and user scope]
 
 ## Summary
 
-[交付能力、架构边界和可观察结果。]
+[Delivery capability, architecture boundary, and observable result.]
 
 ## Technical Context
 
-**Language/Version**: [语言及运行版本]
-**Primary Dependencies**: [依赖与固定版本]
-**Storage**: [数据所有权及持久位置]
-**Testing**: [真实入口、依赖环境与验收边界]
-**Target Platform**: [运行环境]
-**Project Type**: [产品形态]
-**Performance Goals**: [样本量、指标、预算和阈值]
-**Constraints**: [有效权限、资源范围和状态约束]
-**Scale/Scope**: [交付范围]
+**Language/Version**: [language and runtime version]
+**Primary Dependencies**: [dependency and fixed version]
+**Storage**: [data owner and durable location]
+**Testing**: [real entry, environment, and acceptance scope]
+**Target Platform**: [runtime environment]
+**Project Type**: [product type]
+**Performance Goals**: [sample, metric, budget, and threshold]
+**Constraints**: [authority, resource, and state boundary]
+**Scale/Scope**: [delivery scope]
 
 ## Constitution Check
 
-| 原则 | 适用结果 | 证据或目标 |
+| Principle | Applicable result | Evidence or target |
 | --- | --- | --- |
-| [条款] | [该设计满足的条件] | [资料引用] |
+| [rule] | [design condition] | [source] |
 
 ## Project Structure
 
-### Documentation (this feature)
+### Documentation
 
-[spec.md、plan.md、research.md、data-model.md、contracts/、quickstart.md 和 tasks.md 的归属。]
+[spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md, and tasks.md ownership.]
 
-### Source Code (repository root)
+### Source Code
 
-[具有明确职责的包、模块及具体文件路径。]
+[Packages, modules, and file paths with clear responsibilities.]
 
-**Structure Decision**: [边界及实际收益。]
+**Structure Decision**: [boundary and concrete value]
 
 ## Design Artifacts
 
-| 产物 | 完成标准 |
+| Artifact | Complete result |
 | --- | --- |
-| research.md | 技术决策、理由与适用依据 |
-| data-model.md | 实体、字段、唯一性、关联及状态语义 |
-| contracts/ | 当前输入、输出、授权与结果 schema |
-| quickstart.md | 环境、运行入口及可观察验收结果 |
+| research.md | Technical choice, reason, and applicable evidence |
+| data-model.md | Entity, field, uniqueness, relation, and state meaning |
+| contracts/ | Current input, output, authority, and result schema |
+| quickstart.md | Environment, start entry, and observable acceptance result |
 
 ## Complexity Tracking
 
-| 设计选择 | 实际收益 | 范围与授权 |
+| Design choice | Concrete value | Scope and authority |
 | --- | --- | --- |
-| [必要抽象或例外] | [量化或具体收益] | [边界及负责人依据] |
+| [required abstraction or exception] | [measured or specific value] | [boundary and owner] |
 
 ## Delivery Criteria
 
-[交付状态、入口证据、配置与数据恢复结果。目标与实测各有明确标记。]
+[Delivery state, entry evidence, configuration result, and data recovery result. State target and measured values.]

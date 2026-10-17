@@ -7,11 +7,11 @@ from zoneinfo import ZoneInfo
 
 ConversationEntry = tuple[str, str, dict]
 
-_WEEKDAYS = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def group_message_record(timestamp: str, name: str, content: object) -> dict:
-    return {"时间点": timestamp, "用户群聊名": name, "用户发的消息/图片": content}
+    return {"timestamp": timestamp, "group_display_name": name, "user_message_or_image": content}
 
 
 def group_entries(entries, ai_name: str = "") -> list[dict]:
@@ -22,7 +22,7 @@ def group_entries(entries, ai_name: str = "") -> list[dict]:
             continue
         content: object = text
         if meta.get("quote") is not None:
-            content = {"文字": text, "引用用户群聊名": meta["quote"]["name"]}
+            content = {"text": text, "quoted_group_display_name": meta["quote"]["name"]}
         name = ai_name if role == "assistant" else str(meta["speaker_name"])
         records.append(group_message_record(str(meta.get("timestamp", "")), name, content))
     return records
@@ -46,7 +46,7 @@ def format_entries(entries, ai_name: str = "") -> str:
         label = f"[{person_id} | {name}]" if person_id else f"[{name}]"
         quote = meta.get("quote")
         if quote is not None:
-            blocks.append(f"{time_label}{label}\n[引用 {quote['name']}]\n{text}")
+            blocks.append(f"{time_label}{label}\n[Quote: {quote['name']}]\n{text}")
         else:
             blocks.append(f"{time_label}{label}\n{text}")
     return "\n\n".join(blocks)

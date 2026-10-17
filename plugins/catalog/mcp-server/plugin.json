@@ -1,7 +1,7 @@
 {
   "id": "mcp.server",
-  "name": "MCP 服务",
-  "description": "可动态注册与撤销工具的 HTTP 宿主。",
+  "name": "MCP Server",
+  "description": "Hosts dynamically registered MCP tools over HTTP.",
   "host": "mcp",
   "category": "tool",
   "entrypoint": "plugins.mcp:MCPServerPlugin",

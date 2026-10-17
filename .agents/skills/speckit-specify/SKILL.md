@@ -1,48 +1,48 @@
 ---
 name: "speckit-specify"
-description: "来自自然语言目标的可验收功能规格"
-compatibility: "适用于具有 .specify/ 目录的 Spec Kit 项目"
+description: "Create an accepted feature specification from a user goal."
+compatibility: "Use in a Spec Kit project with a .specify directory."
 metadata:
   author: "github-spec-kit"
   source: "templates/commands/specify.md"
 ---
 
-# 来自自然语言目标的可验收功能规格
+# Feature Specification
 
 ## User Input
 
-```text
+\`\`\`text
 $ARGUMENTS
-```
+\`\`\`
 
-当前用户目标和已有授权是产物范围的依据。
+Use the current user goal and granted authority as the work boundary.
 
-## 上下文入口
+## Context
 
-```powershell
+\`\`\`powershell
 .specify/scripts/powershell/resolve-template.ps1 spec-template -Json
-```
+\`\`\`
 
-上下文结果包含适用的 FEATURE_DIR、AVAILABLE_DOCS、模板内容和实际分支。路径采用绝对定位，文档引用采用相对路径。项目宪章提供适用原则，完整输入对应可交付产物。
+Use FEATURE_DIR, AVAILABLE_DOCS, template data, and the active branch. Use the constitution as the governing source.
 
-## 产物
+## Result
 
-当前用户描述对应 SPECIFY_FEATURE_DIRECTORY/spec.md 和 checklists/requirements.md。规格包含独立用户故事、优先级、Given/When/Then、FR、实体、SC 及假设，正文以正向适用条件和可观察结果表达。
+Create \`SPECIFY_FEATURE_DIRECTORY/spec.md\` and \`checklists/requirements.md\`. Include independent user stories, priority, Given/When/Then scenarios, functional requirements, entities, success criteria, and assumptions. Use applicable conditions and observable results.
 
-## 目录与元数据
+## Directory and Metadata
 
-SPECIFY_FEATURE_DIRECTORY 优先采用用户显式路径；默认目录为 specs/<prefix>-<short-name>。short-name 表达 2 至 4 个核心词。prefix 依据 .specify/init-options.json 的 feature_numbering，timestamp 对应 YYYYMMDD-HHMMSS，sequential 对应现有最大编号加 1；branch_numbering 是既有配置的后备字段。
+Use an explicit user path when provided. Otherwise use \`specs/<prefix>-<short-name>\`. Use two to four core words for short-name. Read feature numbering from \`.specify/init-options.json\`. Use the current timestamp for timestamp numbering. Use the next number for sequential numbering.
 
-.specify/feature.json 保存实际解析目录。spec-template 的解析结果是规格结构来源，分支创建属于已启用 before_specify 钩子的作用范围；用户显式 GIT_BRANCH_NAME 保持原值。
+Write the resolved directory to \`.specify/feature.json\`. Use the resolved spec template as the specification structure. Preserve an explicit \`GIT_BRANCH_NAME\`.
 
-## 质量标准
+## Quality Result
 
-规格面向业务利益相关者，功能具有明确条件，成功指标具有环境、样本和阈值。技术细节归 plan，评审清单具有独立文件。
+Write for business stakeholders. Give each function a clear condition. Give each success criterion an environment, sample, and threshold. Keep design detail in plan. Keep review items in a separate checklist.
 
-高影响决策的 NEEDS CLARIFICATION 标记最多 3 个，问题具有明确选项。内置 requirements.md 反映规格实际质量，质量核对迭代最多 3 次。完成报告包含目录、规格路径、质量结果及适用下一项产物。
+Use up to three NEEDS CLARIFICATION markers for high-impact decisions. Give each marker clear options. Update requirements.md to match the specification quality. Report the directory, specification path, quality result, and next artifact.
 
-## 扩展结果契约
+## Extension Contract
 
-扩展定义来源为 `.specify/extensions.yml`，作用点为 `hooks.before_specify` 与 `hooks.after_specify`。有效 YAML 的已启用条目具有执行资格，enabled 默认值为 true。带 condition 的条目由 HookExecutor 求值，空条件条目适用当前会话执行器。
+Read extensions from \`.specify/extensions.yml\`. Run enabled hooks at \`hooks.before_specify\` and \`hooks.after_specify\`. Evaluate condition with HookExecutor. Use every hook with an empty condition.
 
-命令标识中的点对应连字符，例如 speckit.git.commit 对应 speckit-git-commit。`optional: false` 的完成凭证包含 `EXECUTE_COMMAND: {command}` 及真实命令结果；`optional: true` 的报告包含命令、描述和用户提示，执行资格依据用户选择。扩展结果与主产物共同组成完成报告。
+Map a dotted command ID to a hyphenated command name. Report the executed command and its actual result for a required action. Report the command, description, and user choice for an optional action.

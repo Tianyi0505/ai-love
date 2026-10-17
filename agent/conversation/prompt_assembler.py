@@ -60,12 +60,12 @@ class PromptAssembler:
             return json.dumps(
                 {
                     "retrieved_context": {
-                        "关系背景": context.relationship_summary,
-                        "本轮相关人物": json.loads(context.relevant_people) if context.relevant_people else [],
-                        "相关记忆": list(context.memories),
-                        "历史会话摘要": context.conversation_summary,
-                        "实体上下文": json.loads(context.entity_context) if context.entity_context else {},
-                        "参与判断": context.extra,
+                        "relationship_context": context.relationship_summary,
+                        "relevant_people": json.loads(context.relevant_people) if context.relevant_people else [],
+                        "relevant_memory": list(context.memories),
+                        "conversation_summary": context.conversation_summary,
+                        "entity_context": json.loads(context.entity_context) if context.entity_context else {},
+                        "participation_context": context.extra,
                     },
                     "conversation_history": [record for batch in context.recent_messages for record in json.loads(batch)],
                     "user_question": json.loads(context.user_input),
@@ -92,14 +92,14 @@ class PromptAssembler:
     def _build_retrieved_context(self, context: PromptContext) -> str:
         memories = "\n".join(f"- {item}" for item in context.memories)
         sections = (
-            ("自我长期认知", context.self_document or context.growth_summary),
-            ("当前联系人长期认知", context.person_document),
-            ("关系背景", context.relationship_summary),
-            ("本轮相关人物", context.relevant_people),
-            ("相关记忆", memories),
-            ("历史会话摘要", context.conversation_summary),
-            ("工具上下文", context.tool_summary),
-            ("当前消息实体上下文", context.entity_context),
+            ("Long-Term Self Knowledge", context.self_document or context.growth_summary),
+            ("Long-Term Contact Knowledge", context.person_document),
+            ("Relationship Context", context.relationship_summary),
+            ("Relevant People", context.relevant_people),
+            ("Relevant Memory", memories),
+            ("Conversation Summary", context.conversation_summary),
+            ("Tool Context", context.tool_summary),
+            ("Current Entity Context", context.entity_context),
         )
         return "\n\n".join(
             f"[{title}]\n{escape(value)}"

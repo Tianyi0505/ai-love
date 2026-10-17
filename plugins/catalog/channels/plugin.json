@@ -1,7 +1,7 @@
 {
   "id": "channels",
-  "name": "平台渠道",
-  "description": "QQ 与外部渠道适配器的发现和创建。",
+  "name": "Platform Channels",
+  "description": "Discovers and creates QQ and external channel adapters.",
   "host": "gateway",
   "category": "channel",
   "entrypoint": "plugins.factories:FactoryPlugin",

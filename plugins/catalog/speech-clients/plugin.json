@@ -1,7 +1,7 @@
 {
   "id": "speech.clients",
-  "name": "语音适配",
-  "description": "智能体到语音合成服务的适配工厂。",
+  "name": "Speech Clients",
+  "description": "Provides agent-to-speech-service client adapters.",
   "host": "ai-agent",
   "category": "speech",
   "entrypoint": "plugins.factories:FactoryPlugin",

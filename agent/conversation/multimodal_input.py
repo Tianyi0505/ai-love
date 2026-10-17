@@ -78,7 +78,7 @@ class DirectVisionMessageInputBuilder:
             if not urls and msg.type == ContentType.IMAGE:
                 if not msg.media_desc:
                     raise ValueError("图片消息缺少图片地址和描述")
-                text = self._prompts.render("message-media", who=who, label="图片", detail=msg.media_desc)
+                text = self._prompts.render("message-media", who=who, label="Image", detail=msg.media_desc)
                 return [text], []
 
             image_parts: list[str] = []

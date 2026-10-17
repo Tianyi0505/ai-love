@@ -1,7 +1,7 @@
 {
   "id": "web-search",
-  "name": "网络搜索",
-  "description": "按关键词查询网络资料。",
+  "name": "Web Search",
+  "description": "Searches web material by terms.",
   "host": "mcp",
   "category": "tool",
   "entrypoint": "plugins.mcp:MCPToolPlugin",

@@ -1,7 +1,7 @@
 {
   "id": "agent",
-  "name": "对话与社交",
-  "description": "人物运行时、私聊、群聊与主动联系。",
+  "name": "Conversation and Social",
+  "description": "Runs personas, private chat, group chat, and proactive contact.",
   "host": "ai-agent",
   "category": "agent",
   "entrypoint": "plugins.components:ServicePlugin",

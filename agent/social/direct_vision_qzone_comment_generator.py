@@ -34,7 +34,7 @@ class DirectVisionQZoneCommentGenerator:
                 ImageAttachment(
                     source_url=source_url,
                     data_url=data_url,
-                    attribution=f"{request.author_name}: [动态图片{index}/{total}]",
+                    attribution=f"{request.author_name}: [Update image {index}/{total}]",
                 )
                 for index, (source_url, data_url) in enumerate(
                     zip(request.picture_urls, data_urls, strict=True),
@@ -44,7 +44,7 @@ class DirectVisionQZoneCommentGenerator:
             picture_text = "\n".join(
                 Template(self._settings.qzone_picture_template).substitute(
                     index=index,
-                    description="内容见随附图片",
+                    description="See the attached image.",
                 )
                 for index in range(1, total + 1)
             )

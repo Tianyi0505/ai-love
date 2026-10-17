@@ -23,11 +23,11 @@ class GroundingToolProvider:
         return [
             ToolDefinition(
                 tool_id="resolve_people",
-                description="解析当前群聊中一个称呼可能指向的人；作用域由系统固定。",
+                description="Resolve a name or reference in the current group conversation.",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "mention": {"type": "string", "description": "待解析的原文称呼"},
+                        "mention": {"type": "string", "description": "Name or reference text."},
                     },
                     "required": ["mention"],
                     "additionalProperties": False,
@@ -36,11 +36,11 @@ class GroundingToolProvider:
             ),
             ToolDefinition(
                 tool_id="search_group_history",
-                description="按关键词检索当前群聊近期历史，结果包含消息发送者 person_id。",
+                description="Search recent messages in the current group conversation.",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "简短、可直接匹配的关键词"},
+                        "query": {"type": "string", "description": "Short search terms."},
                         "limit": {"type": "integer"},
                     },
                     "required": ["query"],
@@ -50,11 +50,11 @@ class GroundingToolProvider:
             ),
             ToolDefinition(
                 tool_id="get_person_context",
-                description="读取当前场景授权范围内、按人物归属整理的背景事实摘要。",
+                description="Read authorized background facts for one resolved person.",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "person_id": {"type": "string", "description": "已解析的人物实体 ID"},
+                        "person_id": {"type": "string", "description": "Resolved person identifier."},
                     },
                     "required": ["person_id"],
                     "additionalProperties": False,

@@ -1,15 +1,14 @@
-# Live Edge 运行边界
+# Live Edge Runtime
 
+LiveEdgeService hosts AvatarModule and StreamModule. Start the service with python -m live.edge_service.
 
-`LiveEdgeService` 以 `live-edge` 承载 AvatarModule 与 StreamModule，共享 Kubernetes 配置及 Bus。现有入口为 `python -m live.edge_service`，插件边界见 [插件运行时](../docs/plugin-runtime.md)。
+## Module results
 
-## 模块结果
-
-| 模块 | 输入契约 | 职责 |
+| Module | Input contract | Responsibility |
 | --- | --- | --- |
-| AvatarModule | avatar.command.> / AvatarCommand | 形象及舞台事件适配 |
-| StreamModule | obs.control / StreamControl | OBS 与推流控制适配 |
+| AvatarModule | avatar.command.> and AvatarCommand | Sends avatar and stage events. |
+| StreamModule | obs.control and StreamControl | Sends OBS and stream-control events. |
 
-模块具有各自订阅句柄，停止完成表示句柄已释放；服务状态对应完整模块集合。共享连接归宿主，回复决策归 Agent。现有外部执行范围以具体适配器的回执为准。
+Each module owns its subscription handle. The host owns shared connections. The agent owns response generation.
 
-service.live-edge 的字段为 instance_addr、obs_ws_url 和 stream_key。真实推流密钥由部署 Secret 提供，源码及公开配置承载引用或模板。
+service.live-edge defines the service address, OBS WebSocket URL, and stream key reference. Deployment secrets provide live credentials.

@@ -1,9 +1,11 @@
 {
   "id": "example.echo",
-  "name": "回声示例",
-  "description": "演示自动发现、资源托管与运行时启停。",
+  "name": "Echo Example",
+  "description": "Demonstrates discovery, scoped resources, and runtime lifecycle.",
   "host": "live-edge",
   "entrypoint": "examples.plugin_echo:EchoPlugin",
-  "provides": ["example.echo"],
+  "provides": [
+    "example.echo"
+  ],
   "enabled": false
 }

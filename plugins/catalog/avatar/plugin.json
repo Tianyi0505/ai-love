@@ -1,7 +1,7 @@
 {
   "id": "avatar",
-  "name": "形象指令",
-  "description": "接收形象指令；沿用现有记录实现。",
+  "name": "Avatar Commands",
+  "description": "Receives avatar commands and records adapter results.",
   "host": "live-edge",
   "category": "live",
   "entrypoint": "plugins.components:ModulePlugin",

@@ -1,8 +1,8 @@
 web_search:
   name: web_search
-  title: 网络搜索
-  description: 查询最新信息、事实和新闻等当前网络内容。
-  query_description: 搜索关键词
+  title: Web Search
+  description: Search current web information, facts, and news.
+  query_description: Search terms.
   query_min_length: 1
   query_max_length: 200
   request_timeout_sec: 10
@@ -10,7 +10,7 @@ web_search:
   user_agent: Mozilla/5.0
   result_limit: 5
   messages:
-    no_result: 搜索「${query}」无结果
+    no_result: No result for "${query}".
     result: |-
       [${index}] ${title}
       ${url}

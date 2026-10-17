@@ -99,7 +99,7 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
         result = await understanding.understand(message)
 
-        self.assertEqual("联系人: [图片] 旧视觉模型识别结果", result)
+        self.assertEqual("联系人: [Image] 旧视觉模型识别结果", result)
         describer.describe.assert_awaited_once_with("https://example.com/legacy.jpg")
 
     async def test_forwarded_images_keep_sender_attribution(self) -> None:
@@ -142,9 +142,9 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             [
-                "小爱: [图片1/2]",
-                "小爱: [图片2/2]",
-                "小博: [图片]",
+                "小爱: [Image 1/2]",
+                "小爱: [Image 2/2]",
+                "小博: [Image]",
             ],
             [image.attribution for image in result.images],
         )
@@ -156,8 +156,8 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
             ],
             [image.source_url for image in result.images],
         )
-        self.assertIn("小爱: [图片1/2]", result.text)
-        self.assertIn("小博: [图片]", result.text)
+        self.assertIn("小爱: [Image 1/2]", result.text)
+        self.assertIn("小博: [Image]", result.text)
 
     async def test_default_agent_uses_free_agnes_with_separate_vision(self) -> None:
         provider = FileConfigProvider()
@@ -232,8 +232,8 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result)
         system_prompt, user_prompt = chat_agent.decide_participation.await_args.args
-        self.assertIn("当前真实消息明确 @ 了你", user_prompt)
-        self.assertEqual("联系人", json.loads(user_prompt)["user_question"]["用户群聊名"])
+        self.assertIn("The current message explicitly mentions you", user_prompt)
+        self.assertEqual("联系人", json.loads(user_prompt)["user_question"]["group_display_name"])
         self.assertIn("联系人: 你还记得群主吗", user_prompt)
         self.assertIn(definition.prompts["participation-output"], system_prompt)
 
@@ -291,8 +291,8 @@ class AgentPromptConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         chat_agent.decide_participation.assert_awaited_once()
         system_prompt, _ = chat_agent.decide_participation.await_args.args
-        self.assertIn("自然的态度、共鸣、简短看法", system_prompt)
-        self.assertIn("关系亲近和参与度较高时，表达意愿更主动", system_prompt)
+        self.assertIn("a natural attitude, shared feeling", system_prompt)
+        self.assertIn("Higher familiarity and participation score", system_prompt)
 
 
 if __name__ == "__main__":

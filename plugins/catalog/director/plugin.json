@@ -1,7 +1,7 @@
 {
   "id": "director",
-  "name": "直播导演",
-  "description": "直播阵容与发言调度。",
+  "name": "Live Director",
+  "description": "Schedules live actors and speech.",
   "host": "director",
   "category": "live",
   "entrypoint": "plugins.components:ServicePlugin",

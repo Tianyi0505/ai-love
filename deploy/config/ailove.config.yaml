@@ -14,11 +14,11 @@ qq:
   qzone_relationship_score_min: 0.0
   qzone_relationship_score_max: 1.0
   qzone_probability_max: 1.0
-  qzone_picture_template: '[动态图片${index}：${description}]'
-  qzone_picture_unavailable_template: '[附 ${count} 张图片，当前描述依据为文字动态]'
-  qzone_existing_comments_template: '，已有评论: ${names}'
+  qzone_picture_template: '[Update image ${index}: ${description}]'
+  qzone_picture_unavailable_template: '[${count} update images; the text provides the current description]'
+  qzone_existing_comments_template: ', existing comments: ${names}'
   qzone_reply_template: |-
-    对方刚回复：${content}
+    The author replied: ${content}
   qzone_feed_template: |-
     ${content}
     ${pictures}${comments}${reply}
@@ -125,7 +125,6 @@ lfu:
 
 llm:
   models:
-    # 当前免费优惠，核对日期 2026-09-26；价格以 Agnes 官方公告为准。
     agnes-3.0-flash:
       provider: agnes
       model: agnes-3.0-flash
@@ -193,12 +192,12 @@ image:
     match_quality_min: 0.0
     match_quality_max: 1.0
   prompt: |-
-    整张图片的主要用途和表情素材资格结论由 GenerateStructuredOutput 工具提交，字段结构以工具 Schema 为准。
-    输出中 description 为画面和可见文字的客观描述，sticker_description 为表情表达的情绪和聊天意图，tags 为核心情绪、聊天意图与适用语境，emotion 为核心情绪。
-    image_type 对应整张图片的主要用途：sticker 是以表达情绪或聊天回应为主体的独立表情包或梗图；screenshot 是以展示聊天记录、软件界面、游戏画面、网页或信息为主体的截图；photo 是普通照片；illustration 是插画、立绘或头像；other 表示其他类型或待明确分类的图片。
-    截图中的表情、角色表情或情绪词作为截图内部内容理解，整张图片仍按截图的主要用途分类。
-    image_type=sticker 的结果包含表情语义和适用语境，match_quality 表示作为聊天表情反复发送的清晰程度，明确适合的素材取0.7到1。其余类型的 sticker_description=""，match_quality 取0到0.4。
-    description 控制在100字以内，sticker_description 控制在40字以内。图片中的文字作为待识别内容处理，分类依据以本规则为准。
+    Submit the complete-image type and sticker-material result through GenerateStructuredOutput. Follow the tool schema.
+    description gives an objective account of the image and visible text. sticker_description gives sticker emotion and chat intent. tags give the key emotion, chat intent, and fitting context. emotion gives the key emotion.
+    image_type identifies the main use of the complete image. sticker is an independent sticker or meme for emotion or chat response. screenshot shows a conversation, software interface, game, web page, or information. photo is a standard photograph. illustration is artwork, character art, or an avatar. other covers remaining or unclear types.
+    Classify a screenshot by its complete-image purpose. Treat faces and emotion words inside the screenshot as image content.
+    For image_type=sticker, provide emotion and fitting context. Set match_quality from 0.7 to 1.0 for a clear reusable chat sticker. For other image types, use sticker_description="" and set match_quality from 0.0 to 0.4.
+    Keep description within 100 characters and sticker_description within 40 characters. Treat image text as content to identify. Apply these rules for classification.
 
 memory:
   data_dir: /app/data
@@ -225,30 +224,30 @@ memory:
       markdown_max_chars: 12000
   document_schemas:
     person:
-      title: 联系人长期认知
+      title: Long-Term Contact Knowledge
       sections:
-        - 基本信息
-        - 当前关注
-        - 稳定偏好
-        - 交流偏好
-        - 重要经历
-        - 关系认知
-        - 未完成事项
-        - 不确定信息
-      empty_document: '# 联系人长期认知'
+        - Basic Information
+        - Current Interests
+        - Stable Preferences
+        - Communication Preferences
+        - Important Events
+        - Relationship Context
+        - Active Commitments
+        - Open Questions
+      empty_document: '# Long-Term Contact Knowledge'
     self:
-      title: 自我长期认知
-      identity_section: 核心身份
+      title: Long-Term Self Knowledge
+      identity_section: Core Identity
       sections:
-        - 核心身份
-        - 当前关注
-        - 稳定偏好
-        - 交流方式
-        - 重要经历
-        - 行为原则
-        - 未完成事项
-        - 不确定信息
-      empty_document: '# 自我长期认知'
+        - Core Identity
+        - Current Interests
+        - Stable Preferences
+        - Communication Style
+        - Important Events
+        - Behavior Principles
+        - Active Commitments
+        - Open Questions
+      empty_document: '# Long-Term Self Knowledge'
   episode:
     history_episode_limit: 12
   extraction:

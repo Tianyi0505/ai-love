@@ -48,13 +48,13 @@ class OutputTool:
 
 
 OUTPUT_TOOLS = (
-    OutputTool.define("submit_response_plan", "提交本轮完整回复、情绪与动作结论。", ResponsePlan),
-    OutputTool.define("submit_participation_decision", "提交群聊参与结论和简短依据。", ParticipationDecision),
-    OutputTool.define("submit_repeat_decision", "提交群聊复读适用性结论和简短依据。", GroupRepeatDecision),
-    OutputTool.define("submit_image_description", "提交图片主要用途、可见内容和表情素材分类。", ImageDescription),
-    OutputTool.define("submit_sticker_decision", "提交候选图片分类与本轮表情适用性结论。", StickerDecision),
-    OutputTool.define("submit_memory_extraction", "提交会话摘要与有消息来源的原子记忆。", MemoryExtractionOutput),
-    OutputTool.define("submit_memory_document", "提交整理完成的长期认知文档。", MemoryConsolidationOutput),
+    OutputTool.define("submit_response_plan", "Submit the reply, emotion, and action plan for this turn.", ResponsePlan),
+    OutputTool.define("submit_participation_decision", "Submit the group participation decision and a short reason.", ParticipationDecision),
+    OutputTool.define("submit_repeat_decision", "Submit the group repeat decision and a short reason.", GroupRepeatDecision),
+    OutputTool.define("submit_image_description", "Submit the image type, visible content, and sticker classification.", ImageDescription),
+    OutputTool.define("submit_sticker_decision", "Submit the candidate image type and sticker suitability.", StickerDecision),
+    OutputTool.define("submit_memory_extraction", "Submit an episode summary and source-backed memory atoms.", MemoryExtractionOutput),
+    OutputTool.define("submit_memory_document", "Submit the consolidated long-term knowledge document.", MemoryConsolidationOutput),
 )
 OUTPUT_TOOL_NAMES = frozenset(item.name for item in OUTPUT_TOOLS)
 _BY_TYPE = {item.output_type: item for item in OUTPUT_TOOLS}

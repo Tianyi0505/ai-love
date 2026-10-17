@@ -1,7 +1,7 @@
 {
   "id": "memory",
-  "name": "长期记忆",
-  "description": "静默期提取、记忆归并、关系与表情能力。",
+  "name": "Long-Term Memory",
+  "description": "Extracts quiet-window memory and provides relationship and sticker features.",
   "host": "ai-agent",
   "category": "memory",
   "entrypoint": "plugins.components:MemoryPlugin",

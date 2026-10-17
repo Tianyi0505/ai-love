@@ -37,15 +37,15 @@ class SocialMessageInputBuilder:
         content: list[dict] = []
         images: list[ImageAttachment] = []
         if msg.text:
-            content.append({"类型": "sticker" if msg.type == ContentType.STICKER else "text", "文字": msg.text})
+            content.append({"content_type": "sticker" if msg.type == ContentType.STICKER else "text", "text": msg.text})
         if msg.meta.get("at_user_ids"):
-            content.append({"类型": "at", "用户": msg.meta["at_user_ids"]})
+            content.append({"content_type": "mention", "user_ids": msg.meta["at_user_ids"]})
         if msg.type == ContentType.VOICE:
             if not msg.media_desc:
                 raise ValueError("当前未配置语音识别能力")
-            content.append({"类型": "voice", "文字": msg.media_desc})
+            content.append({"content_type": "voice", "text": msg.media_desc})
         elif msg.type == ContentType.FILE:
-            content.append({"类型": "file", "名称": msg.text, "地址": msg.media_url})
+            content.append({"content_type": "file", "name": msg.text, "url": msg.media_url})
 
         urls = msg.media_urls or (
             [msg.media_url] if msg.type in {ContentType.IMAGE, ContentType.STICKER} and msg.media_url else []
@@ -56,7 +56,7 @@ class SocialMessageInputBuilder:
                 description = msg.media_desc
             if not self._direct_vision and not description:
                 description = (await self._image_describer.describe(url)).description
-            picture = {"类型": "image", "图片序号": index + 1, "地址": url, "描述": description}
+            picture = {"content_type": "image", "image_index": index + 1, "url": url, "description": description}
             content.append(picture)
             if self._direct_vision:
                 attribution = group_message_record(timestamp, name, [picture])
@@ -64,15 +64,15 @@ class SocialMessageInputBuilder:
         if msg.type == ContentType.IMAGE and not urls:
             if not msg.media_desc:
                 raise ValueError("图片消息缺少图片地址和描述")
-            content.append({"类型": "image", "描述": msg.media_desc})
+            content.append({"content_type": "image", "description": msg.media_desc})
 
         if msg.quote_ref is not None:
             quote, quote_images = await self._group_message(msg.quote_ref, ancestors)
-            content.append({"类型": "quote", "消息": quote})
+            content.append({"content_type": "quote", "message": quote})
             images.extend(quote_images)
         if msg.type == ContentType.FORWARD:
             children = await asyncio.gather(*(self._group_message(child, ancestors) for child in msg.sub_messages))
-            content.append({"类型": "forward", "消息": [record for record, _ in children]})
+            content.append({"content_type": "forward", "messages": [record for record, _ in children]})
             for _, child_images in children:
                 images.extend(child_images)
         return group_message_record(timestamp, name, content), images

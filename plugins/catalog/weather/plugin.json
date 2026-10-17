@@ -1,7 +1,7 @@
 {
   "id": "weather",
-  "name": "天气",
-  "description": "查询天气与预报。",
+  "name": "Weather",
+  "description": "Gets current weather and forecasts.",
   "host": "mcp",
   "category": "tool",
   "entrypoint": "plugins.mcp:MCPToolPlugin",

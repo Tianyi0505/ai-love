@@ -1,48 +1,46 @@
 ---
 name: "speckit-implement"
-description: "任务定义范围内的实现与验收结果"
-compatibility: "适用于具有 .specify/ 目录的 Spec Kit 项目"
+description: "Deliver implementation and acceptance results for defined tasks."
+compatibility: "Use in a Spec Kit project with a .specify directory."
 metadata:
   author: "github-spec-kit"
   source: "templates/commands/implement.md"
 ---
 
-# 任务定义范围内的实现与验收结果
+# Task Implementation
 
 ## User Input
 
-```text
+\`\`\`text
 $ARGUMENTS
-```
+\`\`\`
 
-当前用户目标和已有授权是产物范围的依据。
+Use the current user goal and granted authority as the work boundary.
 
-## 上下文入口
+## Context
 
-```powershell
+\`\`\`powershell
 .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks
-```
+\`\`\`
 
-上下文结果包含适用的 FEATURE_DIR、AVAILABLE_DOCS、模板内容和实际分支。路径采用绝对定位，文档引用采用相对路径。项目宪章提供适用原则，完整输入对应可交付产物。
+Use FEATURE_DIR, AVAILABLE_DOCS, template data, and the active branch. Use the constitution as the governing source.
 
-## 产物
+## Result
 
-任务定义的代码、配置和文档具有实际交付结果；tasks.md 的 `[x]` 对应实现及适用验收证据，`[ ]` 对应目标结果。任务顺序以依赖为依据，独立文件任务具有可并行范围。
+Deliver the code, configuration, and documentation named by tasks.md. Use \`[x]\` for a task with implementation and applicable acceptance evidence. Use \`[ ]\` for a target result. Order tasks by dependency. Work on independent files in parallel.
 
-输入包含 spec.md、plan.md、tasks.md、适用 research.md、data-model.md、contracts/ 和宪章。实施范围由用户授权及任务确定，现有工作区内容具有明确归属。
+Use spec.md, plan.md, tasks.md, applicable research.md, data-model.md, contracts, and the constitution as input. Respect user authority and existing workspace ownership.
 
-## 质量门槛
+## Quality Result
 
-checklists/ 的权限为只读状态核对。每份清单的报告包含 Total、Checked、Open 和 Status。自定义 `[x]` 是评审者的需求质量确认；内置 requirements.md 由 specify/clarify 维护。
+Read checklist state. Report Total, Checked, Open, and Status for each checklist. A reviewer owns custom checklist markers. Specify and clarify own requirements.md markers.
 
-实施资格为所有清单标准均满足，或用户已明确授权接受当前清单状态。需要该例外时，确认资料包含具体清单、开放项目与对应规则依据。此前相应授权持续有效。
+Every delivered result includes usable code, required configuration, applicable checks, and actual status. State the test environment, boundary doubles, tested scope, and target.
 
-## 完成标准
+Report the completed task count, main changes, acceptance evidence, and the next deliverable.
 
-每个交付结果具有可用代码、必要配置、适用检查和真实状态记录。验证结果明确环境、边界替身、已测范围及目标。最终报告包含完成任务数、主要变化、验收证据与下一项可交付结果。
+## Extension Contract
 
-## 扩展结果契约
+Read extensions from \`.specify/extensions.yml\`. Run enabled hooks at \`hooks.before_implement\` and \`hooks.after_implement\`. Evaluate condition with HookExecutor. Use every hook with an empty condition.
 
-扩展定义来源为 `.specify/extensions.yml`，作用点为 `hooks.before_implement` 与 `hooks.after_implement`。有效 YAML 的已启用条目具有执行资格，enabled 默认值为 true。带 condition 的条目由 HookExecutor 求值，空条件条目适用当前会话执行器。
-
-命令标识中的点对应连字符，例如 speckit.git.commit 对应 speckit-git-commit。`optional: false` 的完成凭证包含 `EXECUTE_COMMAND: {command}` 及真实命令结果；`optional: true` 的报告包含命令、描述和用户提示，执行资格依据用户选择。扩展结果与主产物共同组成完成报告。
+Map a dotted command ID to a hyphenated command name. Report the executed command and its actual result for a required action. Report the command, description, and user choice for an optional action.

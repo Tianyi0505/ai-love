@@ -1,57 +1,57 @@
 ---
-description: "按用户故事组织的交付结果清单模板"
+description: "Template for delivery tasks organized by user story."
 ---
 
 # Tasks: [FEATURE NAME]
 
-**Input**: `/specs/[###-feature-name]/` 的设计文档。
-**Prerequisites**: plan.md、spec.md，以及适用的 research.md、data-model.md 和 contracts/。
-**Tests**: 验收项目对应用户要求及功能规格的明确验证范围。
-**Organization**: 每个用户故事具有独立结果、路径和验收证据。
+**Input**: Design documents in \`/specs/[###-feature-name]/\`.
+**Prerequisites**: plan.md, spec.md, and applicable research.md, data-model.md, and contracts/.
+**Tests**: Acceptance tasks match feature requirements and the user validation scope.
+**Organization**: Each user story has an independent result, path, and acceptance evidence.
 
-## Format: `[ID] [P?] [Story] Description`
+## Format: \`[ID] [P?] [Story] Description\`
 
-任务格式为 `- [ ] T001 [P] [US1] <具体文件路径> 提供 <可验收结果>`。编号连续，故事标签对应规格，`[P]` 表示依赖满足后文件互相独立的任务。`[ ]` 表示目标结果，`[x]` 表示已有完成证据。
+Use \`- [ ] T001 [P] [US1] <file path> Deliver <accepted result>\`. Use consecutive identifiers. Use a story label for a story task. Use \`[P]\` when prerequisite results enable independent file work. Use \`[ ]\` for a target result. Use \`[x]\` for delivered evidence.
 
 ## Phase 1: Setup
 
-- [ ] T001 [项目路径] 具备设计规定的包结构和依赖。
-- [ ] T002 [环境路径] 提供独立验证环境和配置。
+- [ ] T001 [project path] Deliver the package structure and dependencies from the design.
+- [ ] T002 [environment path] Deliver an independent validation environment and configuration.
 
-## Phase 2: Foundational
+## Phase 2: Foundation
 
-- [ ] T003 [契约路径] 定义各用户故事共同使用的输入输出。
-- [ ] T004 [持久层路径] 提供稳定身份、数据归属和状态结果。
+- [ ] T003 [contract path] Deliver shared input and output contracts.
+- [ ] T004 [storage path] Deliver stable identity, data ownership, and state results.
 
 ## Phase 3: User Story 1 - [Title] (Priority: P1)
 
-**Goal**: [用户可观察结果。]
-**Independent Test**: [入口、环境、样本与通过标准。]
+**Goal**: [Observable user result.]
+**Independent Test**: [Entry, environment, sample, and pass condition.]
 
-- [ ] T005 [US1] [实现路径] 提供 [结果]。
-- [ ] T006 [US1] [验收路径] 具有 [结果] 的真实入口证据。
+- [ ] T005 [US1] [implementation path] Deliver [result].
+- [ ] T006 [US1] [acceptance path] Deliver real-entry evidence for [result].
 
 ## Phase 4: User Story 2 - [Title] (Priority: P2)
 
-**Goal**: [用户可观察结果。]
-**Independent Test**: [独立验收结果。]
+**Goal**: [Observable user result.]
+**Independent Test**: [Independent acceptance result.]
 
-- [ ] T007 [US2] [实现路径] 提供 [结果]。
-- [ ] T008 [US2] [验收路径] 具有 [结果] 的入口证据。
+- [ ] T007 [US2] [implementation path] Deliver [result].
+- [ ] T008 [US2] [acceptance path] Deliver entry evidence for [result].
 
 ## Phase 5: Delivery
 
-- [ ] T009 [文档路径] 准确表达实际交付能力、环境和数据。
-- [ ] T010 [验收路径] 汇总功能指标、资源结果及恢复证据。
+- [ ] T009 [documentation path] Describe the delivered capability, environment, and data state.
+- [ ] T010 [acceptance path] Report feature metrics, resource results, and recovery evidence.
 
 ## Dependencies
 
-| 结果集合 | 前置结果 | 独立范围 |
+| Result set | Prerequisite result | Independent scope |
 | --- | --- | --- |
-| [用户故事] | [任务编号] | [文件与状态范围] |
+| [user story] | [task identifier] | [file and state boundary] |
 
 ## Requirement Coverage
 
-| 需求 | 交付任务 | 验收证据 |
+| Requirement | Delivery Task | Acceptance Evidence |
 | --- | --- | --- |
-| FR-001 / SC-001 | [任务编号] | [路径与结果] |
+| FR-001 / SC-001 | [task identifier] | [path and result] |

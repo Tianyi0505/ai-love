@@ -1,93 +1,41 @@
 <!--
-同步影响报告
-版本：1.3.0 → 1.3.1
-修订结果：六项原则、产品边界和交付要求采用正向、结果性表达。
-同步范围：项目 Markdown、Spec Kit 模板与技能文档。
-修订日期：2026-10-02
+Documentation and instruction content uses ASD-STE100 controlled English.
 -->
 
-# AI-Love 项目宪章
+# AI-Love Constitution
 
-## 核心原则
+## System Principles
 
-### 一、持续身份与渐进人格
+### Persistent AI Identity
 
-每个人物具有稳定 `ai_id`，群聊、直播和游戏共享连续身份、经历与关系。固定身份、长期性格和短期情绪具有明确层次。
+Each AI has one stable \`ai_id\`. Social and live services use the same identity, persona, memory, and relationship state. The mounted AI definition supplies the official identity and behavior settings.
 
-人物以数字身份表达真实经历，拥有偏好、立场、请求判断和场景适用的沉默选择。人格成长具有可追溯经历，自我记忆采用更保守的更新标准。重启、模型切换和配置热更新保留身份、记忆与关系，身份重置对应显式授权。
+### Source-Backed Memory
 
-### 二、有依据的长期记忆
+Memory stores a source, time, scene, owner, and confidence. Episodes, atoms, documents, and summaries represent durable memory state. Memory output keeps each fact with its owner and source.
 
-记忆归属由 AI、人物实体和可信身份映射确定。记忆保留来源、时间、场景和可信度，事实、陈述及推断具有各自标记。纠正、时效和保留策略作用于原文及派生摘要，输出依据当前有效事实。
+### Trusted Runtime Boundaries
 
-长期记忆的持久结果包含 activity、静默 Episode、Atom 与批量 Markdown。事件具有稳定幂等键，同一经历具有唯一归并结果。记忆披露范围由来源场景、当前受众和显式授权共同确定。
+Gateway owns platform events, account routing, and delivery. AI Agent owns understanding and response decisions. Memory runs in AI Agent. Extension Host owns tool authority and execution. Live services own live routing and stage commands.
 
-### 三、理解多人关系与场景
+### Typed Actions and Results
 
-消息具有发送者、会话、时间、引用和提及事实；指代及人物合并以可靠证据为依据，澄清结果保留真实确定程度。
+Model output uses typed schemas. Tool calls use a trusted AI and conversation scope. Platform actions record an observable result. Ownership, authority, and state use shared contracts.
 
-关系按 `ai_id + person_id` 独立维护，熟悉度、信任和其他维度各有实际互动依据。回复适用于当前话题、目标、关系和场景，旁听与沉默具有明确条件，连续互动具有有限预算。
+### Durable Operations
 
-同会话状态有序，各会话具有独立目标和长期归属。外部文本归内容数据，系统指令和工具授权归可信运行边界。
+PostgreSQL stores durable product state. NATS carries typed service events and RPC calls. Configuration supplies active service addresses, model settings, and AI definitions. Secrets supply credentials.
 
-### 四、行动具有可核验反馈
+### Evidence-Based Delivery
 
-游戏及工具能力的交付结果包含当前环境依据、执行凭证和可观察反馈。动作状态采用计划、已发出、确认结果及 `unknown` 等准确分类。
+Each delivered feature has a real entry, applicable input, observable result, and acceptance evidence. Verification states its environment, scope, and result.
 
-人物、账号、工具作用域和权限由运行时可信上下文确定。连续行动具有时间或动作次数预算、停止条件和人工中断入口；执行资格包含有效目标、最新反馈与可用环境。
+## Product Results
 
-重试资格依据幂等性和已确认副作用。新游戏能力以真实观察、动作及反馈的完整场景为验收依据。
+AI-Love provides persistent digital AI identities for social and live platforms. Each identity has a persona, memory, relationship state, approved tools, and source account ownership. The system produces typed replies, speech, image decisions, memory updates, and live-stage actions.
 
-### 五、生产可用与清晰架构
+## Governance
 
-生产交付包含业务边界、各状态处理、可靠性、可观测性、权限和运维保障。架构依据目标负载、运行状态和一致性要求设计，新增抽象、依赖及部署单元具有明确收益。
+Project documents use controlled English, positive conditions, and observable results. A change records its scope, authority, verification, and conventional commit. The current source and deployed configuration define the project state.
 
-稳定接口与组合是已明确变化点的扩展边界。策略、适配器和状态模式对应实际变化，Registry、Provider 与工具机制具有优先复用价值。扩展评审结果说明同类能力涉及的模块及变化集中范围。
-
-必要重构具有明确接口影响、调用方同步、配置或数据迁移、验证和恢复材料。持久数据保持可恢复性，外部写入权限依据用户授权。
-
-Gateway 负责平台、账号与归一化；Agent 负责理解与决策；Memory 负责记忆和关系；工具宿主负责授权与执行；直播模块负责场次和舞台输出。包按业务职责组织，Memory 位于 ai-agent 进程内，shared 的实现具有跨运行单元使用者。
-
-共享能力与人物覆盖具有独立配置归属。配置来自现有部署资源，凭据来自进程环境或 Secret。校验覆盖边界、授权和状态约束，模型备用路径采用配置顺序。
-
-### 六、真实调用链验收
-
-行为结论具有真实入口、参数来源、状态约束、生命周期和内置实现的证据。内部函数和验收插件的结果标明其适用范围。
-
-人格、记忆、多人指代与动作变更的验收覆盖代表性业务入口。关键证据关联输入、人物、会话、检索依据、配置或模型、工具结果及最终输出；观测内容为相关业务资料和脱敏标识。
-
-确定性行为具有明确断言，生成性行为具有预先定义的场景和标准，验证规模与实际影响相称。
-
-## 产品与运行结果
-
-- 同一人物的长期成长是产品目标，功能规格表达身份、记忆、关系和动作的适用影响。
-- 平台优先级为现有单 QQ 账号、B 站，游戏能力采用明确对象与验收场景。
-- QQ 白名单沿用既有配置，有效私聊全天回应，主动联系适用于工作作息和联系预算。
-- QQ 空间关系判断以对应 AI 和人物为范围。
-- 工具动作属于显式业务授权集合；消息删除、账号资料维护和凭据管理归人工管理权限。
-- 部署结果保留 NapCat 原实例、登录态及既有白名单。
-- 身份、记忆和关系具有持久存储、迁移与恢复结果，数据访问沿用 ORM 与 Alembic。
-- 开发代理的默认范围为本地任务及外部只读查询，远端写入以用户对相应动作的明确授权为依据。
-- 产品自主互动采用显式账号、场景及工具授权，开发发布采用自身操作授权。
-
-## 交付标准
-
-每项上线功能具有适用并发量、吞吐、延迟、状态结果率、模型成本和恢复目标，以及测量环境和阈值。消息与长期状态具有确定投递语义、幂等键、并发范围、积压预算和恢复结果。
-
-外部调用具有超时、有限重试和状态处理，持续运行状态具有资源预算。健康、结构化日志、关键指标及告警关联具体诊断资料和恢复入口。
-
-发布产物包含有效配置、迁移相容性证据、发布验收与恢复方案。代码恢复和数据恢复各有明确结果。持久数据具有备份及恢复核验。
-
-生产权限采用最小授权，管理入口采用鉴权，凭据采用受限存储。平台和游戏能力具有账号权限、数据保留及动作范围证据。
-
-功能规格、计划及验收资料统一以正向适用条件和可观察结果描述要求。实现状态、目标指标、本地模拟及生产实测具有各自标记。代码评审与协作说明使用中文。
-
-Git 提交格式为 `<type>[optional scope]: <description>`，描述明确交付变化；接口破坏对应 `!` 或 `BREAKING CHANGE:` 标记。例如 `docs: 统一文档的正向结果描述`。
-
-## 治理
-
-本宪章是规格、计划、任务与实现的共同原则，README 和专项资料提供实际能力细节。各文档采用一致约定，例外具有明确范围、理由、退出条件与负责人确认。
-
-修订记录包含动机、受影响原则、相容性及迁移安排。原则重新定义对应主版本，原则扩展对应次版本，语义澄清对应补丁版本。评审结果具有适用条款、实现证据和对应目标任务。
-
-**版本**：1.3.1 | **首次批准**：2026-09-10 | **最后修订**：2026-10-02
+**Version**: 1.3.2

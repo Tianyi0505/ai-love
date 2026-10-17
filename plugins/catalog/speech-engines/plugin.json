@@ -1,7 +1,7 @@
 {
   "id": "speech.engines",
-  "name": "语音引擎",
-  "description": "GPT-SoVITS、MIMO 及外部合成引擎工厂。",
+  "name": "Speech Engines",
+  "description": "Provides GPT-SoVITS, MIMO, and external speech-engine adapters.",
   "host": "gptsovits",
   "category": "speech",
   "entrypoint": "plugins.factories:FactoryPlugin",

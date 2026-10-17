@@ -1,7 +1,7 @@
 {
   "id": "music",
-  "name": "音乐指令",
-  "description": "接收音乐控制意图；播放器仍待接入。",
+  "name": "Music Commands",
+  "description": "Records music-control commands.",
   "host": "mcp",
   "category": "tool",
   "entrypoint": "plugins.mcp:MCPToolPlugin",

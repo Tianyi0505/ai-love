@@ -92,18 +92,18 @@ class FailoverChatAgent:
             records = []
             for image, description in zip(images, descriptions, strict=True):
                 record = json.loads(image.attribution)
-                record["用户发的消息/图片"] = {
-                    "图片": record["用户发的消息/图片"],
-                    "识别结果": description.description,
+                record["user_message_or_image"] = {
+                    "image": record["user_message_or_image"],
+                    "description": description.description,
                 }
                 records.append(record)
-            prompt["图片识别结果"] = records
+            prompt["image_descriptions"] = records
             return json.dumps(prompt, ensure_ascii=False)
         image_text = "\n".join(
             f"{image.attribution} {description.description}"
             for image, description in zip(images, descriptions, strict=True)
         )
-        return f"{user_prompt}\n\n以下是图片识别结果，已按原消息发送者对应：\n{image_text}"
+        return f"{user_prompt}\n\nImage descriptions by source message:\n{image_text}"
 
     @staticmethod
     def _log_primary_failure(model_name: str, error: Exception) -> None:

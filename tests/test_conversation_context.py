@@ -26,8 +26,8 @@ def test_formats_each_message_with_local_timestamp() -> None:
 
     rendered = format_entries(context.window("group", "123"), ai_name="洛雨")
     assert rendered == (
-        "[2026-09-02 周三 14:30] [person-1 | 甲]\n你好\n\n"
-        "[2026-09-02 周三 14:30] [AI | 洛雨]\n你好呀"
+        "[2026-09-02 Wed 14:30] [person-1 | 甲]\n你好\n\n"
+        "[2026-09-02 Wed 14:30] [AI | 洛雨]\n你好呀"
     )
 
 
@@ -35,7 +35,7 @@ def test_accepts_millisecond_event_timestamp() -> None:
     context = ConversationContext(window_size=1, timezone="Asia/Shanghai")
     timestamp_ms = int(datetime(2026, 9, 2, 6, 30, tzinfo=timezone.utc).timestamp() * 1000)
 
-    assert context.format_timestamp(timestamp_ms) == "2026-09-02 周三 14:30"
+    assert context.format_timestamp(timestamp_ms) == "2026-09-02 Wed 14:30"
 
 
 async def test_current_social_message_also_carries_timestamp() -> None:
@@ -83,4 +83,4 @@ async def test_current_social_message_also_carries_timestamp() -> None:
         entity_context=EntityContext(current_sender={}, references=(), recent_participants=()),
     )
 
-    assert context.user_input == "[2026-09-02 周三 14:30]\n现在几点"
+    assert context.user_input == "[2026-09-02 Wed 14:30]\n现在几点"

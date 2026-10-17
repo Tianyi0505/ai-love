@@ -1,7 +1,7 @@
 {
   "id": "tools",
-  "name": "工具网关",
-  "description": "工具发现、权限绑定与调用。",
+  "name": "Tool Gateway",
+  "description": "Discovers tools, applies grants, and invokes tools.",
   "host": "extension-host",
   "category": "tool",
   "entrypoint": "plugins.components:ServicePlugin",

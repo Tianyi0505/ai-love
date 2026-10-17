@@ -1,39 +1,33 @@
 # [PROJECT_NAME] Constitution
 
-## Core Principles
+## System Principles
 
 ### [PRINCIPLE_1_NAME]
 
-[PRINCIPLE_1_DESCRIPTION]
+[Applicable condition and observable result.]
 
 ### [PRINCIPLE_2_NAME]
 
-[PRINCIPLE_2_DESCRIPTION]
+[Applicable condition and observable result.]
 
 ### [PRINCIPLE_3_NAME]
 
-[PRINCIPLE_3_DESCRIPTION]
+[Applicable condition and observable result.]
 
 ### [PRINCIPLE_4_NAME]
 
-[PRINCIPLE_4_DESCRIPTION]
+[Applicable condition and observable result.]
 
 ### [PRINCIPLE_5_NAME]
 
-[PRINCIPLE_5_DESCRIPTION]
+[Applicable condition and observable result.]
 
-## [SECTION_2_NAME]
+## Product Results
 
-[SECTION_2_CONTENT]
-
-## [SECTION_3_NAME]
-
-[SECTION_3_CONTENT]
+[Current product capability and observable results.]
 
 ## Governance
 
-[GOVERNANCE_RULES]
+[Document scope, authority, evidence, and version rules.]
 
-原则表达适用条件、允许范围及可观察结果，治理资料包含修订依据、负责人、作用范围和版本。
-
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
+**Version**: [CONSTITUTION_VERSION]

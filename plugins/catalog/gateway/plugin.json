@@ -1,7 +1,7 @@
 {
   "id": "gateway",
-  "name": "消息网关",
-  "description": "平台消息接入、账号路由、可靠发送与 QQ 空间。",
+  "name": "Message Gateway",
+  "description": "Receives platform messages, routes accounts, delivers messages, and supports QZone.",
   "host": "gateway",
   "category": "channel",
   "entrypoint": "plugins.components:ServicePlugin",

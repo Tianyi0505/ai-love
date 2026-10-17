@@ -92,7 +92,7 @@ def _human_message(user_prompt: str, images: Sequence[ImageAttachment]):
     content = [TextBlock(text=user_prompt)]
     for image in images:
         content.extend([
-            TextBlock(text=image.attribution if image.is_group else f"\n下图对应消息：{image.attribution}"),
+            TextBlock(text=image.attribution if image.is_group else f"\nImage source: {image.attribution}"),
             image_block(image.data_url),
         ])
     return UserMsg("user", content)

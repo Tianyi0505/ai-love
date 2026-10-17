@@ -25,7 +25,7 @@ class MCPServerPlugin(Plugin):
             yield self.resources
 
         self.server = FastMCP(
-            "ailove", instructions="AI-Love 动态工具插件", lifespan=lifespan,
+            "ailove", instructions="AI-Love MCP tools provide scoped dynamic capabilities.", lifespan=lifespan,
             json_response=True, stateless_http=True, host=self.context.config.get("bind", "0.0.0.0"),
         )
 

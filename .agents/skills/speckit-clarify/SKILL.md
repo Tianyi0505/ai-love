@@ -1,44 +1,44 @@
 ---
 name: "speckit-clarify"
-description: "具有用户答案及一致验收语义的功能规格"
-compatibility: "适用于具有 .specify/ 目录的 Spec Kit 项目"
+description: "Clarify a feature specification and its acceptance meaning."
+compatibility: "Use in a Spec Kit project with a .specify directory."
 metadata:
   author: "github-spec-kit"
   source: "templates/commands/clarify.md"
 ---
 
-# 具有用户答案及一致验收语义的功能规格
+# Specification Clarification
 
 ## User Input
 
-```text
+\`\`\`text
 $ARGUMENTS
-```
+\`\`\`
 
-当前用户目标和已有授权是产物范围的依据。
+Use the current user goal and granted authority as the work boundary.
 
-## 上下文入口
+## Context
 
-```powershell
+\`\`\`powershell
 .specify/scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly
-```
+\`\`\`
 
-上下文结果包含适用的 FEATURE_DIR、AVAILABLE_DOCS、模板内容和实际分支。路径采用绝对定位，文档引用采用相对路径。项目宪章提供适用原则，完整输入对应可交付产物。
+Use FEATURE_DIR, AVAILABLE_DOCS, template data, and the active branch. Use absolute paths for file operations. Use project-relative paths in documents.
 
-## 产物
+## Result
 
-更新后的 spec.md 具有 `## Clarifications` 和 `### Session YYYY-MM-DD`，每条记录格式为 `- Q: <问题> → A: <确认答案>`。答案同时体现于相应需求、实体、边界或成功指标。
+Update spec.md with \`## Clarifications\` and \`### Session YYYY-MM-DD\`. Record each answer as \`- Q: <question> → A: <confirmed answer>\`. Apply the answer to the matching requirement, entity, boundary, or success criterion.
 
-术语、数据归属、适用场景、授权、指标和依赖各有明确语义。每次会话最多 5 个高影响问题，每次呈现一个完整问题；选项为 2 至 5 项，简短回答范围为 5 个词以内。问题正文可独立理解，后接一句说明答案对交付的影响。已有答案及可靠上下文是判断依据。
+Give each term, data owner, scene, authority, metric, and dependency one clear meaning. Ask up to five high-impact questions in one session. Present one complete question at a time. Provide two to five options. Keep a short answer within five words. State the delivery effect after each question.
 
-## 质量结果
+## Quality Result
 
-内置 checklists/requirements.md 的 checkbox 状态反映当前规格质量，状态变更范围为标记字符。原有标题、文字、次序和格式保留。自定义清单归评审者。
+Update the marker state in \`checklists/requirements.md\` to match the current specification quality. Preserve headings, text, order, and format. The reviewer owns custom checklists.
 
-交付报告包含已回答数量、规格绝对路径、涉及章节、质量清单前后计数及分类覆盖。答案适用的改稿范围为当前规格。
+Report answer count, the absolute specification path, changed sections, checklist counts, and category coverage.
 
-## 扩展结果契约
+## Extension Contract
 
-扩展定义来源为 `.specify/extensions.yml`，作用点为 `hooks.before_clarify` 与 `hooks.after_clarify`。有效 YAML 的已启用条目具有执行资格，enabled 默认值为 true。带 condition 的条目由 HookExecutor 求值，空条件条目适用当前会话执行器。
+Read extensions from \`.specify/extensions.yml\`. Run enabled hooks at \`hooks.before_clarify\` and \`hooks.after_clarify\`. Evaluate condition with HookExecutor. Use every hook with an empty condition.
 
-命令标识中的点对应连字符，例如 speckit.git.commit 对应 speckit-git-commit。`optional: false` 的完成凭证包含 `EXECUTE_COMMAND: {command}` 及真实命令结果；`optional: true` 的报告包含命令、描述和用户提示，执行资格依据用户选择。扩展结果与主产物共同组成完成报告。
+Map a dotted command ID to a hyphenated command name. Report the executed command and its actual result for a required action. Report the command, description, and user choice for an optional action.
