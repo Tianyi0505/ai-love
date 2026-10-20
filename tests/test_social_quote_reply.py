@@ -80,15 +80,20 @@ async def test_missing_historical_quote_still_replies_to_current_message(private
     await flow.client.aclose()
 
 
-def test_nested_quote_never_becomes_reply_target():
+@pytest.mark.parametrize(
+    "chat_type,to_ai,reply_target",
+    [(ChatType.GROUP, False, ""), (ChatType.GROUP, True, "101"), (ChatType.PRIVATE, False, "101")],
+)
+def test_nested_quote_never_becomes_reply_target(chat_type, to_ai, reply_target):
     current = SocialMessage(
-        chat=Chat(chat_id="20000", chat_type=ChatType.GROUP),
+        chat=Chat(chat_id="20000", chat_type=chat_type),
         sender=SocialSender(user_id="20000"),
         type=ContentType.QUOTE,
         text="A",
         message_id="101",
         account_id="qq-main",
         platform="qq",
+        to_ai=to_ai,
         meta={"reply_message_id": "88"},
         quote_ref=SocialMessage(
             chat=Chat(chat_id="20000", chat_type=ChatType.GROUP),
@@ -107,7 +112,7 @@ def test_nested_quote_never_becomes_reply_target():
         ),
     )
 
-    assert AgentExecutionContext.from_social_message(current, "ai-1").reply_to_message_id == "101"
+    assert AgentExecutionContext.from_social_message(current, "ai-1").reply_to_message_id == reply_target
 
 
 def test_plain_and_proactive_messages_do_not_gain_quote():

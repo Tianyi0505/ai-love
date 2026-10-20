@@ -147,7 +147,7 @@ class GroupParticipationService:
         context = PromptContext(
             scene="group-join",
             user_input=current_message,
-            extra={"addressing": "The current message explicitly mentions you." if explicitly_addressed else "Current group message."},
+            extra={"addressing": "The current message explicitly mentions you or replies to your message." if explicitly_addressed else "Current group message."},
             recent_messages=(history_text,) if history_text else (),
             relationship_summary=self._prompt_assembler.render(
                 "group-join-relationship",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from shared.contracts.rpc.social import SocialSendRequest
+from shared.contracts.social import ChatType
 from shared.contracts.tools import ToolExecutionContext
 from shared.snowflake_id_generator import snowflake_ids
 
@@ -34,6 +35,7 @@ class AgentExecutionContext:
     def from_social_message(cls, message, ai_id: str, run_id: str | None = None) -> "AgentExecutionContext":
         resolved_run_id = run_id or message.meta.get("run_id") or new_run_id()
         has_quote = bool(message.meta.get("reply_message_id") or message.quote_ref)
+        should_quote = has_quote and (message.chat.chat_type == ChatType.PRIVATE or message.to_ai)
         return cls(
             run_id=str(resolved_run_id),
             ai_id=ai_id,
@@ -46,8 +48,8 @@ class AgentExecutionContext:
             sender_platform_user_id=message.sender.user_id,
             message_id=message.message_id,
             # quote_ref 是当前消息引用的历史消息，仅供理解上下文使用。
-            # 出站回复始终引用当前收到的消息，避免把回复挂到历史消息上。
-            reply_to_message_id=str(message.message_id) if has_quote else "",
+            # 群聊普通接话不附加引用；定向回复和私聊需要引用时，只引用当前收到的消息。
+            reply_to_message_id=str(message.message_id) if should_quote else "",
             occurred_at=message.timestamp,
             source="social",
         )
