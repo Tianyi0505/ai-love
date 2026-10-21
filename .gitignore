@@ -1,58 +1,47 @@
-# 忽略环境变量与密钥
+# Secrets and local configuration
 .env
 .env.*
 !.env.example
-*.pem
 *.key
+*.pem
 *.p12
-napcat-qrcode.png
 
-# 忽略前端依赖与构建产物
+# Node and TypeScript
 node_modules/
-package-lock.json
-!admin/console/frontend/package-lock.json
-
-# 忽略 Python 构建文件
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv*/
-venv/
+*.tsbuildinfo
+*.tgz
 dist/
 build/
-*.tsbuildinfo
+harness/.runtime/
 
-# 忽略编辑器配置
-.vscode/
-.idea/
-*.swp
-
-# 忽略运行时数据
+# Agent workspace state
+.ai-love/
 data/
+output/
 logs/
 *.log
-memory_db/
-chroma/
-output/plugin-validation/
-output/playwright/
-.playwright-cli/
 *.db
 *.sqlite3
 
-# 忽略本地文档与归档文件
+# Private deployment data
+deploy/private/
+deploy/.migration-*
+
+# Editors and local tools
+.idea/
+.vscode/
+.playwright-cli/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local-only operator notes and archives
 doc/
 *.txt
 *.tar
 CLAUDE.md
-deploy/.migration-*
-deploy/.napcat-qrcode.png
-deploy/private/
-
-# 忽略系统文件
-.DS_Store
-Thumbs.db
-
-# 私有部署、服务器与运维 Markdown（保留本地，不提交）
 **/*deploy*.md
 **/*server*.md
 **/*infra*.md
@@ -63,11 +52,3 @@ Thumbs.db
 **/*运维*.md
 **/operations.md
 deploy/**/*.md
-docs/live-service-merge.md
-docs/persona-memory-and-mcp-output.md
-docs/plugin-validation.md
-docs/langchain-migration-plan.md
-specs/001-private-reply-rules/validation.md
-output/
-.pytest_cache/
-.ruff_cache/

@@ -1,0 +1,5 @@
+# AI-Love is one cohesive social-conversation feature. DSH supplies the Agent,
+# session, model, tool, lifecycle, and operations capabilities.
+- insert:
+    - id: ai-love
+      name: '@ai-love/deepseek-harness-plugin'

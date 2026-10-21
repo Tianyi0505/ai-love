@@ -1,0 +1,20 @@
+{
+  "owner_ai_id": "ai_luoyu",
+  "avatar_id": "luoyu",
+  "reference": "luoyu-reference-approved.png",
+  "sha256": "b849fe85e6d976a1e6db6c1e755697743e3bafef55098a822747e9d49124a6a0",
+  "status": "artwork_and_rig_draft",
+  "ready": false,
+  "artwork": "../../../../data/live2d/source/ai_luoyu/luoyu/luoyu-front.png",
+  "artwork_sha256": "fa4a9ef3138da9f8fbb670cc76321f4fbabbc128e338a37b419d02562dc21fa2",
+  "draft_psd": "../../../../data/live2d/source/ai_luoyu/luoyu/luoyu-separation-v1.psd",
+  "draft_cmo3": "../../../../data/live2d/source/ai_luoyu/luoyu/luoyu-separation-v1.cmo3",
+  "draft_observation": "Imported into Cubism 5.3.04 FREE; 41 ArtMeshes, 4659 vertices, 6994 triangles, 14 warp and 4 rotation deformers. Face XY and corners generated. Turning the head reveals material-cut seams; draft is not accepted or ready.",
+  "required_missing": [
+    "accepted layered PSD with complete occluded regions",
+    "accepted Cubism CMO3 rig with eye/mouth/physics binding",
+    "exported MOC3/runtime bundle"
+  ],
+  "supersedes": "luoyu-concept-v1.png",
+  "test_models": "../../../../tests/fixtures/live2d/fixture-manifest.json"
+}

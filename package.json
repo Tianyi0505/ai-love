@@ -1,0 +1,38 @@
+{
+  "name": "@ai-love/deepseek-harness-plugin",
+  "version": "0.1.0",
+  "description": "AI-Love social conversation plugin for DeepSeek Harness with Markdown-backed cross-session memory",
+  "type": "module",
+  "exports": {
+    ".": "./harness/bundle/src/ai-love.ts",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./harness/bundle/cordis.patch.yml"
+  },
+  "files": [
+    "harness/bundle/src/",
+    "harness/bundle/cordis.patch.yml",
+    "harness/bundle/README.md",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./harness/bundle/cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test:dsh-plugin": "pnpm --dir harness test"
+  },
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.1-rc.2 <0.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2"
+  },
+  "license": "MIT"
+}

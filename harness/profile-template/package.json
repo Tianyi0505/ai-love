@@ -1,0 +1,17 @@
+{
+  "name": "ai-love-dsh-profile",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@ai-love/deepseek-harness-plugin": "link:__AILOVE_DSH_PLUGIN__"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "@ai-love/deepseek-harness-plugin"
+      ]
+    }
+  }
+}

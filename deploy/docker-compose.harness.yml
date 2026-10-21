@@ -1,0 +1,25 @@
+services:
+  harness:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+      DSH_HOME: /var/lib/ai-love-dsh
+      DSH_TELEMETRY_MODE: ${DSH_TELEMETRY_MODE:-DISABLED}
+      AILOVE_DSH_HOST: auto
+      AILOVE_WORKSPACE_DIRECTORY: /workspace
+      AILOVE_MEMORY_DIRECTORY: ${AILOVE_MEMORY_DIRECTORY:-.ai-love/memory}
+      AILOVE_INGRESS_HOST: 0.0.0.0
+      AILOVE_INGRESS_PORT: 8090
+      AILOVE_INGRESS_TOKEN: ${AILOVE_INGRESS_TOKEN:?AILOVE_INGRESS_TOKEN is required}
+    volumes:
+      - dsh-state:/var/lib/ai-love-dsh
+      - ${AILOVE_HOST_WORKSPACE_DIRECTORY:?AILOVE_HOST_WORKSPACE_DIRECTORY is required}:/workspace
+    ports:
+      - "${AILOVE_DSH_PORT:-3080}:3080"
+      - "${AILOVE_INGRESS_PORT:-8090}:8090"
+    restart: unless-stopped
+
+volumes:
+  dsh-state:
