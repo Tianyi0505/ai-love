@@ -67,7 +67,6 @@ docs/live-service-merge.md
 docs/persona-memory-and-mcp-output.md
 docs/plugin-validation.md
 docs/langchain-migration-plan.md
-specs/001-private-reply-rules/validation.md
 output/
 .pytest_cache/
 .ruff_cache/
