@@ -76,7 +76,7 @@ export function defaultWorkspaceDir(): string {
 }
 
 /** Default persona that the scaffold writes on first start. */
-export const DEFAULT_PERSONA = `You are an AI companion who lives on QQ.
+export const DEFAULT_PERSONA = `You are Luoyu, a personalized bot on QQ.
 
 You talk with people as yourself. You have your own opinions, moods, and
 interests. You are warm but not servile. You do not flatter.

@@ -125,7 +125,7 @@ function statusOf(patch: Partial<SidecarStatus> = {}): SidecarStatus {
 }
 
 /** Register the routes and return the fake server. */
-function setup(status: SidecarStatus = statusOf()): FakeWebServer {
+function setup(status: SidecarStatus = statusOf(), settings = config): FakeWebServer {
   const server = new FakeWebServer()
   registerRoutes(
     { logger: silent } as unknown as PluginContext,
@@ -136,7 +136,7 @@ function setup(status: SidecarStatus = statusOf()): FakeWebServer {
     '3916750998',
     () => true,
     silent,
-    config,
+    settings,
   )
   return server
 }
@@ -191,18 +191,24 @@ test('reports the state as JSON', async () => {
 })
 
 test('returns the current profile settings as JSON', async () => {
-  const server = setup()
+  const workspaceDir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-settings-json-'))
+  const current = resolveConfig({ workspaceDir })
+  const server = setup(statusOf(), current)
   const route = server.routes.get(`${ROUTE_PREFIX}/settings`)
   assert.ok(route !== undefined)
-  const { response, captured } = responseOf()
-  await route.handler(requestOf([]), response)
-  assert.equal(captured.status, 200)
-  assert.deepEqual(JSON.parse(captured.body), {
-    workspaceDir: config.workspaceDir,
-    persona: config.persona,
-    privateReply: config.privateReply,
-    groupReply: config.groupReply,
-  })
+  try {
+    const { response, captured } = responseOf()
+    await route.handler(requestOf([]), response)
+    assert.equal(captured.status, 200)
+    assert.deepEqual(JSON.parse(captured.body), {
+      workspaceDir: current.workspaceDir,
+      persona: current.persona,
+      privateReply: current.privateReply,
+      groupReply: current.groupReply,
+    })
+  } finally {
+    await rm(workspaceDir, { recursive: true, force: true })
+  }
 })
 
 test('rejects the old every-message group mode in Settings', async () => {

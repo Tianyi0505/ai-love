@@ -1,7 +1,7 @@
 /**
  * Workspace scaffold.
  *
- * The workspace is the long-term memory of the companion. It holds one
+ * The workspace is the long-term memory of the bot. It holds one
  * instruction file, one persona file, and a set of Markdown memory files. The
  * agent reads and writes these files with its own file tools, so the memory
  * needs no database and no plugin code.
@@ -57,11 +57,11 @@ async function writeIfAbsent(path: string, body: string): Promise<boolean> {
 
 /** Build the instruction file body. */
 export function instructionBody(): string {
-  return `# Companion workspace
+  return `# Bot workspace
 
-This directory is the long-term memory of one AI companion. Each QQ chat runs
-in its own session. The sessions share this directory, so the files here are
-the only memory that survives a session.
+This directory is the long-term memory of one personalized QQ bot. Each
+QQ chat runs in its own session. The sessions share this directory, so the
+files here are the only memory that survives a session.
 
 ## Files
 

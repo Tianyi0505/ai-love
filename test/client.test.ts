@@ -61,8 +61,8 @@ test('registers a Luoyu section with the Harness module loader', async () => {
   assert.equal(typeof options?.label, 'function')
   assert.equal((options?.label as () => string)(), 'Luoyu')
   assert.equal(typeof component, 'function')
-  assert.equal(dictionary?.zh.workspace, 'AI 工作区')
-  assert.equal(dictionary?.en.title, 'Make your QQ companion yours')
+  assert.equal(dictionary?.zh.workspace, '机器人工作区')
+  assert.equal(dictionary?.en.title, 'Make your QQ bot yours')
 })
 
 interface ClientPlugin {

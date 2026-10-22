@@ -1,14 +1,15 @@
 {
   "name": "dsh-luoyu",
   "version": "0.1.0",
-  "description": "Run a QQ companion named Luoyu through DeepSeek Harness.",
+  "description": "Run a personalized QQ bot named Luoyu through DeepSeek Harness.",
   "keywords": [
     "dsh",
     "dsh-plugin",
     "qq",
     "napcat",
     "onebot",
-    "ai-companion"
+    "chatbot",
+    "qq-bot"
   ],
   "license": "MIT",
   "type": "module",
@@ -22,6 +23,7 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
+    "README.zh-CN.md",
     "client.js"
   ],
   "engines": {
