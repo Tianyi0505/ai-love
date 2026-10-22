@@ -1,4 +1,4 @@
-# 忽略环境变量与密钥
+# Environment variables and secrets
 .env
 .env.*
 !.env.example
@@ -7,66 +7,23 @@
 *.p12
 napcat-qrcode.png
 
-# 忽略前端依赖与构建产物
+# Dependencies and build caches
 node_modules/
 package-lock.json
-!admin/console/frontend/package-lock.json
-
-# 忽略 Python 构建文件
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv*/
-venv/
-dist/
-build/
+pnpm-lock.yaml
 *.tsbuildinfo
+coverage/
 
-# 忽略编辑器配置
-.vscode/
-.idea/
-*.swp
-
-# 忽略运行时数据
+# Runtime data
 data/
 logs/
 *.log
-memory_db/
-chroma/
-output/plugin-validation/
-output/playwright/
-.playwright-cli/
 *.db
 *.sqlite3
 
-# 忽略本地文档与归档文件
-doc/
-*.txt
-*.tar
-CLAUDE.md
-deploy/.migration-*
-deploy/.napcat-qrcode.png
-deploy/private/
-
-# 忽略系统文件
+# Editor and system files
+.vscode/
+.idea/
+*.swp
 .DS_Store
 Thumbs.db
-
-# 私有部署、服务器与运维 Markdown（保留本地，不提交）
-**/*deploy*.md
-**/*server*.md
-**/*infra*.md
-**/*kubernetes*.md
-**/*k8s*.md
-**/*部署*.md
-**/*服务器*.md
-**/*运维*.md
-**/operations.md
-deploy/**/*.md
-docs/live-service-merge.md
-docs/persona-memory-and-mcp-output.md
-docs/plugin-validation.md
-docs/langchain-migration-plan.md
-output/
-.pytest_cache/
-.ruff_cache/
