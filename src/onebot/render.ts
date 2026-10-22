@@ -5,7 +5,7 @@
  * list into that transcript and collects the facts the bridge needs: the
  * mention targets, the quoted message identity, and the media attachments.
  *
- * @module dsh-ai-love/onebot/render
+ * @module dsh-luoyu/onebot/render
  */
 
 import { segmentString, type MessageSegment } from './types.ts'

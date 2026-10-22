@@ -6,7 +6,7 @@
  * reconnects with a bounded backoff. Every action call carries the access
  * token when one is configured.
  *
- * @module dsh-ai-love/onebot/client
+ * @module dsh-luoyu/onebot/client
  */
 
 import WebSocket from 'ws'
@@ -140,7 +140,7 @@ export class OneBotClient {
 
     socket.on('open', () => {
       this.reconnectAttempt = 0
-      this.logger.info(`dsh-ai-love: OneBot event socket open at ${this.options.wsUrl}`)
+      this.logger.info(`dsh-luoyu: OneBot event socket open at ${this.options.wsUrl}`)
       this.listeners.onConnect?.()
     })
 
@@ -149,7 +149,7 @@ export class OneBotClient {
     })
 
     socket.on('error', (error: Error) => {
-      this.logger.warn(`dsh-ai-love: OneBot event socket error: ${error.message}`)
+      this.logger.warn(`dsh-luoyu: OneBot event socket error: ${error.message}`)
     })
 
     socket.on('close', (code: number, reason: Buffer) => {
@@ -183,7 +183,7 @@ export class OneBotClient {
     try {
       parsed = JSON.parse(raw)
     } catch {
-      this.logger.warn('dsh-ai-love: OneBot event socket received a frame that is not JSON')
+      this.logger.warn('dsh-luoyu: OneBot event socket received a frame that is not JSON')
       return
     }
     if (typeof parsed !== 'object' || parsed === null) return

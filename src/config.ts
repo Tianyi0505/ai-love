@@ -5,7 +5,7 @@
  * one QQ account, and the reply rules. Every field has a default so that a
  * fresh install runs after the operator sets the account only.
  *
- * @module dsh-ai-love/config
+ * @module dsh-luoyu/config
  */
 
 import { homedir } from 'node:os'
@@ -67,12 +67,12 @@ export function resolveDshHome(): string {
 
 /** Directory that holds the plugin state and the managed sidecar. */
 export function defaultDataDir(): string {
-  return join(resolveDshHome(), 'integrations', 'dsh-ai-love')
+  return join(resolveDshHome(), 'integrations', 'dsh-luoyu')
 }
 
 /** Default workspace directory. */
 export function defaultWorkspaceDir(): string {
-  return join(defaultDataDir(), 'workspace')
+  return '/workspace/memroy'
 }
 
 /** Default persona that the scaffold writes on first start. */

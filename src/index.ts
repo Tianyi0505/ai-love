@@ -5,7 +5,7 @@
  * bridge, and the status page. The bridge is the only part that talks to the
  * Harness session controller.
  *
- * @module dsh-ai-love
+ * @module dsh-luoyu
  */
 
 import { mkdir } from 'node:fs/promises'
@@ -22,7 +22,7 @@ import { findWebServer, registerRoutes } from './web.ts'
 import { scaffoldWorkspace } from './workspace.ts'
 
 /** The plugin name that the loader reports. */
-export const name = 'dsh-ai-love'
+export const name = 'dsh-luoyu'
 
 /**
  * The configuration schema.
@@ -72,7 +72,7 @@ export async function apply(ctx: PluginContext, input?: Partial<Config>): Promis
   const store = new StateStore(dataDir, logger)
   await store.load()
   if (await store.setWorkspaceDir(config.workspaceDir)) {
-    logger.info('dsh-ai-love: the workspace changed; chats will start new sessions on their next message')
+    logger.info('dsh-luoyu: the workspace changed; chats will start new sessions on their next message')
   }
 
   const sidecar = new NapCatSidecar(
@@ -101,10 +101,10 @@ export async function apply(ctx: PluginContext, input?: Partial<Config>): Promis
         bridge.accept(event)
       },
       onConnect: () => {
-        logger.info('dsh-ai-love: the OneBot event stream is connected')
+        logger.info('dsh-luoyu: the OneBot event stream is connected')
       },
       onDisconnect: (reason: string) => {
-        logger.warn(`dsh-ai-love: the OneBot event stream closed: ${reason}`)
+        logger.warn(`dsh-luoyu: the OneBot event stream closed: ${reason}`)
       },
     },
     logger,
@@ -139,7 +139,7 @@ export async function apply(ctx: PluginContext, input?: Partial<Config>): Promis
 
     if (config.autoStart && config.napcatMode === 'managed') {
       void sidecar.start().catch((error: unknown) => {
-        logger.warn(`dsh-ai-love: the managed NapCat sidecar did not start: ${(error as Error).message}`)
+        logger.warn(`dsh-luoyu: the managed NapCat sidecar did not start: ${(error as Error).message}`)
       })
     }
 
@@ -150,7 +150,7 @@ export async function apply(ctx: PluginContext, input?: Partial<Config>): Promis
       void sidecar.stop()
       void store.close()
     }
-  }, 'dsh-ai-love lifecycle')
+  }, 'dsh-luoyu lifecycle')
 
-  logger.info(`dsh-ai-love: ready, workspace is ${config.workspaceDir}`)
+  logger.info(`dsh-luoyu: ready, workspace is ${config.workspaceDir}`)
 }

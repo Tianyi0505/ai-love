@@ -1,7 +1,7 @@
 /**
  * Tests of the workspace scaffold.
  *
- * @module dsh-ai-love/test/workspace.test
+ * @module dsh-luoyu/test/workspace.test
  */
 
 import assert from 'node:assert/strict'
@@ -33,7 +33,7 @@ const silent: PluginLogger = {
 
 /** Create a temporary directory and remove it after the test. */
 async function withTempDir(body: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-workspace-'))
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-workspace-'))
   try {
     await body(dir)
   } finally {

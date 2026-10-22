@@ -11,7 +11,7 @@
  * process, and reports the login state. Every step that needs a missing
  * dependency stops with an actionable message instead of a stack trace.
  *
- * @module dsh-ai-love/napcat
+ * @module dsh-luoyu/napcat
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -140,7 +140,7 @@ export function hasDisplay(): boolean {
 async function resolveRelease(version: string): Promise<{ tag: string; url: string }> {
   const endpoint = version === 'latest' ? `${RELEASE_API}/latest` : `${RELEASE_API}/tags/${version}`
   const response = await fetch(endpoint, {
-    headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-ai-love' },
+    headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-luoyu' },
   })
   if (!response.ok) {
     throw new Error(`cannot read the NapCat release "${version}": HTTP ${response.status}`)
@@ -209,7 +209,7 @@ export function buildOneBotConfig(options: SidecarOptions): OneBotConfig {
     network: {
       httpServers: [
         {
-          name: 'dsh-ai-love-http',
+          name: 'dsh-luoyu-http',
           enable: true,
           port: options.httpPort,
           host: '127.0.0.1',
@@ -224,7 +224,7 @@ export function buildOneBotConfig(options: SidecarOptions): OneBotConfig {
       httpClients: [],
       websocketServers: [
         {
-          name: 'dsh-ai-love-ws',
+          name: 'dsh-luoyu-ws',
           enable: true,
           host: '127.0.0.1',
           port: options.wsPort,
@@ -323,13 +323,13 @@ export class NapCatSidecar {
     const release = await resolveRelease(this.options.version)
     await mkdir(this.options.napcatDir, { recursive: true })
     const archive = join(this.options.napcatDir, 'napcat.zip')
-    this.logger.info(`dsh-ai-love: downloading NapCat ${release.tag}`)
+    this.logger.info(`dsh-luoyu: downloading NapCat ${release.tag}`)
     await download(release.url, archive)
     await unzip(archive, this.options.napcatDir)
     await rm(archive, { force: true })
     await writeFile(this.versionPath, `${release.tag}\n`, 'utf8')
     this.setStatus({ installed: true, version: release.tag })
-    this.logger.info(`dsh-ai-love: NapCat ${release.tag} installed in ${this.options.napcatDir}`)
+    this.logger.info(`dsh-luoyu: NapCat ${release.tag} installed in ${this.options.napcatDir}`)
     return release.tag
   }
 
@@ -338,7 +338,7 @@ export class NapCatSidecar {
     await mkdir(join(this.options.napcatDir, 'config'), { recursive: true })
     const config = buildOneBotConfig(this.options)
     await writeFile(this.configPath, `${JSON.stringify(config, undefined, 2)}\n`, 'utf8')
-    this.logger.info(`dsh-ai-love: wrote the OneBot configuration to ${this.configPath}`)
+    this.logger.info(`dsh-luoyu: wrote the OneBot configuration to ${this.configPath}`)
   }
 
   /**
@@ -408,7 +408,7 @@ export class NapCatSidecar {
         phase: code === 0 ? 'offline' : 'failed',
         detail: `NapCat exited with ${signal ?? `code ${code}`}.`,
       })
-      this.logger.warn(`dsh-ai-love: NapCat exited with ${signal ?? `code ${code}`}`)
+      this.logger.warn(`dsh-luoyu: NapCat exited with ${signal ?? `code ${code}`}`)
     })
 
     this.startLoginPolling()

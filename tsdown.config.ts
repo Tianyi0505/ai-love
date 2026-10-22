@@ -6,7 +6,7 @@
  * bundle would break service identity. Runtime dependencies stay external
  * too, so that `ws` resolves from this package's own `node_modules`.
  *
- * @module dsh-ai-love/tsdown.config
+ * @module dsh-luoyu/tsdown.config
  */
 
 import { defineConfig } from 'tsdown'

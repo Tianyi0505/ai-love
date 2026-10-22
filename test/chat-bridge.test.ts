@@ -5,7 +5,7 @@
  * stand-ins. They cover the routing rules, the session mapping, the queue, and
  * the reply settlement.
  *
- * @module dsh-ai-love/test/chat-bridge.test
+ * @module dsh-luoyu/test/chat-bridge.test
  */
 
 import assert from 'node:assert/strict'
@@ -197,7 +197,7 @@ async function setup(
   dir: string
   close(): Promise<void>
 }> {
-  const dir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-bridge-'))
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-bridge-'))
   const controller = new FakeController()
   const ctx = new FakeContext(controller)
   const client = new FakeClient()

@@ -4,7 +4,7 @@
  * The tests start a local HTTP server that stands in for NapCat. They do not
  * start a WebSocket server, so the reconnect loop stays inert.
  *
- * @module dsh-ai-love/test/onebot.test
+ * @module dsh-luoyu/test/onebot.test
  */
 
 import assert from 'node:assert/strict'

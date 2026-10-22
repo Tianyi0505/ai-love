@@ -1,7 +1,7 @@
 /**
  * Tests of the chat bridge helpers.
  *
- * @module dsh-ai-love/test/bridge.test
+ * @module dsh-luoyu/test/bridge.test
  */
 
 import assert from 'node:assert/strict'

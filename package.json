@@ -1,7 +1,7 @@
 {
-  "name": "dsh-ai-love",
+  "name": "dsh-luoyu",
   "version": "0.1.0",
-  "description": "Run an AI companion on your own QQ account. One DeepSeek Harness session per chat, long-term memory as Markdown files in a workspace you choose.",
+  "description": "Run a QQ companion named Luoyu through DeepSeek Harness.",
   "keywords": [
     "dsh",
     "dsh-plugin",

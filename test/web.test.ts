@@ -5,7 +5,7 @@
  * handlers with a stand-in request and response. They do not start NapCat and
  * they do not create a session.
  *
- * @module dsh-ai-love/test/web.test
+ * @module dsh-luoyu/test/web.test
  */
 
 import assert from 'node:assert/strict'
@@ -165,7 +165,7 @@ test('serves the page as HTML', async () => {
   await route.handler(requestOf([]), response)
   assert.equal(captured.status, 200)
   assert.match(captured.headers['content-type'] ?? '', /text\/html/)
-  assert.match(captured.body, /dsh-ai-love/)
+  assert.match(captured.body, /luoyu/)
 })
 
 test('reports the state as JSON', async () => {
@@ -216,7 +216,7 @@ test('rejects the old every-message group mode in Settings', async () => {
 })
 
 test('returns the persona text stored in the workspace file', async () => {
-  const workspaceDir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-settings-read-'))
+  const workspaceDir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-settings-read-'))
   const current = resolveConfig({ ...config, workspaceDir, persona: 'Profile default.' })
   await writeFile(join(workspaceDir, 'PERSONA.md'), personaBody('Edited in the workspace.'), 'utf8')
   const ctx = { logger: silent, get: () => undefined } as unknown as PluginContext
@@ -234,9 +234,9 @@ test('returns the persona text stored in the workspace file', async () => {
 })
 
 test('persists settings through the profile editor and updates the persona file', async () => {
-  const workspaceDir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-settings-'))
+  const workspaceDir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-settings-'))
   let saved: Record<string, unknown> | undefined
-  const entry = { options: { id: 'dsh-ai-love', config: {} } }
+  const entry = { options: { id: 'dsh-luoyu', config: {} } }
   const editor = {
     entries: () => [entry],
     edit: async (_entry: unknown, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>) => {
@@ -274,7 +274,7 @@ test('answers 404 when there is no QR code', async () => {
 })
 
 test('serves the QR code image when the file exists', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-web-'))
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-web-'))
   const path = join(dir, 'qrcode.png')
   const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
   await writeFile(path, bytes)

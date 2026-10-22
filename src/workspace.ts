@@ -9,7 +9,7 @@
  * The scaffold writes a file only when the file is absent. An operator edit is
  * never overwritten.
  *
- * @module dsh-ai-love/workspace
+ * @module dsh-luoyu/workspace
  */
 
 import { access, mkdir, writeFile } from 'node:fs/promises'
@@ -211,7 +211,7 @@ export async function scaffoldWorkspace(
   }
 
   if (created.length > 0) {
-    logger.info(`dsh-ai-love: created ${created.length} workspace file(s) in ${workspaceDir}`)
+    logger.info(`dsh-luoyu: created ${created.length} workspace file(s) in ${workspaceDir}`)
   }
   return { created, kept }
 }

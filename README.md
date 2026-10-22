@@ -1,6 +1,6 @@
-# AI-Love
+# Luoyu
 
-AI-Love runs an AI companion on your own QQ account. It is a plugin for
+Luoyu runs an AI companion on your own QQ account. It is a plugin for
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
 One QQ chat is one Harness session. A group chat and a private chat each keep
@@ -42,17 +42,17 @@ the turn from the session log and sends the answer back to the chat.
 Install the plugin into a Harness profile:
 
 ~~~bash
-dsh plugin --profile web add dsh-ai-love
+dsh plugin --profile web add dsh-luoyu
 ~~~
 
-Then start the Harness. Open **Settings → AI Love** to configure the workspace
+Then start the Harness. Open **Settings → Luoyu** to configure the workspace
 and persona, and to manage NapCat.
 
-The AI Love section shows the login state. Press **Start NapCat** to download and
+The Luoyu section shows the login state. Press **Start NapCat** to download and
 start NapCat. Scan the QR code with the QQ mobile app. The plugin connects to
 NapCat after the login.
 
-The status page is available at `http://127.0.0.1:3080/dsh-ai-love`. The Settings
+The status page is available at `http://127.0.0.1:3080/luoyu`. The Settings
 section saves changes to the active profile. If you change the workspace, each
 QQ chat starts a new DSH session. Existing sessions remain available in DSH.
 
@@ -72,8 +72,8 @@ Every field has a default. Set the account and the workspace:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `workspaceDir` | `<DSH_HOME>/integrations/dsh-ai-love/workspace` | Holds the persona, the memory files, and every session. |
-| `persona` | A short companion persona | Written into `PERSONA.md`. Edit it in **Settings → AI Love**. |
+| `workspaceDir` | `/workspace/memroy` | Holds the persona, the memory files, and every session. |
+| `persona` | A short companion persona | Written into `PERSONA.md`. Edit it in **Settings → Luoyu**. |
 | `privateReply` | `true` | Answer private messages. |
 | `groupReply` | `balanced` | Answer direct mentions immediately. In balanced mode, answer active group chats with a 90–300 second cooldown. |
 | `uin` | empty | QQ number of the account. Managed mode reads the login state when this is empty. |
@@ -81,7 +81,7 @@ Every field has a default. Set the account and the workspace:
 | `wsUrl` | `ws://127.0.0.1:3001` | OneBot event stream. |
 | `httpUrl` | `http://127.0.0.1:3000` | OneBot action endpoint. |
 | `accessToken` | empty | Token that NapCat requires. |
-| `napcatDir` | `<DSH_HOME>/integrations/dsh-ai-love/napcat` | The managed NapCat installation. |
+| `napcatDir` | `<DSH_HOME>/integrations/dsh-luoyu/napcat` | The managed NapCat installation. |
 | `napcatVersion` | `latest` | NapCat release tag. |
 | `napcatWebuiPort` | `6099` | Port of the NapCat web interface. |
 | `napcatWebuiToken` | empty | Token of the NapCat web interface. |
@@ -120,7 +120,7 @@ what matters.
 ## State
 
 The plugin keeps one state file at
-`<DSH_HOME>/integrations/dsh-ai-love/state.json`. It holds the chat-to-session
+`<DSH_HOME>/integrations/dsh-luoyu/state.json`. It holds the chat-to-session
 map and the last 2000 seen message identities. The file has mode `0600`.
 
 A corrupt state file is renamed to `state.json.corrupt` and the plugin starts
@@ -157,8 +157,8 @@ change needs a build before the Harness reads it.
   official QQ bot API.
 - The plugin sends text only. It does not send an image, a voice message, or a
   sticker.
-- The plugin answers a group message that mentions the account, or every group
-  message. It has no participation score and no proactive message.
+- Balanced mode joins an active group after two messages in three minutes. It
+  waits 90 to 300 seconds between replies and does not send unsolicited messages.
 - The managed mode needs the Linux QQ client and a display server.
 - One session holds one chat. A very active chat reaches the context limit
   sooner than a quiet chat.

@@ -9,7 +9,7 @@
  * Messages of one chat run in order. Messages of different chats run in
  * parallel.
  *
- * @module dsh-ai-love/bridge
+ * @module dsh-luoyu/bridge
  */
 
 import { randomUUID } from 'node:crypto'
@@ -217,7 +217,7 @@ export class ChatBridge {
     const depth = this.queued.get(job.key) ?? 0
     if (depth >= MAX_QUEUE_PER_CHAT) {
       this.groupRate.release(job.key, job.groupReservationAt)
-      this.logger.warn(`dsh-ai-love: queue for ${job.key} is full, dropping one message`)
+      this.logger.warn(`dsh-luoyu: queue for ${job.key} is full, dropping one message`)
       return
     }
     this.queued.set(job.key, depth + 1)
@@ -226,7 +226,7 @@ export class ChatBridge {
     const next = previous
       .then(() => this.handle(job))
       .catch((error: unknown) => {
-        this.logger.error(`dsh-ai-love: cannot handle one message of ${job.key}: ${(error as Error).message}`)
+        this.logger.error(`dsh-luoyu: cannot handle one message of ${job.key}: ${(error as Error).message}`)
       })
       .finally(() => {
         const remaining = (this.queued.get(job.key) ?? 1) - 1
@@ -312,16 +312,16 @@ export class ChatBridge {
         id: randomUUID(),
         role: 'user',
         content: [{ type: 'text', text: prompt }],
-        source: { kind: 'user', rpcId: `dsh-ai-love:${job.messageId || randomUUID()}` },
+        source: { kind: 'user', rpcId: `dsh-luoyu:${job.messageId || randomUUID()}` },
       })
       const reason = await settled
       if (reason !== 'completed') {
-        this.logger.warn(`dsh-ai-love: turn of ${job.key} ended with "${reason}", no reply is sent`)
+        this.logger.warn(`dsh-luoyu: turn of ${job.key} ended with "${reason}", no reply is sent`)
         return
       }
       const text = this.takeReply(sessionId)
       if (text.length === 0) {
-        this.logger.warn(`dsh-ai-love: turn of ${job.key} produced no text, no reply is sent`)
+        this.logger.warn(`dsh-luoyu: turn of ${job.key} produced no text, no reply is sent`)
         return
       }
       await this.reply(job, text)
@@ -380,7 +380,7 @@ export class ChatBridge {
     })
     void this.store.flush()
     if (created.sessionId !== candidate) {
-      this.logger.info(`dsh-ai-love: chat ${job.key} uses new session ${created.sessionId}`)
+      this.logger.info(`dsh-luoyu: chat ${job.key} uses new session ${created.sessionId}`)
     }
     return created.sessionId
   }
@@ -393,7 +393,7 @@ export class ChatBridge {
     const controller = requireService<SessionControllerService>(this.ctx, 'sessionController')
     const found = await controller.resolveAgent(sessionId)
     if ('error' in found) {
-      this.logger.warn(`dsh-ai-love: cannot resolve session ${sessionId}: ${found.error.message ?? found.error.code ?? 'unknown'}`)
+      this.logger.warn(`dsh-luoyu: cannot resolve session ${sessionId}: ${found.error.message ?? found.error.code ?? 'unknown'}`)
       return undefined
     }
     const agent = found.agent
@@ -409,7 +409,7 @@ export class ChatBridge {
     try {
       presets.set((agent as unknown as { session: unknown }).session, this.options.permissionPreset)
     } catch (error) {
-      this.logger.warn(`dsh-ai-love: cannot set permission preset "${this.options.permissionPreset}": ${(error as Error).message}`)
+      this.logger.warn(`dsh-luoyu: cannot set permission preset "${this.options.permissionPreset}": ${(error as Error).message}`)
     }
   }
 

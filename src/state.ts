@@ -5,7 +5,7 @@
  * the bridge already handled. The bridge writes the file after each change so
  * that a restart continues each conversation instead of starting a new one.
  *
- * @module dsh-ai-love/state
+ * @module dsh-luoyu/state
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
@@ -72,7 +72,7 @@ export async function loadState(dataDir: string, logger: PluginLogger): Promise<
     raw = await readFile(path, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      logger.warn(`dsh-ai-love: cannot read ${path}: ${(error as Error).message}`)
+      logger.warn(`dsh-luoyu: cannot read ${path}: ${(error as Error).message}`)
     }
     return emptyState()
   }
@@ -103,7 +103,7 @@ export async function loadState(dataDir: string, logger: PluginLogger): Promise<
       seenMessageIds: seen.slice(-SEEN_LIMIT),
     }
   } catch (error) {
-    logger.warn(`dsh-ai-love: ${path} is not valid JSON, starting empty: ${(error as Error).message}`)
+    logger.warn(`dsh-luoyu: ${path} is not valid JSON, starting empty: ${(error as Error).message}`)
     await rename(path, `${path}.corrupt`).catch(() => undefined)
     return emptyState()
   }
@@ -199,7 +199,7 @@ export class StateStore {
     this.pending = this.pending
       .then(() => saveState(this.dataDir, snapshot))
       .catch((error: unknown) => {
-        this.logger.warn(`dsh-ai-love: cannot write the state: ${(error as Error).message}`)
+        this.logger.warn(`dsh-luoyu: cannot write the state: ${(error as Error).message}`)
       })
     return this.pending
   }

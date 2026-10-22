@@ -1,7 +1,7 @@
 /**
  * Tests of the inbound segment renderer.
  *
- * @module dsh-ai-love/test/render.test
+ * @module dsh-luoyu/test/render.test
  */
 
 import assert from 'node:assert/strict'

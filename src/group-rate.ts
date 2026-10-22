@@ -5,7 +5,7 @@
  * relationship service, so recent group activity supplies a local score while
  * the original 90–300 second curve stays intact.
  *
- * @module dsh-ai-love/group-rate
+ * @module dsh-luoyu/group-rate
  */
 
 /** The original group join window. */

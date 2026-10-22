@@ -4,7 +4,7 @@
  * The tests cover the pure parts: the OneBot configuration, the display
  * detection, and the status defaults. They do not start NapCat.
  *
- * @module dsh-ai-love/test/napcat.test
+ * @module dsh-luoyu/test/napcat.test
  */
 
 import assert from 'node:assert/strict'
@@ -105,7 +105,7 @@ test('starts with an unknown phase and no installation', () => {
 })
 
 test('reports the installation facts without a start', async () => {
-  const sidecar = new NapCatSidecar(options({ napcatDir: '/tmp/dsh-ai-love-missing-napcat' }), silent)
+  const sidecar = new NapCatSidecar(options({ napcatDir: '/tmp/luoyu-missing-napcat' }), silent)
   const status = await sidecar.inspect()
   assert.equal(status.installed, false)
   assert.equal(status.phase, 'not-installed')

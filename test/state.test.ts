@@ -1,7 +1,7 @@
 /**
  * Tests of the durable bridge state.
  *
- * @module dsh-ai-love/test/state.test
+ * @module dsh-luoyu/test/state.test
  */
 
 import assert from 'node:assert/strict'
@@ -21,7 +21,7 @@ const silent: PluginLogger = {
 
 /** Create a temporary directory and remove it after the test. */
 async function withTempDir(body: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-state-'))
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-luoyu-state-'))
   try {
     await body(dir)
   } finally {

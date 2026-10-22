@@ -5,7 +5,7 @@
  * HTTP action endpoint. This module declares the parts of the protocol that
  * the plugin reads and writes.
  *
- * @module dsh-ai-love/onebot/types
+ * @module dsh-luoyu/onebot/types
  */
 
 /** One message segment. */

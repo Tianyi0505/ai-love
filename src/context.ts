@@ -6,7 +6,7 @@
  * uses. A local declaration keeps the package free of a run-time dependency on
  * the Harness packages and keeps the version gate simple.
  *
- * @module dsh-ai-love/context
+ * @module dsh-luoyu/context
  */
 
 /** A log record sink. The Harness logger implements this interface. */
@@ -141,7 +141,7 @@ export interface PluginContext {
 export function requireService<T>(ctx: PluginContext, name: string): T {
   const service = ctx.get(name)
   if (service === undefined || service === null) {
-    throw new Error(`dsh-ai-love requires the "${name}" service`)
+    throw new Error(`dsh-luoyu requires the "${name}" service`)
   }
   return service as T
 }

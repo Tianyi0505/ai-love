@@ -5,7 +5,7 @@
  * the login state, the QR code, and the chat sessions. It also starts and
  * stops the NapCat sidecar, so the operator never needs a terminal.
  *
- * @module dsh-ai-love/web
+ * @module dsh-luoyu/web
  */
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -20,7 +20,7 @@ import type { NapCatSidecar, SidecarStatus } from './napcat.ts'
 import type { ChatBridge } from './bridge.ts'
 
 /** Prefix of every route that the plugin owns. */
-export const ROUTE_PREFIX = '/dsh-ai-love'
+export const ROUTE_PREFIX = '/luoyu'
 
 /** The facts that the page renders. */
 export interface StatusSnapshot {
@@ -87,7 +87,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI-Love · QQ</title>
+<title>Luoyu · QQ</title>
 <style>
   :root { color-scheme: dark light; --bg:#0f1115; --card:#171a21; --line:#2a2f3a; --text:#e6e9ef; --muted:#8b93a1; --ok:#3ecf8e; --warn:#f5a524; --bad:#f05d5d; }
   @media (prefers-color-scheme: light) { :root { --bg:#f6f7f9; --card:#fff; --line:#e2e5ea; --text:#15181d; --muted:#6b7280; } }
@@ -119,7 +119,7 @@ const PAGE = `<!doctype html>
 </head>
 <body>
 <main>
-  <h1>AI-Love · QQ</h1>
+  <h1>Luoyu · QQ</h1>
   <p class="sub">One DeepSeek Harness session per chat. Memory lives in the workspace as Markdown.</p>
 
   <section>
@@ -273,7 +273,7 @@ export function registerRoutes(
             persona = personaText(await readFile(join(config.workspaceDir, PERSONA_FILE), 'utf8'))
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-              logger.warn(`dsh-ai-love: cannot read the persona file: ${(error as Error).message}`)
+              logger.warn(`dsh-luoyu: cannot read the persona file: ${(error as Error).message}`)
             }
           }
           sendJson(response, 200, {
@@ -334,9 +334,9 @@ export function registerRoutes(
         }
 
         const editor = optionalService<ConfigEditorService>(ctx, 'configEditor')
-        const entry = editor?.entries().find(row => row.options.id === 'dsh-ai-love')
+        const entry = editor?.entries().find(row => row.options.id === 'dsh-luoyu')
         if (editor === undefined || entry === undefined) {
-          sendJson(response, 503, { error: 'The active profile does not expose an editable AI Love configuration.' })
+          sendJson(response, 503, { error: 'The active profile does not expose an editable Luoyu configuration.' })
           return
         }
 
@@ -372,7 +372,7 @@ export function registerRoutes(
             if (hadPersona && oldPersona !== undefined) await writeFile(personaPath, oldPersona, { mode: 0o600 }).catch(() => undefined)
             else await rm(personaPath, { force: true }).catch(() => undefined)
           }
-          logger.warn(`dsh-ai-love: cannot save settings: ${(error as Error).message}`)
+          logger.warn(`dsh-luoyu: cannot save settings: ${(error as Error).message}`)
           sendJson(response, 500, { error: (error as Error).message })
         }
       },
@@ -411,7 +411,7 @@ export function registerRoutes(
           const phase = await sidecar.start()
           sendJson(response, 200, { phase })
         } catch (error) {
-          logger.warn(`dsh-ai-love: cannot start NapCat: ${(error as Error).message}`)
+          logger.warn(`dsh-luoyu: cannot start NapCat: ${(error as Error).message}`)
           sendJson(response, 500, { error: (error as Error).message })
         }
       },
@@ -444,7 +444,7 @@ export function registerRoutes(
     }),
   )
 
-  logger.info(`dsh-ai-love: status page at ${ROUTE_PREFIX}`)
+  logger.info(`dsh-luoyu: status page at ${ROUTE_PREFIX}`)
   return () => {
     for (const dispose of disposers) dispose()
   }

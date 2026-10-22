@@ -1,7 +1,7 @@
 /**
  * Tests of the configuration defaults.
  *
- * @module dsh-ai-love/test/config.test
+ * @module dsh-luoyu/test/config.test
  */
 
 import assert from 'node:assert/strict'
@@ -35,12 +35,12 @@ test('falls back to the home directory when the variable is blank', () => {
   }
 })
 
-test('places the data and the workspace under the Harness home', () => {
+test('uses the Luoyu integration path and the requested memory workspace', () => {
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = '/tmp/custom-home'
   try {
-    assert.equal(defaultDataDir(), join('/tmp/custom-home', 'integrations', 'dsh-ai-love'))
-    assert.equal(defaultWorkspaceDir(), join('/tmp/custom-home', 'integrations', 'dsh-ai-love', 'workspace'))
+    assert.equal(defaultDataDir(), join('/tmp/custom-home', 'integrations', 'dsh-luoyu'))
+    assert.equal(defaultWorkspaceDir(), '/workspace/memroy')
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous

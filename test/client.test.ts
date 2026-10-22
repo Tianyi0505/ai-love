@@ -1,7 +1,7 @@
 /**
  * Tests of the browser Settings module contract.
  *
- * @module dsh-ai-love/test/client.test
+ * @module dsh-luoyu/test/client.test
  */
 
 import assert from 'node:assert/strict'
@@ -17,7 +17,7 @@ test('declares the client packages that provide its services', async () => {
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings'))
 })
 
-test('registers an AI Love section with the Harness module loader', async () => {
+test('registers a Luoyu section with the Harness module loader', async () => {
   const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
   let registration: { id: string; factory: (require: (name: string) => unknown) => ClientPlugin } | undefined
   runInNewContext(source, {
@@ -30,7 +30,7 @@ test('registers an AI Love section with the Harness module loader', async () => 
     },
   })
   assert.ok(registration)
-  assert.equal(registration.id, 'dsh-ai-love')
+  assert.equal(registration.id, 'dsh-luoyu')
 
   const plugin = registration.factory(name => {
     assert.equal(name, 'react')
@@ -57,9 +57,9 @@ test('registers an AI Love section with the Harness module loader', async () => 
     },
   })
   assert.equal(options?.name, 'settings.section')
-  assert.equal(options?.id, 'ai-love')
+  assert.equal(options?.id, 'luoyu')
   assert.equal(typeof options?.label, 'function')
-  assert.equal((options?.label as () => string)(), 'AI Love')
+  assert.equal((options?.label as () => string)(), 'Luoyu')
   assert.equal(typeof component, 'function')
   assert.equal(dictionary?.zh.workspace, 'AI 工作区')
   assert.equal(dictionary?.en.title, 'Make your QQ companion yours')
