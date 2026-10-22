@@ -271,8 +271,8 @@ export class OneBotClient {
    * @param message - The outbound segments.
    * @param signal - Optional abort signal.
    */
-  async sendGroup(groupId: string, message: readonly MessageSegment[], signal?: AbortSignal): Promise<void> {
-    await this.call('send_group_msg', { group_id: Number(groupId), message }, signal)
+  async sendGroup(groupId: string, message: readonly MessageSegment[], signal?: AbortSignal): Promise<{ message_id?: number | string } | undefined> {
+    return this.call<{ message_id?: number | string }>('send_group_msg', { group_id: Number(groupId), message }, signal)
   }
 
   /** Read one message by identity, including a quoted message. */

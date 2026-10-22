@@ -205,6 +205,16 @@ test('returns the current profile settings as JSON', async () => {
   })
 })
 
+test('rejects the old every-message group mode in Settings', async () => {
+  const server = setup()
+  const route = server.routes.get(`${ROUTE_PREFIX}/settings`)
+  assert.ok(route !== undefined)
+  const { response, captured } = responseOf()
+  await route.handler(requestOf([JSON.stringify({ groupReply: 'all' })], 'POST'), response)
+  assert.equal(captured.status, 400)
+  assert.match(captured.body, /balanced/)
+})
+
 test('returns the persona text stored in the workspace file', async () => {
   const workspaceDir = await mkdtemp(join(tmpdir(), 'dsh-ai-love-settings-read-'))
   const current = resolveConfig({ ...config, workspaceDir, persona: 'Profile default.' })
@@ -240,13 +250,13 @@ test('persists settings through the profile editor and updates the persona file'
   assert.ok(route !== undefined)
   try {
     const { response, captured } = responseOf()
-    await route.handler(requestOf([JSON.stringify({ workspaceDir, persona: 'A new persona.', privateReply: false, groupReply: 'all' })], 'POST'), response)
+    await route.handler(requestOf([JSON.stringify({ workspaceDir, persona: 'A new persona.', privateReply: false, groupReply: 'balanced' })], 'POST'), response)
     assert.equal(captured.status, 200)
     assert.deepEqual(JSON.parse(captured.body), { saved: true, workspaceChanged: true })
     assert.equal(saved?.workspaceDir, workspaceDir)
     assert.equal(saved?.persona, 'A new persona.')
     assert.equal(saved?.privateReply, false)
-    assert.equal(saved?.groupReply, 'all')
+    assert.equal(saved?.groupReply, 'balanced')
     assert.match(await readFile(join(workspaceDir, 'PERSONA.md'), 'utf8'), /A new persona\./)
   } finally {
     await rm(workspaceDir, { recursive: true, force: true })

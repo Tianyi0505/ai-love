@@ -22,6 +22,8 @@ import type {
   SessionLike,
 } from './context.ts'
 import { optionalService, requireService } from './context.ts'
+import type { GroupReplyMode } from './config.ts'
+import { GroupReplyGate, rememberSentMessage, sentMessageId } from './group-rate.ts'
 import type { OneBotClient } from './onebot/client.ts'
 import { buildOutbound, renderInbound, toPlainChatText } from './onebot/render.ts'
 import { segmentsOf, type MessageEvent, type MessageSegment } from './onebot/types.ts'
@@ -34,7 +36,9 @@ export interface BridgeOptions {
   /** Answer private messages. */
   privateReply: boolean
   /** Which group messages the bridge answers. */
-  groupReply: 'mention' | 'all'
+  groupReply: GroupReplyMode
+  /** Clock used to apply the group reply cadence. */
+  now?: () => number
   /** Permission preset for each chat session. */
   permissionPreset: string
   /** IANA time zone for each prompt. */
@@ -58,6 +62,8 @@ interface InboundJob {
   senderId: string
   text: string
   segments: readonly MessageSegment[]
+  directlyAddressed: boolean
+  groupReservationAt?: number
 }
 
 /** One reply that the bridge collected from a turn. */
@@ -151,6 +157,8 @@ export class ChatBridge {
   private readonly waiters = new Map<string, (reason: string) => void>()
   private readonly resolved = new Map<string, AgentLike>()
   private readonly disposed = new Set<string>()
+  private readonly groupRate = new GroupReplyGate()
+  private readonly sentGroupMessageIds = new Set<string>()
   private closed = false
 
   constructor(
@@ -197,6 +205,8 @@ export class ChatBridge {
    */
   accept(event: MessageEvent): void {
     if (this.closed) return
+    const incomingId = event.message_id === undefined ? '' : String(event.message_id)
+    if (incomingId.length > 0 && this.store.current.seenMessageIds.includes(incomingId)) return
     const job = this.toJob(event)
     if (job === undefined) return
     const state = this.store.current
@@ -206,6 +216,7 @@ export class ChatBridge {
 
     const depth = this.queued.get(job.key) ?? 0
     if (depth >= MAX_QUEUE_PER_CHAT) {
+      this.groupRate.release(job.key, job.groupReservationAt)
       this.logger.warn(`dsh-ai-love: queue for ${job.key} is full, dropping one message`)
       return
     }
@@ -244,17 +255,32 @@ export class ChatBridge {
     if (rendered.empty) return undefined
 
     const mentioned = selfId.length > 0 && rendered.mentionedUserIds.includes(selfId)
+    const quotedOwnMessage = kind === 'group'
+      && rendered.replyToMessageId !== undefined
+      && this.sentGroupMessageIds.has(rendered.replyToMessageId)
+    const directlyAddressed = mentioned || quotedOwnMessage
     if (kind === 'private' && !this.options.privateReply) return undefined
-    if (kind === 'group' && this.options.groupReply === 'mention' && !mentioned) return undefined
 
     const targetId = kind === 'group' ? groupId : senderId
+    const key = chatKey(kind, targetId)
+    let groupReservationAt: number | undefined
+    if (kind === 'group') {
+      const now = this.options.now?.() ?? Date.now()
+      const lastReplyAt = this.store.current.chats[key]?.lastGroupReplyAt
+      const recentMessages = this.groupRate.observe(key, now, lastReplyAt)
+      if (this.options.groupReply === 'mention' && !directlyAddressed) return undefined
+      if (!directlyAddressed) {
+        groupReservationAt = this.groupRate.reserve(key, now, recentMessages)
+        if (groupReservationAt === undefined) return undefined
+      }
+    }
     const sender = event.sender ?? {}
     const card = typeof sender.card === 'string' && sender.card.length > 0 ? sender.card : undefined
     const nickname = typeof sender.nickname === 'string' && sender.nickname.length > 0 ? sender.nickname : undefined
     const senderName = card ?? nickname ?? senderId
 
     return {
-      key: chatKey(kind, targetId),
+      key,
       kind,
       targetId,
       title: kind === 'group' ? groupId : senderName,
@@ -263,39 +289,63 @@ export class ChatBridge {
       senderId,
       text: rendered.text,
       segments: segmentsOf(event),
+      directlyAddressed,
+      ...(groupReservationAt !== undefined ? { groupReservationAt } : {}),
     }
   }
 
   /** Handle one accepted message. */
   private async handle(job: InboundJob): Promise<void> {
-    const receivedAt = Date.now()
-    const sessionId = await this.ensureSession(job)
-    if (sessionId === undefined) return
+    let replied = false
+    try {
+      const receivedAt = this.now()
+      const sessionId = await this.ensureSession(job)
+      if (sessionId === undefined) return
 
-    const agent = await this.resolveAgent(sessionId)
-    if (agent === undefined) return
-    if (this.closed) return
+      const agent = await this.resolveAgent(sessionId)
+      if (agent === undefined || this.closed) return
 
-    this.buffers.delete(sessionId)
-    const prompt = buildPrompt(job, this.options.timeZone, receivedAt)
-    const settled = this.waitForTurn(sessionId)
-    agent.followup({
-      id: randomUUID(),
-      role: 'user',
-      content: [{ type: 'text', text: prompt }],
-      source: { kind: 'user', rpcId: `dsh-ai-love:${job.messageId || randomUUID()}` },
-    })
-    const reason = await settled
-    if (reason !== 'completed') {
-      this.logger.warn(`dsh-ai-love: turn of ${job.key} ended with "${reason}", no reply is sent`)
-      return
+      this.buffers.delete(sessionId)
+      const prompt = buildPrompt(job, this.options.timeZone, receivedAt)
+      const settled = this.waitForTurn(sessionId)
+      agent.followup({
+        id: randomUUID(),
+        role: 'user',
+        content: [{ type: 'text', text: prompt }],
+        source: { kind: 'user', rpcId: `dsh-ai-love:${job.messageId || randomUUID()}` },
+      })
+      const reason = await settled
+      if (reason !== 'completed') {
+        this.logger.warn(`dsh-ai-love: turn of ${job.key} ended with "${reason}", no reply is sent`)
+        return
+      }
+      const text = this.takeReply(sessionId)
+      if (text.length === 0) {
+        this.logger.warn(`dsh-ai-love: turn of ${job.key} produced no text, no reply is sent`)
+        return
+      }
+      await this.reply(job, text)
+      if (job.kind === 'group') this.recordGroupReply(job)
+      replied = true
+    } finally {
+      if (!replied) this.groupRate.release(job.key, job.groupReservationAt)
     }
-    const text = this.takeReply(sessionId)
-    if (text.length === 0) {
-      this.logger.warn(`dsh-ai-love: turn of ${job.key} produced no text, no reply is sent`)
-      return
+  }
+
+  /** Read the configured test clock, or the system clock. */
+  private now(): number {
+    return this.options.now?.() ?? Date.now()
+  }
+
+  /** Persist one successful group reply for the next cooldown decision. */
+  private recordGroupReply(job: InboundJob): void {
+    const now = this.now()
+    this.groupRate.recordReply(job.key, job.groupReservationAt, now)
+    const record = this.store.current.chats[job.key]
+    if (record !== undefined) {
+      recordChat(this.store.current, job.key, { ...record, lastGroupReplyAt: now })
+      void this.store.flush()
     }
-    await this.reply(job, text)
   }
 
   /** Find or create the session of one chat. */
@@ -423,8 +473,13 @@ export class ChatBridge {
     for (const [index, part] of parts.entries()) {
       const quote = index === 0 && job.messageId.length > 0 && job.kind === 'group' ? job.messageId : undefined
       const segments = buildOutbound(part, quote)
-      if (job.kind === 'group') await this.client.sendGroup(job.targetId, segments)
-      else await this.client.sendPrivate(job.targetId, segments)
+      if (job.kind === 'group') {
+        const result = await this.client.sendGroup(job.targetId, segments)
+        const messageId = sentMessageId(result)
+        if (messageId !== undefined) rememberSentMessage(this.sentGroupMessageIds, messageId)
+      } else {
+        await this.client.sendPrivate(job.targetId, segments)
+      }
     }
   }
 

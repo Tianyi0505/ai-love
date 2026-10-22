@@ -16,7 +16,7 @@ import Schema from '@deepseek-ai/schemastery'
 export type NapCatMode = 'managed' | 'external'
 
 /** Which group messages the plugin answers. */
-export type GroupReplyMode = 'mention' | 'all'
+export type GroupReplyMode = 'mention' | 'balanced' | 'all'
 
 /** The operator-facing configuration. */
 export interface Config {
@@ -100,15 +100,16 @@ Rules:
  */
 export function resolveConfig(input: Partial<Config> | undefined): Config {
   const parse = Config as unknown as (value: Record<string, unknown>) => Config
-  return parse({ ...(input ?? {}) })
+  const config = parse({ ...(input ?? {}) })
+  return { ...config, groupReply: config.groupReply === 'all' ? 'balanced' : config.groupReply }
 }
 
 /** The configuration schema that the Harness renders and validates. */
 export const Config: Schema<Config> = Schema.object({
   privateReply: Schema.boolean().default(true).description('Answer private messages.'),
-  groupReply: Schema.union(['mention', 'all'])
-    .default('mention')
-    .description('Answer only messages that mention the account, or every group message.'),
+  groupReply: Schema.union(['mention', 'balanced', 'all'])
+    .default('balanced')
+    .description('Answer mentions immediately and join active group chats at a balanced cadence.'),
   workspaceDir: Schema.string()
     .default(defaultWorkspaceDir())
     .description('Directory that holds the persona, the memory files, and every session.'),

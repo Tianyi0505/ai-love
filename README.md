@@ -75,7 +75,7 @@ Every field has a default. Set the account and the workspace:
 | `workspaceDir` | `<DSH_HOME>/integrations/dsh-ai-love/workspace` | Holds the persona, the memory files, and every session. |
 | `persona` | A short companion persona | Written into `PERSONA.md`. Edit it in **Settings → AI Love**. |
 | `privateReply` | `true` | Answer private messages. |
-| `groupReply` | `mention` | Answer only a message that mentions the account, or every group message. |
+| `groupReply` | `balanced` | Answer direct mentions immediately. In balanced mode, answer active group chats with a 90–300 second cooldown. |
 | `uin` | empty | QQ number of the account. Managed mode reads the login state when this is empty. |
 | `napcatMode` | `managed` | Let the plugin run NapCat, or connect to a NapCat that you run yourself. |
 | `wsUrl` | `ws://127.0.0.1:3001` | OneBot event stream. |

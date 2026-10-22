@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { Config, DEFAULT_PERSONA, defaultDataDir, defaultWorkspaceDir, resolveDshHome } from '../src/config.ts'
+import { Config, DEFAULT_PERSONA, defaultDataDir, defaultWorkspaceDir, resolveConfig, resolveDshHome } from '../src/config.ts'
 
 /** Validate a partial configuration the way the Harness does. */
 const parse = Config as unknown as (input: Record<string, unknown>) => ReturnType<typeof Config>
@@ -50,7 +50,7 @@ test('places the data and the workspace under the Harness home', () => {
 test('accepts an empty configuration and fills every field', () => {
   const value = parse({})
   assert.equal(value.privateReply, true)
-  assert.equal(value.groupReply, 'mention')
+  assert.equal(value.groupReply, 'balanced')
   assert.equal(value.napcatMode, 'managed')
   assert.equal(value.wsUrl, 'ws://127.0.0.1:3001')
   assert.equal(value.httpUrl, 'http://127.0.0.1:3000')
@@ -62,6 +62,11 @@ test('accepts an empty configuration and fills every field', () => {
   assert.equal(value.napcatWebuiPort, 6099)
   assert.equal(value.napcatVersion, 'latest')
   assert.equal(value.persona, DEFAULT_PERSONA)
+})
+
+test('accepts the retired all mode and resolves it to balanced', () => {
+  assert.equal(parse({ groupReply: 'all' }).groupReply, 'all')
+  assert.equal(resolveConfig({ groupReply: 'all' }).groupReply, 'balanced')
 })
 
 test('rejects a group reply mode that the plugin does not know', () => {

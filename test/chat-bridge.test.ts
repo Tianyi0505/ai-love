@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { ChatBridge } from '../src/bridge.ts'
+import type { GroupReplyMode } from '../src/config.ts'
 import type { PluginContext, PluginLogger, SessionEventLike, SessionLike } from '../src/context.ts'
 import type { OneBotClient } from '../src/onebot/client.ts'
 import type { MessageEvent, MessageSegment } from '../src/onebot/types.ts'
@@ -81,7 +82,7 @@ class FakeClient {
 
   async sendGroup(groupId: string, message: readonly MessageSegment[]): Promise<unknown> {
     this.groups.push({ groupId, message })
-    return { message_id: 1 }
+    return { message_id: `outbound-${this.groups.length}` }
   }
 
   async sendPrivate(userId: string, message: readonly MessageSegment[]): Promise<unknown> {
@@ -186,7 +187,7 @@ function answer(ctx: FakeContext, session: SessionLike, text: string, turn = 1, 
 
 /** Build a bridge over stand-in parts. */
 async function setup(
-  patch: { privateReply?: boolean; groupReply?: 'mention' | 'all'; uin?: string } = {},
+  patch: { privateReply?: boolean; groupReply?: GroupReplyMode; uin?: string; now?: () => number } = {},
 ): Promise<{
   bridge: ChatBridge
   ctx: FakeContext
@@ -209,7 +210,8 @@ async function setup(
     {
       workspaceDir: dir,
       privateReply: patch.privateReply ?? true,
-      groupReply: patch.groupReply ?? 'mention',
+      groupReply: patch.groupReply ?? 'balanced',
+      now: patch.now,
       permissionPreset: 'danger-full-access',
       timeZone: 'Asia/Shanghai',
       maxReplyChars: 1500,
@@ -254,8 +256,8 @@ test('ignores a message that the account sent itself', async () => {
   }
 })
 
-test('ignores a group message that does not mention the account', async () => {
-  const parts = await setup()
+test('ignores a non-mention group message in mention-only mode', async () => {
+  const parts = await setup({ groupReply: 'mention' })
   try {
     parts.bridge.accept(groupEvent({ message: [{ type: 'text', data: { text: 'hello' } }] }))
     await new Promise(resolve => setTimeout(resolve, 30))
@@ -265,12 +267,107 @@ test('ignores a group message that does not mention the account', async () => {
   }
 })
 
-test('answers a group message that mentions the account in the all mode', async () => {
-  const parts = await setup({ groupReply: 'all' })
+test('answers a direct group mention even in mention-only mode', async () => {
+  const parts = await setup({ groupReply: 'mention' })
   try {
-    parts.bridge.accept(groupEvent({ message: [{ type: 'text', data: { text: 'hello' } }] }))
+    parts.bridge.accept(groupEvent())
     await until(() => parts.controller.created.length === 1)
     assert.equal(parts.controller.created[0], 'qq-group-782795932')
+  } finally {
+    await parts.close()
+  }
+})
+
+test('accepts a balanced group message after two messages in the join window', async () => {
+  let now = 1000
+  const parts = await setup({ groupReply: 'balanced', now: () => now })
+  try {
+    const plain = [{ type: 'text', data: { text: 'hello' } }]
+    parts.bridge.accept(groupEvent({ message_id: 102, message: plain }))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(parts.controller.created.length, 0)
+
+    now += 1
+    parts.bridge.accept(groupEvent({ message_id: 103, message: plain }))
+    await until(() => parts.controller.created.length === 1)
+    assert.equal(parts.controller.created[0], 'qq-group-782795932')
+  } finally {
+    await parts.close()
+  }
+})
+
+test('keeps a five-minute cooldown for low-activity groups', async () => {
+  let now = 1000
+  const parts = await setup({ groupReply: 'balanced', now: () => now })
+  try {
+    const plain = [{ type: 'text', data: { text: 'hello' } }]
+    parts.bridge.accept(groupEvent({ message_id: 101, message: plain }))
+    now += 1
+    parts.bridge.accept(groupEvent({ message_id: 102, message: plain }))
+    const agent = () => parts.controller.agents.get('qq-group-782795932')
+    await until(() => (agent()?.sent.length ?? 0) === 1)
+    const first = agent()
+    assert.ok(first !== undefined)
+    answer(parts.ctx, first.session, 'hello back')
+    await until(() => parts.client.groups.length === 1)
+    assert.equal(parts.bridge.state.chats['group:782795932']?.lastGroupReplyAt, now)
+
+    now += 10
+    parts.bridge.accept(groupEvent({ message_id: 103, message: plain }))
+    now += 1
+    parts.bridge.accept(groupEvent({ message_id: 104, message: plain }))
+    await new Promise(resolve => setTimeout(resolve, 30))
+    assert.equal(agent()?.sent.length, 1)
+
+    now = 301_001
+    parts.bridge.accept(groupEvent({ message_id: 105, message: plain }))
+    now += 1
+    parts.bridge.accept(groupEvent({ message_id: 106, message: plain }))
+    await until(() => (agent()?.sent.length ?? 0) === 2)
+  } finally {
+    await parts.close()
+  }
+})
+
+test('lets direct mentions bypass the balanced cooldown', async () => {
+  let now = 1000
+  const parts = await setup({ groupReply: 'balanced', now: () => now })
+  try {
+    parts.bridge.accept(groupEvent({ message_id: 201 }))
+    const agent = () => parts.controller.agents.get('qq-group-782795932')
+    await until(() => (agent()?.sent.length ?? 0) === 1)
+    const first = agent()
+    assert.ok(first !== undefined)
+    answer(parts.ctx, first.session, 'hello back')
+    await until(() => parts.client.groups.length === 1)
+
+    now += 1
+    parts.bridge.accept(groupEvent({ message_id: 202 }))
+    await until(() => (agent()?.sent.length ?? 0) === 2)
+  } finally {
+    await parts.close()
+  }
+})
+
+test('lets replies to the bot bypass mention-only mode', async () => {
+  const parts = await setup({ groupReply: 'mention' })
+  try {
+    parts.bridge.accept(groupEvent({ message_id: 301 }))
+    const agent = () => parts.controller.agents.get('qq-group-782795932')
+    await until(() => (agent()?.sent.length ?? 0) === 1)
+    const first = agent()
+    assert.ok(first !== undefined)
+    answer(parts.ctx, first.session, 'hello back')
+    await until(() => parts.client.groups.length === 1)
+
+    parts.bridge.accept(groupEvent({
+      message_id: 302,
+      message: [
+        { type: 'reply', data: { id: 'outbound-1' } },
+        { type: 'text', data: { text: 'thanks' } },
+      ],
+    }))
+    await until(() => (agent()?.sent.length ?? 0) === 2)
   } finally {
     await parts.close()
   }

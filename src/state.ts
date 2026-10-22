@@ -24,6 +24,8 @@ export interface ChatRecord {
   title: string
   /** Unix epoch milliseconds of the last handled message. */
   updatedAt: number
+  /** Unix epoch milliseconds of the last successful group reply. */
+  lastGroupReplyAt?: number
 }
 
 /** The persisted bridge state. */
@@ -88,6 +90,7 @@ export async function loadState(dataDir: string, logger: PluginLogger): Promise<
         targetId: typeof record.targetId === 'string' ? record.targetId : '',
         title: typeof record.title === 'string' ? record.title : '',
         updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
+        ...(typeof record.lastGroupReplyAt === 'number' ? { lastGroupReplyAt: record.lastGroupReplyAt } : {}),
       }
     }
     const seen = Array.isArray(parsed.seenMessageIds)

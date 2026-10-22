@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
       online: 'Online', starting: 'Starting', stopped: 'Stopped', needsLogin: 'Login needed', unavailable: 'Unavailable', loading: 'Checking…',
       start: 'Start NapCat', stop: 'Stop NapCat', refreshQr: 'Refresh QR', qrTitle: 'Scan with QQ', qrHint: 'Open QQ on your phone and scan this code to sign in.', qrWaiting: 'Your login code will appear here after NapCat starts.',
       workspace: 'AI workspace', workspaceHint: 'Each QQ chat gets its own DSH session. Memories stay in this folder.', workspacePath: 'Workspace folder', workspaceHelp: 'An absolute folder path for this companion’s memories and files.',
-      persona: 'Persona', personaHelp: 'Set the companion’s voice, identity, and conversation style.', privateReply: 'Reply to private messages', privateReplyHelp: 'Allow the companion to answer direct messages.', groupReply: 'Group chat replies', mention: 'Only when mentioned', all: 'Every group message',
+      persona: 'Persona', personaHelp: 'Set the companion’s voice, identity, and conversation style.', privateReply: 'Reply to private messages', privateReplyHelp: 'Allow the companion to answer direct messages.', groupReply: 'Group chat replies', groupReplyHelp: 'Balanced mode waits for an active chat and follows the original 90–300 second reply interval. Direct mentions and replies to the bot are immediate.', balanced: 'Balanced participation', mention: 'Only when mentioned',
       save: 'Save changes', saving: 'Saving…', saved: 'Settings saved to this DSH profile.', workspaceChanged: 'Workspace updated. New chats will use fresh sessions; existing sessions remain in DSH.', saveHint: 'Changes are stored in this DSH profile.', loadingSettings: 'Loading your settings…',
       requestSent: 'NapCat request sent.', stoppedNotice: 'NapCat stopped.', profile: 'DSH PROFILE', ready: 'QQ is connected', noConnection: 'QQ is not connected yet', statusUnavailable: 'Could not load the connection status.',
     }
@@ -35,7 +35,7 @@ window.__ModuleLoader__.load({
       online: '已连接', starting: '正在启动', stopped: '已停止', needsLogin: '等待登录', unavailable: '不可用', loading: '正在检查…',
       start: '启动 NapCat', stop: '停止 NapCat', refreshQr: '刷新二维码', qrTitle: '使用 QQ 扫码', qrHint: '打开手机 QQ，扫描二维码完成登录。', qrWaiting: '启动 NapCat 后，登录二维码会显示在这里。',
       workspace: 'AI 工作区', workspaceHint: '每个 QQ 聊天都会使用独立 DSH 会话，记忆保存在此目录。', workspacePath: '工作区目录', workspaceHelp: '用于保存这位 AI 伴侣的记忆和文件的绝对路径。',
-      persona: 'AI 人设', personaHelp: '描述 AI 的身份、语气和交流风格。', privateReply: '回复私聊消息', privateReplyHelp: '允许 AI 伴侣回复发给它的私聊消息。', groupReply: '群聊回复方式', mention: '仅在被提及时回复', all: '回复群内所有消息',
+      persona: 'AI 人设', personaHelp: '描述 AI 的身份、语气和交流风格。', privateReply: '回复私聊消息', privateReplyHelp: '私聊消息仍会像原版一样立即回复。', groupReply: '群聊回复频率', groupReplyHelp: '适度模式参考旧版 90–300 秒动态间隔；活跃群聊更频繁。@机器人或回复机器人消息时立即响应。', balanced: '适度参与', mention: '仅在被提及时回复',
       save: '保存更改', saving: '正在保存…', saved: '设置已保存到当前 DSH 配置。', workspaceChanged: '工作区已更新。新聊天将使用新会话，旧会话仍保留在 DSH 中。', saveHint: '更改会保存到当前 DSH 配置。', loadingSettings: '正在读取设置…',
       requestSent: '已发送 NapCat 操作请求。', stoppedNotice: 'NapCat 已停止。', profile: 'DSH 配置', ready: 'QQ 已连接', noConnection: 'QQ 尚未连接', statusUnavailable: '无法读取连接状态。',
     }
@@ -181,7 +181,7 @@ window.__ModuleLoader__.load({
               field(t('workspacePath'), t('workspaceHelp'), h('input', { className: 'ai-love__input', value: settings.workspaceDir, onChange: event => setSettings({ ...settings, workspaceDir: event.target.value }), required: true })),
               field(t('persona'), t('personaHelp'), h('textarea', { className: 'ai-love__input ai-love__textarea', value: settings.persona, onChange: event => setSettings({ ...settings, persona: event.target.value }), required: true, maxLength: 50000 })),
               h('label', { className: 'ai-love__toggle-row' }, h('span', { className: 'ai-love__toggle-copy' }, h('span', { className: 'ai-love__label' }, t('privateReply')), h('span', { className: 'ai-love__help' }, t('privateReplyHelp'))), h('input', { className: 'ai-love__check', type: 'checkbox', checked: settings.privateReply, onChange: event => setSettings({ ...settings, privateReply: event.target.checked }) })),
-              field(t('groupReply'), '', h('select', { className: 'ai-love__input', value: settings.groupReply, onChange: event => setSettings({ ...settings, groupReply: event.target.value }) }, h('option', { value: 'mention' }, t('mention')), h('option', { value: 'all' }, t('all')))),
+              field(t('groupReply'), t('groupReplyHelp'), h('select', { className: 'ai-love__input', value: settings.groupReply, onChange: event => setSettings({ ...settings, groupReply: event.target.value }) }, h('option', { value: 'balanced' }, t('balanced')), h('option', { value: 'mention' }, t('mention')))),
               h('div', { className: 'ai-love__save-row' }, h('span', { className: 'ai-love__save-note' }, t('saveHint')), h('button', { className: 'ai-love__button ai-love__button--primary', type: 'submit', disabled: busy || !dirty }, busy ? t('saving') : t('save'))))
               : h('section', { className: 'ai-love__panel ai-love__panel--wide' }, h('p', { className: 'ai-love__panel-hint' }, t('loadingSettings')))),
           h('footer', { className: 'ai-love__footer' }, h(Icon, { name: 'info', size: 14 }), t('saveHint')))

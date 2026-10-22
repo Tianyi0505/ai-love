@@ -57,12 +57,14 @@ test('writes the state and reads it back', async () => {
       targetId: '1',
       title: 'Friends',
       updatedAt: 1000,
+      lastGroupReplyAt: 900,
     })
     markSeen(state, 'm-1')
     await saveState(dir, state)
 
     const loaded = await loadState(dir, silent)
     assert.equal(loaded.chats['group:1']?.sessionId, 'qq-group-1')
+    assert.equal(loaded.chats['group:1']?.lastGroupReplyAt, 900)
     assert.deepEqual(loaded.seenMessageIds, ['m-1'])
   })
 })

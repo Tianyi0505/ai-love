@@ -13,6 +13,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { ConfigEditorService, ConfigEntryLike, PluginContext, PluginLogger, WebRequest, WebResponse, WebServerService } from './context.ts'
 import type { Config } from './config.ts'
 import { resolveConfig } from './config.ts'
+import { normalizeGroupReplyMode } from './group-rate.ts'
 import { PERSONA_FILE, personaBody, personaText } from './workspace.ts'
 import { optionalService } from './context.ts'
 import type { NapCatSidecar, SidecarStatus } from './napcat.ts'
@@ -279,7 +280,7 @@ export function registerRoutes(
             workspaceDir: config.workspaceDir,
             persona,
             privateReply: config.privateReply,
-            groupReply: config.groupReply,
+            groupReply: normalizeGroupReplyMode(config.groupReply),
           })
           return
         }
@@ -321,8 +322,8 @@ export function registerRoutes(
           patch.privateReply = input.privateReply
         }
         if (input.groupReply !== undefined) {
-          if (input.groupReply !== 'mention' && input.groupReply !== 'all') {
-            sendJson(response, 400, { error: 'groupReply must be "mention" or "all".' })
+          if (input.groupReply !== 'mention' && input.groupReply !== 'balanced') {
+            sendJson(response, 400, { error: 'groupReply must be "mention" or "balanced".' })
             return
           }
           patch.groupReply = input.groupReply
